@@ -1,0 +1,21 @@
+[
+  {
+    "num": 1,
+    "name": "Test Movie 1",
+    "stream_type": "movie",
+    "stream_id": 201,
+    "stream_icon": "http://example.com/posters/movie1.jpg",
+    "rating": "7.5",
+    "rating_5based": 3.8,
+    "added": "1704067200",
+    "category_id": "10",
+    "container_extension": "mkv",
+    "tmdb": "12345"
+  },
+  {
+    "name": "Test Movie 2",
+    "stream_id": "202",
+    "rating": "",
+    "container_extension": null
+  }
+]

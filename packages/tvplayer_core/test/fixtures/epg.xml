@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<tv generator-info-name="test">
+  <channel id="test1.example">
+    <display-name>Test Channel 1</display-name>
+    <icon src="http://example.com/logos/test1.png"/>
+  </channel>
+  <channel id="test2.example">
+    <display-name>Test Channel 2</display-name>
+  </channel>
+  <programme start="20240101080000 +0100" stop="20240101090000 +0100" channel="test1.example">
+    <title lang="en">Test Morning Show</title>
+    <title lang="nl">Test Ochtendshow</title>
+    <desc lang="en">News &amp; weather for testing.</desc>
+    <category lang="en">News</category>
+    <credits><presenter>Presenter One</presenter></credits>
+  </programme>
+  <programme start="20240101090000 -0230" stop="20240101100000 -0230" channel="test1.example">
+    <title><![CDATA[Ünïcode <Show> 测试 📺]]></title>
+  </programme>
+  <programme start="20240101100000" stop="20240101110000" channel="test2.example">
+    <title>No Offset Show</title>
+    <desc></desc>
+  </programme>
+  <programme start="2024010112" stop="202401011330 Z" channel="test2.example">
+    <title>Short Timestamp Show</title>
+  </programme>
+  <programme start="garbage" stop="20240101130000 +0000" channel="test2.example">
+    <title>Broken Start</title>
+  </programme>
+  <programme start="20240101120000 +0000" channel="test2.example">
+    <title>Missing Stop</title>
+  </programme>
+  <programme start="20240101120000 +0000" stop="20240101130000 +0000">
+    <title>Missing Channel</title>
+  </programme>
+  <programme start="20240101120000 +0000" stop="20240101130000 +0000" channel="test2.example">
+    <desc>Missing title</desc>
+  </programme>
+  <programme start="20240231120000 +0000" stop="20240231130000 +0000" channel="test2.example">
+    <title>Impossible Date</title>
+  </programme>
+  <programme start="20240101140000 +0000" stop="20240101130000 +0000" channel="test2.example">
+    <title>Stop Before Start</title>
+  </programme>
+  <programme start="20240101150000 +0000" stop="20240101160000 +0000" channel="test2.example">
+    <title>Last Valid Show</title>
+  </programme>
+</tv>

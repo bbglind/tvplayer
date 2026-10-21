@@ -1,0 +1,23 @@
+{
+  "info": {
+    "movie_image": "http://example.com/posters/movie1.jpg",
+    "tmdb_id": 12345,
+    "plot": "A synthetic plot for testing.",
+    "cast": "Actor One, Actor Two",
+    "director": "Director One",
+    "genre": "Drama",
+    "releasedate": "2020-05-01",
+    "duration_secs": "5400",
+    "duration": "01:30:00",
+    "rating": 7.5,
+    "backdrop_path": ["http://example.com/backdrops/movie1.jpg"],
+    "youtube_trailer": ""
+  },
+  "movie_data": {
+    "stream_id": "201",
+    "name": "Test Movie 1",
+    "added": "1704067200",
+    "category_id": "10",
+    "container_extension": "mkv"
+  }
+}

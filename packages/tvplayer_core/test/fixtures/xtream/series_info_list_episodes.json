@@ -1,0 +1,12 @@
+{
+  "seasons": [],
+  "info": {"name": "Test Series 2"},
+  "episodes": [
+    [
+      {"id": "5001", "episode_num": 1, "title": "Episode One", "container_extension": "mp4", "season": 1, "info": null}
+    ],
+    [
+      {"id": "5101", "episode_num": 1, "title": "", "container_extension": "mp4", "season": 3}
+    ]
+  ]
+}

@@ -1,0 +1,37 @@
+[
+  {
+    "num": 1,
+    "name": "Test Channel 1",
+    "stream_type": "live",
+    "stream_id": 101,
+    "stream_icon": "http://example.com/logos/test1.png",
+    "epg_channel_id": "test1.example",
+    "added": "1704067200",
+    "category_id": "1",
+    "category_ids": [1],
+    "custom_sid": "",
+    "tv_archive": 1,
+    "direct_source": "",
+    "tv_archive_duration": "7"
+  },
+  {
+    "num": "2",
+    "name": "Test Channel 2 Ünïcode",
+    "stream_id": "102",
+    "stream_icon": "",
+    "epg_channel_id": null,
+    "added": "",
+    "category_id": "2",
+    "tv_archive": "0",
+    "tv_archive_duration": null
+  },
+  {
+    "name": "Test Channel 3 minimal",
+    "stream_id": 103.0
+  },
+  {
+    "name": "Broken entry without stream id",
+    "stream_id": "abc"
+  },
+  "not an object"
+]

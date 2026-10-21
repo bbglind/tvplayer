@@ -1,0 +1,31 @@
+{
+  "epg_listings": [
+    {
+      "id": "1",
+      "epg_id": "1",
+      "title": "VGVzdCBNb3JuaW5nIFNob3c=",
+      "lang": "en",
+      "start": "2024-01-01 08:00:00",
+      "end": "2024-01-01 09:00:00",
+      "description": "w5xuw69jb2RlIGRlc2NyaXB0aW9uIOKAkyDmtYvor5U=",
+      "channel_id": "test1.example",
+      "start_timestamp": "1704096000",
+      "stop_timestamp": "1704099600"
+    },
+    {
+      "id": "2",
+      "title": "Plain Title",
+      "start": "2024-01-01 09:00:00",
+      "end": "2024-01-01 10:00:00",
+      "description": null,
+      "channel_id": "test1.example"
+    },
+    {
+      "id": "3",
+      "title": "QnJva2VuIHRpbWVz",
+      "start": "garbage",
+      "end": null,
+      "channel_id": "test1.example"
+    }
+  ]
+}

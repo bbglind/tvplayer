@@ -1,0 +1,12 @@
+#EXTM3U url-tvg="http://example.com/epg.xml"
+#EXTINF:-1 tvg-id="test1.example" tvg-name="Test Channel 1" tvg-logo="http://example.com/logos/test1.png" group-title="Test News",Test Channel 1
+http://example.com/live/testuser/testpass/101.ts
+#EXTINF:-1 tvg-id="test2.example" tvg-name="Test Channel 2, HD" group-title="Test Sports" catchup="default",Test Channel 2, HD
+#EXTVLCOPT:http-user-agent=TestAgent
+http://example.com/live/testuser/testpass/102.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="Tëst Ünïcode 测试",Tëst Ünïcode 测试 📺
+#EXTGRP:Test Unicode
+http://example.com/live/testuser/testpass/103.ts
+#EXTINF:5400,Test Movie 1
+http://example.com/movie/testuser/testpass/201.mkv

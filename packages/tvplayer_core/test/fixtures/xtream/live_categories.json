@@ -1,0 +1,6 @@
+[
+  {"category_id": "1", "category_name": "Test News", "parent_id": 0},
+  {"category_id": 2, "category_name": "Test Sports", "parent_id": "0"},
+  {"category_id": "3", "category_name": "Tëst Ünïcode 测试 📺", "parent_id": null},
+  {"category_name": "No id, skipped"}
+]

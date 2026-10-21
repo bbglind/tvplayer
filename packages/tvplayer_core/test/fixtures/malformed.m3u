@@ -1,0 +1,12 @@
+#EXTINF:-1 tvg-id="orphan.example",Orphan without URL
+#EXTINF:-1 tvg-name="Broken Quote group-title="Test Group",Test Channel Broken
+http://example.com/broken.ts
+#EXTINF garbage without colon or comma
+http://example.com/nocolon.ts
+http://example.com/streams/Bare%20Stream.ts
+#EXTINF:-1 tvg-id=unquoted.example group-title='Single Quoted',Test Channel Unquoted
+http://example.com/unquoted.ts
+#RANDOM directive
+   
+#EXTINF:-1,
+http://example.com/

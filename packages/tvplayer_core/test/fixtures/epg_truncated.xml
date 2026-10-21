@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <programme start="20240101080000 +0000" stop="20240101090000 +0000" channel="test1.example">
+    <title>Complete Show</title>
+  </programme>
+  <programme start="20240101090000 +0000" stop="20240101100000 +0000" channel="test1.example">
+    <title>Cut off in the mid

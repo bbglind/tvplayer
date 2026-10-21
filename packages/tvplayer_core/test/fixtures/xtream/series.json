@@ -1,0 +1,19 @@
+[
+  {
+    "num": 1,
+    "name": "Test Series 1",
+    "series_id": 301,
+    "cover": "http://example.com/covers/series1.jpg",
+    "plot": "A synthetic series.",
+    "cast": "",
+    "director": null,
+    "genre": "Comedy",
+    "releaseDate": "2019-01-01",
+    "last_modified": "1704067200",
+    "rating": "8",
+    "backdrop_path": [],
+    "youtube_trailer": null,
+    "category_id": "20"
+  },
+  {"name": "Test Series 2", "series_id": "302", "rating": null}
+]

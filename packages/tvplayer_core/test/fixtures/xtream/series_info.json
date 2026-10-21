@@ -1,0 +1,24 @@
+{
+  "seasons": [
+    {"air_date": "2019-01-01", "episode_count": 2, "id": 1, "name": "Season 1", "overview": "", "season_number": 1, "cover_big": "http://example.com/covers/s1.jpg"}
+  ],
+  "info": {
+    "name": "Test Series 1",
+    "cover": "http://example.com/covers/series1.jpg",
+    "plot": "A synthetic series.",
+    "genre": "Comedy",
+    "releaseDate": "2019-01-01",
+    "rating": "8",
+    "category_id": "20"
+  },
+  "episodes": {
+    "2": [
+      {"id": "4001", "episode_num": "1", "title": "Test Series 1 - S02E01", "container_extension": "mp4", "info": {"duration_secs": 1500, "plot": "Second season opener."}, "season": 2}
+    ],
+    "1": [
+      {"id": "3002", "episode_num": 2, "title": "Test Series 1 - S01E02", "container_extension": "mkv", "info": {"duration_secs": "1450", "movie_image": "http://example.com/stills/e2.jpg", "rating": "7.1"}, "season": "1"},
+      {"id": 3001, "episode_num": 1, "title": "Test Series 1 - S01E01", "container_extension": "mkv", "info": []},
+      {"title": "Broken episode without id"}
+    ]
+  }
+}
