@@ -2,6 +2,8 @@
 /// clients/parsers. Pure Dart, no Flutter dependency.
 library;
 
+export 'src/live/live_source.dart';
+export 'src/m3u/m3u_client.dart';
 export 'src/m3u/m3u_parser.dart' show M3uParser;
 export 'src/models/account_info.dart';
 export 'src/models/category.dart';
