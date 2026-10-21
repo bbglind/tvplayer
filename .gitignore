@@ -44,6 +44,7 @@ app.*.map.json
 **/android/gradlew
 **/android/gradlew.bat
 **/android/**/GeneratedPluginRegistrant.java
+**/android/**/.cxx/
 /android/app/debug
 /android/app/profile
 /android/app/release
