@@ -6,6 +6,7 @@ import '../../data/errors.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
 import '../player/open_channel.dart';
+import 'separator_header.dart';
 
 /// Categories on the left, searchable channel list on the right.
 class LiveTvScreen extends ConsumerWidget {
@@ -93,7 +94,7 @@ class _CategoryList extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
           ),
           trailing: Text(
-            '${id == null ? catalog.channels.length : catalog.countIn(id)}',
+            '${id == null ? catalog.channelCount : catalog.countIn(id)}',
           ),
           onTap: () => notifier.select(id),
         );
@@ -180,8 +181,9 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
                   key: const Key('live.channels'),
                   itemExtent: 72,
                   itemCount: channels.length,
-                  itemBuilder: (context, i) =>
-                      _ChannelTile(channel: channels[i]),
+                  itemBuilder: (context, i) => channels[i].isSeparator
+                      ? SeparatorHeader(channel: channels[i])
+                      : _ChannelTile(channel: channels[i]),
                 ),
         ),
       ],

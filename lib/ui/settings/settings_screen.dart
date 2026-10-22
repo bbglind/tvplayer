@@ -10,7 +10,7 @@ import '../epg/guide_screen.dart' show formatGuideDate, formatShift;
 import '../setup/setup_screen.dart';
 import 'time_zone_picker.dart';
 
-/// Provider management, TV guide settings and the player debug toggle.
+/// Provider management, TV guide settings and player options.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -189,6 +189,18 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         const Divider(height: 32),
+        Text('Player', style: Theme.of(context).textTheme.titleMedium),
+        SwitchListTile(
+          key: const Key('settings.playbackStats'),
+          title: const Text('Show playback statistics'),
+          subtitle: const Text('Dropped-frame counters below the video'),
+          value: settings.showPlaybackStats,
+          onChanged: (v) => _saveSettings(
+            context,
+            ref,
+            settings.copyWith(showPlaybackStats: v),
+          ),
+        ),
         SwitchListTile(
           title: const Text('Player debug info'),
           subtitle: const Text('mpv property overlay, hwdec selector and log'),

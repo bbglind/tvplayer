@@ -8,6 +8,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/errors.dart';
 import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
+import '../live/separator_header.dart';
 import '../player/open_channel.dart';
 
 /// The full TV guide: channels down the side, time across the top.
@@ -356,7 +357,9 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                         itemExtent: GuideGrid.rowHeight,
                         itemCount: widget.channels.length,
                         itemBuilder: (context, i) =>
-                            _ChannelCell(channel: widget.channels[i]),
+                            widget.channels[i].isSeparator
+                            ? SeparatorHeader(channel: widget.channels[i])
+                            : _ChannelCell(channel: widget.channels[i]),
                       ),
                     ),
                     const VerticalDivider(width: 1),
@@ -376,15 +379,23 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                                   controller: _bodyV,
                                   itemExtent: GuideGrid.rowHeight,
                                   itemCount: widget.channels.length,
-                                  itemBuilder: (context, i) => _GuideRow(
-                                    channel: widget.channels[i],
-                                    guide: widget.guide,
-                                    time: time,
-                                    start: start,
-                                    window: window,
-                                    now: now,
-                                    width: width,
-                                  ),
+                                  itemBuilder: (context, i) =>
+                                      widget.channels[i].isSeparator
+                                      ? ColoredBox(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest,
+                                        )
+                                      : _GuideRow(
+                                          channel: widget.channels[i],
+                                          guide: widget.guide,
+                                          time: time,
+                                          start: start,
+                                          window: window,
+                                          now: now,
+                                          width: width,
+                                          scroll: _bodyH,
+                                        ),
                                 ),
                                 Positioned(
                                   key: const Key('guide.nowLine'),
@@ -590,6 +601,7 @@ class _GuideRow extends ConsumerWidget {
     required this.window,
     required this.now,
     required this.width,
+    required this.scroll,
   });
 
   final LiveStream channel;
@@ -599,6 +611,9 @@ class _GuideRow extends ConsumerWidget {
   final _Window window;
   final DateTime now;
   final double width;
+
+  /// The grid's horizontal scroll, for keeping titles in view.
+  final ScrollController scroll;
 
   double _x(DateTime t) =>
       t.difference(start).inSeconds / 60 * GuideGrid.pixelsPerMinute;
@@ -632,6 +647,9 @@ class _GuideRow extends ConsumerWidget {
             program: p,
             label: time.formatRange(p.start, p.stop),
             airing: airing,
+            left: left,
+            width: right - left,
+            scroll: scroll,
             onTap: airing
                 ? () => openChannel(context, ref, channel)
                 : () => _showDetails(context, p),
@@ -704,12 +722,23 @@ class _ProgramCell extends StatelessWidget {
     required this.label,
     required this.airing,
     required this.onTap,
+    required this.left,
+    required this.width,
+    required this.scroll,
   });
 
   final EpgProgram program;
   final String label;
   final bool airing;
   final VoidCallback onTap;
+
+  /// Position and width of the block in the grid.
+  final double left;
+  final double width;
+  final ScrollController scroll;
+
+  /// Text keeps at least this much of the block when pinned.
+  static const _minTextWidth = 60.0;
 
   @override
   Widget build(BuildContext context) {
@@ -726,32 +755,50 @@ class _ProgramCell extends StatelessWidget {
           child: Tooltip(
             message: '$label  ${program.title}',
             waitDuration: const Duration(milliseconds: 600),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    program.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    softWrap: false,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: airing ? scheme.onPrimaryContainer : null,
-                      fontWeight: FontWeight.w600,
+            child: ListenableBuilder(
+              listenable: scroll,
+              // A block that starts left of the visible area keeps its text
+              // at the visible edge instead of scrolled out of sight.
+              builder: (context, child) {
+                final offset = scroll.hasClients
+                    ? scroll.offset
+                    : scroll.initialScrollOffset;
+                final double inset = (offset - left).clamp(
+                  0.0,
+                  math.max(0.0, width - _minTextWidth),
+                );
+                return Padding(
+                  padding: EdgeInsets.only(left: inset),
+                  child: child,
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      program.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      softWrap: false,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: airing ? scheme.onPrimaryContainer : null,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    softWrap: false,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: airing ? scheme.onPrimaryContainer : null,
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      softWrap: false,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: airing ? scheme.onPrimaryContainer : null,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

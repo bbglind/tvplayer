@@ -64,9 +64,17 @@ EpgGuide _guide({DateTime? fetchedAt, String suffix = ''}) => EpgGuide(
   fetchedAt: fetchedAt ?? _now.subtract(const Duration(hours: 1)),
 );
 
-LiveCatalog _catalog({int fillers = 0}) => LiveCatalog(
+LiveCatalog _catalog({int fillers = 0, bool separator = false}) => LiveCatalog(
   categories: const [Category(id: 'c', name: 'Sweden')],
   channels: [
+    if (separator)
+      const LiveStream(
+        id: 's',
+        name: '####### SWEDEN HD #######',
+        categoryIds: ['c'],
+        number: 99,
+        epgChannelId: 'kanal1.example',
+      ),
     // No EPG id: matched by name ("SE:" and "HD" ignored).
     const LiveStream(id: '1', name: 'SE: Kanal 1 HD', categoryIds: ['c']),
     const LiveStream(
@@ -382,6 +390,75 @@ void main() {
       );
     });
 
+    testWidgets('a programme that started off-screen keeps its title in '
+        'view', (tester) async {
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+
+      // Night Film runs from the grid's start, left of the initial view.
+      final body = tester.getRect(find.byKey(const Key('guide.body')));
+      final block = _program('2', _utc(24, 22));
+      final title = find.descendant(
+        of: block,
+        matching: find.text('Night Film'),
+      );
+      final label = find.descendant(
+        of: block,
+        matching: find.text('00:00–06:00'),
+      );
+      expect(tester.getRect(block).left, lessThan(body.left - 100));
+      expect(tester.getTopLeft(title).dx, closeTo(body.left + 8, 1));
+      expect(tester.getTopLeft(label).dx, closeTo(body.left + 8, 1));
+
+      // Still pinned after scrolling further.
+      await tester.drag(block, const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(title).dx, closeTo(body.left + 8, 1));
+
+      // Back at the start of the block the text sits at its own left edge.
+      await tester.drag(block, const Offset(2000, 0));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(title).dx,
+        closeTo(tester.getRect(block).left + 8, 1),
+      );
+    });
+
+    testWidgets('separator entries are headings without a guide row', (
+      tester,
+    ) async {
+      source = FakeLiveSource(_catalog(separator: true), hasGuide: true);
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+
+      final header = find.byKey(const Key('separator.s'));
+      expect(
+        find.descendant(of: header, matching: find.text('SWEDEN HD')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('#'), findsNothing);
+      expect(find.text('99'), findsNothing);
+      // Its EPG id matches Kanal 1's guide, but it gets no programmes.
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w.key is ValueKey<String> &&
+              (w.key! as ValueKey<String>).value.startsWith('guide.program.s.'),
+        ),
+        findsNothing,
+      );
+      expect(find.text('No guide information'), findsOneWidget);
+      // The header lines up with the first row.
+      expect(
+        tester.getRect(header).top,
+        tester.getRect(find.byKey(const Key('guide.rows'))).top,
+      );
+
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+      expect(player.opened, isEmpty);
+    });
+
     testWidgets('category filter limits the rows', (tester) async {
       source = FakeLiveSource(
         LiveCatalog(
@@ -409,7 +486,52 @@ void main() {
     });
   });
 
+  group('separators in the Live TV list', () {
+    testWidgets('show as a heading that is not counted or playable', (
+      tester,
+    ) async {
+      source = FakeLiveSource(_catalog(separator: true), hasGuide: true);
+      await pump(tester, const LiveTvScreen());
+      await tester.pumpAndSettle();
+
+      final header = find.byKey(const Key('separator.s'));
+      expect(
+        find.descendant(of: header, matching: find.text('SWEDEN HD')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('#'), findsNothing);
+      expect(find.text('99'), findsNothing);
+      expect(find.byKey(const Key('nowNext.s')), findsNothing);
+      // 'All channels' and 'Sweden' count the three real channels.
+      expect(find.text('3'), findsNWidgets(2));
+
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+      expect(player.opened, isEmpty);
+
+      // Searching shows only channels.
+      await tester.enterText(find.byKey(const Key('live.search')), 'sweden');
+      await tester.pumpAndSettle();
+      expect(header, findsNothing);
+      expect(find.text('No channels'), findsOneWidget);
+    });
+  });
+
   group('settings', () {
+    testWidgets('playback statistics are off by default and can be turned '
+        'on', (tester) async {
+      await pump(tester, const SettingsScreen());
+      await tester.pumpAndSettle();
+      final toggle = find.byKey(const Key('settings.playbackStats'));
+      await tester.scrollUntilVisible(toggle, 100);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(settings.saved.showPlaybackStats, isTrue);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    });
+
     testWidgets('shows the device zone by default and saves a picked zone', (
       tester,
     ) async {

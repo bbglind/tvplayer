@@ -145,4 +145,41 @@ void main() {
       await expectLater(source.load(), throwsA(isA<XtreamAuthException>()));
     });
   });
+
+  group('separators', () {
+    test('names made mostly of # are headings', () {
+      expect(separatorTitle('####### SWEDEN HD #######'), 'SWEDEN HD');
+      expect(separatorTitle('  ##### NEWS #####  '), 'NEWS');
+      expect(
+        separatorTitle('#### SVERIGE KANALER OCH SPORT ####'),
+        'SVERIGE KANALER OCH SPORT',
+      );
+      expect(separatorTitle('###SPORT'), 'SPORT');
+      expect(separatorTitle('# # #'), '');
+    });
+
+    test('ordinary names, even with a #, are channels', () {
+      expect(separatorTitle('SE: Kanal 1 HD'), isNull);
+      expect(separatorTitle('#1 Music'), isNull);
+      expect(separatorTitle('Channel ## 5'), isNull);
+      expect(separatorTitle(''), isNull);
+    });
+
+    test('LiveStream.isSeparator and catalog counts', () {
+      final catalog = LiveCatalog(
+        categories: const [Category(id: 'c', name: 'C')],
+        channels: const [
+          LiveStream(id: '0', name: '#### SWEDEN ####', categoryIds: ['c']),
+          LiveStream(id: '1', name: 'Kanal 1', categoryIds: ['c']),
+          LiveStream(id: '2', name: 'Kanal 2', categoryIds: ['c']),
+        ],
+      );
+      expect(catalog.channels.first.isSeparator, isTrue);
+      expect(catalog.channels.last.isSeparator, isFalse);
+      // Kept in the list, in place, but not counted as channels.
+      expect(catalog.channelsIn('c'), hasLength(3));
+      expect(catalog.countIn('c'), 2);
+      expect(catalog.channelCount, 2);
+    });
+  });
 }

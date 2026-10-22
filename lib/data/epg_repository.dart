@@ -64,11 +64,15 @@ class FileEpgRepository implements EpgRepository {
   }) async {
     final download = await _file('epg_download.xml');
     final cachePath = (await _file(_cacheName)).path;
-    final epgIds = [
+    final real = [
       for (final c in channels)
+        if (!c.isSeparator) c,
+    ];
+    final epgIds = [
+      for (final c in real)
         if (c.epgChannelId case final id? when id.isNotEmpty) id,
     ];
-    final names = [for (final c in channels) c.name];
+    final names = [for (final c in real) c.name];
     try {
       await source.downloadGuide(download);
       final downloadPath = download.path;

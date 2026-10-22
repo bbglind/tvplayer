@@ -29,30 +29,65 @@ final class LiveStream {
   final int? number;
   final String? epgChannelId;
 
+  /// Whether this entry is a category heading rather than a channel, like
+  /// `####### SWEDEN HD #######`. Providers add these to their lists; they
+  /// have no programmes and can't be played.
+  bool get isSeparator => separatorTitle(name) != null;
+
   @override
   String toString() => 'LiveStream($id, $name)';
 }
+
+/// The heading text of a separator entry's [name] (without the `#`
+/// characters), or null when [name] is a real channel.
+///
+/// A name is a separator when it starts or ends with `###`, or when most of
+/// its non-space characters are `#`.
+String? separatorTitle(String name) {
+  final trimmed = name.trim();
+  final hashes = '#'.allMatches(trimmed).length;
+  if (hashes == 0) return null;
+  final others = trimmed.replaceAll(_hashOrSpace, '').length;
+  if (!_hashRun.hasMatch(trimmed) && hashes <= others) return null;
+  return trimmed.replaceAll('#', ' ').replaceAll(_spaces, ' ').trim();
+}
+
+final _hashOrSpace = RegExp(r'[#\s]');
+final _hashRun = RegExp(r'^#{3,}|#{3,}$');
+final _spaces = RegExp(r'\s+');
 
 /// Categories and channels of one provider, with a per-category index.
 final class LiveCatalog {
   LiveCatalog({required this.categories, required this.channels}) {
     for (final channel in channels) {
+      final separator = channel.isSeparator;
+      if (!separator) _channelCount++;
       for (final id in channel.categoryIds) {
         (_byCategory[id] ??= []).add(channel);
+        if (!separator) _counts[id] = (_counts[id] ?? 0) + 1;
       }
     }
   }
 
   final List<Category> categories;
+
+  /// Channels in provider order, including [LiveStream.isSeparator] entries.
   final List<LiveStream> channels;
   final Map<String, List<LiveStream>> _byCategory = {};
+  final Map<String, int> _counts = {};
 
-  /// Channels in [categoryId], or all channels when it is null.
+  int _channelCount = 0;
+
+  /// Number of real channels, without separators.
+  int get channelCount => _channelCount;
+
+  /// Channels in [categoryId], or all channels when it is null, including
+  /// separators.
   List<LiveStream> channelsIn(String? categoryId) =>
       categoryId == null ? channels : _byCategory[categoryId] ?? const [];
 
-  /// Number of channels in [categoryId].
-  int countIn(String categoryId) => _byCategory[categoryId]?.length ?? 0;
+  /// Number of real channels in [categoryId], without separators.
+  int countIn(String categoryId) => _counts[categoryId] ?? 0;
 }
 
 /// Loads live TV from a provider and resolves playback URLs.

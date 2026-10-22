@@ -28,9 +28,18 @@ enum _Mode {
 /// separate mpv window otherwise. Leaving the screen closes mpv; mpv exiting
 /// leaves the screen.
 class MpvPlayerScreen extends ConsumerStatefulWidget {
-  const MpvPlayerScreen({super.key, required this.channel});
+  const MpvPlayerScreen({
+    super.key,
+    required this.channel,
+    this.fixedLength = false,
+  });
 
   final LiveStream channel;
+
+  /// Whether the content has a fixed length (a movie or an episode), so it
+  /// gets a seek bar. Live streams don't: mpv's duration there is only what
+  /// is buffered.
+  final bool fixedLength;
 
   @override
   ConsumerState<MpvPlayerScreen> createState() => _MpvPlayerScreenState();
@@ -133,6 +142,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final showStats =
+        ref.watch(appSettingsProvider).value?.showPlaybackStats ?? false;
     final Widget body;
     if (_url == null) {
       body = const Center(child: Text('No provider configured'));
@@ -142,8 +153,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         builder: (context, _) {
           final state = _isMine ? _player.state : const ExternalPlaybackState();
           return _showVideo
-              ? _buildEmbedded(context, state)
-              : _buildStatus(context, state);
+              ? _buildEmbedded(context, state, showStats)
+              : _buildStatus(context, state, showStats);
         },
       );
     }
@@ -163,7 +174,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     );
   }
 
-  Widget _buildEmbedded(BuildContext context, ExternalPlaybackState state) {
+  Widget _buildEmbedded(
+    BuildContext context,
+    ExternalPlaybackState state,
+    bool showStats,
+  ) {
     // The native area covers the placeholder; Flutter can't draw over it,
     // so controls go below.
     final video = _RectReporter(
@@ -178,13 +193,17 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     return Column(
       children: [
         Expanded(child: video),
-        _buildControls(context, state),
+        _buildControls(context, state, showStats),
         NowNextBar(channel: widget.channel),
       ],
     );
   }
 
-  Widget _buildControls(BuildContext context, ExternalPlaybackState state) {
+  Widget _buildControls(
+    BuildContext context,
+    ExternalPlaybackState state,
+    bool showStats,
+  ) {
     final starting =
         _mode == _Mode.embedding ||
         state.status == ExternalPlayerStatus.starting;
@@ -201,10 +220,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
             Expanded(
               child: starting
                   ? const LinearProgressIndicator()
-                  : _buildSeekBar(context, state),
+                  : widget.fixedLength
+                  ? _buildSeekBar(context, state)
+                  : const SizedBox.shrink(),
             ),
-            const SizedBox(width: 16),
-            _DropReadout(state),
+            if (showStats) ...[const SizedBox(width: 16), _DropReadout(state)],
             const SizedBox(width: 8),
             IconButton(
               tooltip: 'Fullscreen (double-click video, Esc to leave)',
@@ -259,7 +279,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     );
   }
 
-  Widget _buildStatus(BuildContext context, ExternalPlaybackState state) {
+  Widget _buildStatus(
+    BuildContext context,
+    ExternalPlaybackState state,
+    bool showStats,
+  ) {
     final theme = Theme.of(context);
     final failed = state.status == ExternalPlayerStatus.failed;
     final (icon, title) = switch (state.status) {
@@ -275,7 +299,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       ExternalPlayerStatus.exited => (Icons.stop_circle_outlined, 'mpv closed'),
       _ => (Icons.hourglass_empty, 'Starting mpv…'),
     };
-    final position = state.position;
+    final position = widget.fixedLength ? state.position : null;
     final duration = state.duration;
     return Center(
       child: ConstrainedBox(
@@ -304,7 +328,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                 key: const Key('mpv.position'),
               ),
             ],
-            if (state.status == ExternalPlayerStatus.playing) ...[
+            if (showStats && state.status == ExternalPlayerStatus.playing) ...[
               const SizedBox(height: 8),
               _DropReadout(state),
             ],

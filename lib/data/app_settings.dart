@@ -5,7 +5,11 @@ import 'package:path_provider/path_provider.dart';
 
 /// User preferences that are not secret.
 final class AppSettings {
-  const AppSettings({this.guideTimeZone, this.guideShiftHours = 0});
+  const AppSettings({
+    this.guideTimeZone,
+    this.guideShiftHours = 0,
+    this.showPlaybackStats = false,
+  });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
   /// device's zone.
@@ -17,17 +21,23 @@ final class AppSettings {
 
   static const maxShiftHours = 12;
 
+  /// Whether the player shows mpv's dropped-frame counters.
+  final bool showPlaybackStats;
+
   AppSettings copyWith({
     String? Function()? guideTimeZone,
     int? guideShiftHours,
+    bool? showPlaybackStats,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
+    showPlaybackStats: showPlaybackStats ?? this.showPlaybackStats,
   );
 
   Map<String, Object?> toJson() => {
     'guideTimeZone': ?guideTimeZone,
     'guideShiftHours': guideShiftHours,
+    'showPlaybackStats': showPlaybackStats,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -38,6 +48,7 @@ final class AppSettings {
     return AppSettings(
       guideTimeZone: zone is String && zone.isNotEmpty ? zone : null,
       guideShiftHours: shift is int && shift.abs() <= maxShiftHours ? shift : 0,
+      showPlaybackStats: json['showPlaybackStats'] == true,
     );
   }
 }

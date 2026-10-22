@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/player/mpv/external_mpv_player.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/ui/epg/now_next.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/player/mpv_player_screen.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'fake_player.dart';
 import 'helpers.dart';
@@ -17,6 +20,7 @@ void main() {
     WidgetTester tester, {
     FakeVideoEmbed? videoEmbed,
     bool embedding = true,
+    bool showStats = false,
   }) async {
     player = FakeExternalPlayer();
     embed = videoEmbed ?? FakeVideoEmbed();
@@ -32,6 +36,9 @@ void main() {
           embedMpvProvider.overrideWithValue(embedding),
           videoEmbedProvider.overrideWithValue(embed),
         ],
+        settings: FakeSettingsStorage(
+          AppSettings(showPlaybackStats: showStats),
+        ),
         child: const Scaffold(body: LiveTvScreen()),
       ),
     );
@@ -46,6 +53,8 @@ void main() {
     player.state.copyWith(
       status: ExternalPlayerStatus.playing,
       position: () => const Duration(seconds: 75),
+      // For live streams mpv reports the buffered amount as the duration.
+      duration: () => const Duration(seconds: 80),
     ),
   );
 
@@ -64,18 +73,14 @@ void main() {
 
       play();
       await tester.pump();
-      expect(find.byKey(const Key('mpv.position')), findsOneWidget);
-      expect(find.text('dropped (vo/dec): - / -'), findsOneWidget);
-      player.emit(
-        player.state.copyWith(voDrops: () => 3, decoderDrops: () => 0),
-      );
-      await tester.pump();
-      expect(find.text('dropped (vo/dec): 3 / 0'), findsOneWidget);
-      // In the controls bar, below the video.
-      expect(
-        tester.getRect(find.byKey(const Key('mpv.drops'))).top,
-        greaterThanOrEqualTo(video.bottom),
-      );
+      // Live: no seek bar and, by default, no statistics.
+      expect(find.byType(Slider), findsNothing);
+      expect(find.byKey(const Key('mpv.position')), findsNothing);
+      expect(find.byKey(const Key('mpv.drops')), findsNothing);
+      expect(find.byTooltip('Pause'), findsOneWidget);
+      expect(find.byTooltip(RegExp('^Fullscreen')), findsOneWidget);
+      // The guide's programme progress stays under the video.
+      expect(find.byType(NowNextBar), findsOneWidget);
       await tester.tap(find.byTooltip('Pause'));
       expect(player.pauseToggles, 1);
 
@@ -88,6 +93,53 @@ void main() {
         tester.getRect(find.byKey(const Key('mpv.video'))),
       );
       expect(embed.rects.last, isNot(video));
+    });
+
+    testWidgets('playback statistics show when turned on', (tester) async {
+      await pumpAndOpenChannel(tester, showStats: true);
+      final video = tester.getRect(find.byKey(const Key('mpv.video')));
+      play();
+      await tester.pump();
+      expect(find.text('dropped (vo/dec): - / -'), findsOneWidget);
+      player.emit(
+        player.state.copyWith(voDrops: () => 3, decoderDrops: () => 0),
+      );
+      await tester.pump();
+      expect(find.text('dropped (vo/dec): 3 / 0'), findsOneWidget);
+      // In the controls bar, below the video.
+      expect(
+        tester.getRect(find.byKey(const Key('mpv.drops'))).top,
+        greaterThanOrEqualTo(video.bottom),
+      );
+      expect(find.byType(Slider), findsNothing);
+    });
+
+    testWidgets('content with a fixed length gets a seek bar', (tester) async {
+      player = FakeExternalPlayer();
+      embed = FakeVideoEmbed();
+      addTearDown(player.dispose);
+      await tester.pumpWidget(
+        testApp(
+          overrides: [
+            liveSourceProvider.overrideWithValue(
+              FakeLiveSource(syntheticCatalog(count: 1)),
+            ),
+            externalMpvProvider.overrideWithValue(player),
+            embedMpvProvider.overrideWithValue(true),
+            videoEmbedProvider.overrideWithValue(embed),
+          ],
+          child: const MpvPlayerScreen(
+            channel: LiveStream(id: '0', name: 'Film'),
+            fixedLength: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      play();
+      await tester.pump();
+      expect(find.byType(Slider), findsOneWidget);
+      expect(find.text('1:20'), findsOneWidget);
     });
 
     testWidgets('fullscreen via button, double-click and Esc', (tester) async {
@@ -177,6 +229,7 @@ void main() {
         await pumpAndOpenChannel(
           tester,
           videoEmbed: FakeVideoEmbed(failure: 'Not running on X11'),
+          showStats: true,
         );
       } finally {
         debugPrint = oldDebugPrint;
@@ -190,6 +243,7 @@ void main() {
       play();
       await tester.pump();
       expect(find.text('Playing in the mpv window'), findsOneWidget);
+      expect(find.byKey(const Key('mpv.position')), findsNothing);
       player.emit(
         player.state.copyWith(voDrops: () => 0, decoderDrops: () => 0),
       );

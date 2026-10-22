@@ -6,6 +6,7 @@ import 'player_session.dart';
 
 /// Reusable video player: video, basic controls and an error banner. With
 /// [showDebug], adds the mpv property overlay, an hwdec selector and the log.
+/// Only [fixedLength] content gets a seek bar.
 ///
 /// Never shows the stream URL.
 class TvPlayerView extends StatefulWidget {
@@ -16,6 +17,7 @@ class TvPlayerView extends StatefulWidget {
     this.hwdecModes = const [],
     this.onHwdecChanged,
     this.showDebug = false,
+    this.fixedLength = false,
   });
 
   /// Contains credentials: never display or log it.
@@ -24,6 +26,10 @@ class TvPlayerView extends StatefulWidget {
   final List<String> hwdecModes;
   final ValueChanged<String>? onHwdecChanged;
   final bool showDebug;
+
+  /// Whether the content has a fixed length (a movie or an episode). Live
+  /// streams don't: mpv's duration there is only what is buffered.
+  final bool fixedLength;
 
   @override
   State<TvPlayerView> createState() => _TvPlayerViewState();
@@ -192,7 +198,11 @@ class _TvPlayerViewState extends State<TvPlayerView> {
               );
             },
           ),
-          Expanded(child: _buildSeekBar()),
+          Expanded(
+            child: widget.fixedLength
+                ? _buildSeekBar()
+                : const SizedBox.shrink(),
+          ),
           const SizedBox(width: 8),
           StreamBuilder<double>(
             stream: player.stream.volume,

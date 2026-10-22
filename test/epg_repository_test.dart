@@ -69,12 +69,18 @@ void main() {
   test('settings round-trip through the settings file', () async {
     final storage = FileSettingsStorage(() async => dir);
     expect((await storage.load()).guideTimeZone, isNull);
+    expect((await storage.load()).showPlaybackStats, isFalse);
     await storage.save(
-      const AppSettings(guideTimeZone: 'Europe/Stockholm', guideShiftHours: -1),
+      const AppSettings(
+        guideTimeZone: 'Europe/Stockholm',
+        guideShiftHours: -1,
+        showPlaybackStats: true,
+      ),
     );
     final loaded = await storage.load();
     expect(loaded.guideTimeZone, 'Europe/Stockholm');
     expect(loaded.guideShiftHours, -1);
+    expect(loaded.showPlaybackStats, isTrue);
 
     File('${dir.path}/settings.json')
         .writeAsStringSync('{"guideShiftHours": 99}');

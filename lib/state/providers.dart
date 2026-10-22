@@ -126,7 +126,7 @@ class ChannelQuery extends Notifier<String> {
 }
 
 /// Channels of the selected category whose name contains the search text
-/// (case-insensitive).
+/// (case-insensitive). Separators are kept, except while searching.
 final visibleChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
   final catalog = ref.watch(liveCatalogProvider);
   final category = ref.watch(selectedCategoryProvider);
@@ -136,7 +136,7 @@ final visibleChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
     if (query.isEmpty) return channels;
     return [
       for (final ch in channels)
-        if (ch.name.toLowerCase().contains(query)) ch,
+        if (!ch.isSeparator && ch.name.toLowerCase().contains(query)) ch,
     ];
   });
 });
