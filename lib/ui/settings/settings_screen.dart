@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../../data/app_settings.dart';
 import '../../data/provider_storage.dart';
+import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
+import '../epg/guide_screen.dart' show formatGuideDate, formatShift;
 import '../setup/setup_screen.dart';
+import 'time_zone_picker.dart';
 
-/// Provider management and the player debug toggle.
+/// Provider management, TV guide settings and the player debug toggle.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -41,9 +45,48 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _saveSettings(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    try {
+      await ref.read(appSettingsProvider.notifier).set(settings);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save settings (${e.runtimeType})')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickTimeZone(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    final choice = await showTimeZonePicker(
+      context,
+      current: settings.guideTimeZone,
+      deviceZone: ref.read(deviceTimeZoneProvider),
+    );
+    if (choice == null || !context.mounted) return;
+    await _saveSettings(
+      context,
+      ref,
+      settings.copyWith(guideTimeZone: () => choice.zone),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(savedProviderProvider).value;
+    final settings =
+        ref.watch(appSettingsProvider).value ?? const AppSettings();
+    final time = ref.watch(guideTimeProvider);
+    final guideState = ref.watch(guideProvider);
+    final guide = guideState.guide;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -82,6 +125,68 @@ class SettingsScreen extends ConsumerWidget {
               label: const Text('Remove provider'),
             ),
           ],
+        ),
+        const Divider(height: 32),
+        Text('TV guide', style: Theme.of(context).textTheme.titleMedium),
+        ListTile(
+          key: const Key('settings.timeZone'),
+          leading: const Icon(Icons.public),
+          title: const Text('Time zone'),
+          subtitle: Text(
+            settings.guideTimeZone == null
+                ? 'Device time zone (${ref.watch(deviceTimeZoneProvider)})'
+                : settings.guideTimeZone!,
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _pickTimeZone(context, ref, settings),
+        ),
+        ListTile(
+          leading: const Icon(Icons.schedule),
+          title: const Text('Time shift'),
+          subtitle: const Text(
+            'Moves all guide times, for providers whose times are wrong.',
+          ),
+          trailing: DropdownButton<int>(
+            key: const Key('settings.shift'),
+            value: settings.guideShiftHours,
+            items: [
+              for (
+                var h = -AppSettings.maxShiftHours;
+                h <= AppSettings.maxShiftHours;
+                h++
+              )
+                DropdownMenuItem(
+                  value: h,
+                  child: Text(h == 0 ? 'None' : formatShift(h)),
+                ),
+            ],
+            onChanged: (h) => _saveSettings(
+              context,
+              ref,
+              settings.copyWith(guideShiftHours: h),
+            ),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.update),
+          title: const Text('Guide data'),
+          subtitle: Text(switch (guideState) {
+            GuideState(supported: false) => 'Not available for this provider',
+            GuideState(loading: true) => 'Updating…',
+            _ when guide == null => guideState.error ?? 'Not downloaded yet',
+            _ =>
+              'Updated ${formatGuideDate(time, guide.fetchedAt)} '
+                  '${time.formatLocalHm(guide.fetchedAt)}, '
+                  '${guide.programCount} programmes'
+                  '${guideState.error == null ? '' : ' · last update failed'}',
+          }),
+          trailing: IconButton(
+            tooltip: 'Refresh TV guide',
+            icon: const Icon(Icons.refresh),
+            onPressed: guideState.supported && !guideState.loading
+                ? ref.read(guideProvider.notifier).refresh
+                : null,
+          ),
         ),
         const Divider(height: 32),
         SwitchListTile(

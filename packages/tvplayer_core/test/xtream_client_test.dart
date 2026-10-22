@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -292,6 +293,84 @@ void main() {
         ),
       );
       await expectLater(client.login(), throwsA(leaksNothing()));
+    });
+
+    group('xmltv download', () {
+      late Directory dir;
+      late File target;
+
+      setUp(() async {
+        dir = await Directory.systemTemp.createTemp('xmltv_test');
+        target = File('${dir.path}/guide.xml');
+      });
+
+      tearDown(() => dir.delete(recursive: true));
+
+      XtreamClient clientWith(MockClientHandler handler) =>
+          XtreamClient(_config, httpClient: MockClient(handler));
+
+      test('streams the guide into a file', () async {
+        Uri? requested;
+        final client = clientWith((request) async {
+          requested = request.url;
+          return http.Response.bytes(utf8.encode(fixture('epg.xml')), 200);
+        });
+        await client.downloadXmltv(target);
+        expect(requested?.path, '/xmltv.php');
+        expect(await target.readAsString(), fixture('epg.xml'));
+      });
+
+      test('HTTP error', () async {
+        final client = clientWith((_) async => http.Response('', 500));
+        await expectLater(
+          client.downloadXmltv(target),
+          throwsA(leaksNothing()),
+        );
+        expect(target.existsSync(), isFalse);
+      });
+
+      test('auth error', () async {
+        final client = clientWith((_) async => http.Response('', 401));
+        await expectLater(
+          client.downloadXmltv(target),
+          throwsA(isA<XtreamAuthException>()),
+        );
+      });
+
+      test('network error', () async {
+        final client = clientWith(
+          (request) async => throw http.ClientException(
+            'Connection refused to example.com for testuser:testpass',
+            request.url,
+          ),
+        );
+        await expectLater(
+          client.downloadXmltv(target),
+          throwsA(leaksNothing()),
+        );
+      });
+
+      test('broken stream removes the partial file', () async {
+        final client = XtreamClient(
+          _config,
+          httpClient: MockClient.streaming((request, _) async {
+            Stream<List<int>> body() async* {
+              yield utf8.encode('<tv>');
+              throw http.ClientException(
+                'reset by example.com testuser testpass',
+                request.url,
+              );
+            }
+
+            return http.StreamedResponse(body(), 200);
+          }),
+        );
+        await expectLater(
+          client.downloadXmltv(target),
+          throwsA(leaksNothing()),
+        );
+        expect(target.existsSync(), isFalse);
+      });
     });
 
     test('client toString', () {

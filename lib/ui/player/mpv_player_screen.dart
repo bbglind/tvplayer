@@ -11,6 +11,7 @@ import '../../format.dart';
 import '../../player/mpv/external_mpv_player.dart';
 import '../../player/mpv/video_embed.dart';
 import '../../state/providers.dart';
+import '../epg/now_next.dart';
 
 enum _Mode {
   /// Asking the native side for an X11 window.
@@ -178,6 +179,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       children: [
         Expanded(child: video),
         _buildControls(context, state),
+        NowNextBar(channel: widget.channel),
       ],
     );
   }
@@ -306,6 +308,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               const SizedBox(height: 8),
               _DropReadout(state),
             ],
+            const SizedBox(height: 16),
+            NowNextBar(channel: widget.channel),
             const SizedBox(height: 16),
             failed
                 ? FilledButton.icon(

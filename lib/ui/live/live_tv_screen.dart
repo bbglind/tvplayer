@@ -4,8 +4,8 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/errors.dart';
 import '../../state/providers.dart';
-import '../player/mpv_player_screen.dart';
-import '../player/player_screen.dart';
+import '../epg/now_next.dart';
+import '../player/open_channel.dart';
 
 /// Categories on the left, searchable channel list on the right.
 class LiveTvScreen extends ConsumerWidget {
@@ -161,6 +161,15 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
                 icon: const Icon(Icons.refresh),
                 onPressed: () => ref.invalidate(liveCatalogProvider),
               ),
+              if (ref.watch(guideProvider) case final guide
+                  when guide.supported)
+                IconButton(
+                  tooltip: 'Refresh TV guide',
+                  icon: const Icon(Icons.event_repeat),
+                  onPressed: guide.loading
+                      ? null
+                      : ref.read(guideProvider.notifier).refresh,
+                ),
             ],
           ),
         ),
@@ -169,7 +178,7 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
               ? const Center(child: Text('No channels'))
               : ListView.builder(
                   key: const Key('live.channels'),
-                  itemExtent: 56,
+                  itemExtent: 72,
                   itemCount: channels.length,
                   itemBuilder: (context, i) =>
                       _ChannelTile(channel: channels[i]),
@@ -201,14 +210,9 @@ class _ChannelTile extends ConsumerWidget {
               ),
       ),
       title: Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: NowNextLine(channel: channel),
       trailing: channel.number == null ? null : Text('${channel.number}'),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => ref.read(useExternalMpvProvider)
-              ? MpvPlayerScreen(channel: channel)
-              : PlayerScreen(channel: channel),
-        ),
-      ),
+      onTap: () => openChannel(context, ref, channel),
     );
   }
 }

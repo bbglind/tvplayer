@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../epg/guide_screen.dart';
 import '../live/live_tv_screen.dart';
 import '../settings/settings_screen.dart';
 
@@ -30,6 +31,11 @@ class _AppShellState extends State<AppShell> {
                 label: Text('Live TV'),
               ),
               NavigationRailDestination(
+                icon: Icon(Icons.calendar_view_week_outlined),
+                selectedIcon: Icon(Icons.calendar_view_week),
+                label: Text('Guide'),
+              ),
+              NavigationRailDestination(
                 icon: Icon(Icons.movie_outlined),
                 selectedIcon: Icon(Icons.movie),
                 label: Text('Movies'),
@@ -50,8 +56,9 @@ class _AppShellState extends State<AppShell> {
           Expanded(
             child: switch (_index) {
               0 => const LiveTvScreen(),
-              1 => const _ComingSoon('Movies'),
-              2 => const _ComingSoon('Series'),
+              1 => const GuideScreen(),
+              2 => const _ComingSoon('Movies'),
+              3 => const _ComingSoon('Series'),
               _ => const SettingsScreen(),
             },
           ),

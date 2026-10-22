@@ -5,6 +5,19 @@ import 'package:xml/xml_events.dart';
 
 import '../models/epg_program.dart';
 
+/// A `<channel>` element of an XMLTV guide.
+final class XmltvChannel {
+  const XmltvChannel({required this.id, this.displayNames = const []});
+
+  final String id;
+
+  /// All `<display-name>`s, in document order.
+  final List<String> displayNames;
+
+  @override
+  String toString() => 'XmltvChannel($id, $displayNames)';
+}
+
 /// Streaming parser for XMLTV guides (e.g. Xtream `xmltv.php`).
 ///
 /// The document is processed as a stream of XML events and programmes are
@@ -20,12 +33,23 @@ class XmltvParser {
   final Set<String>? channelIds;
 
   /// Parses an XMLTV document from raw bytes (decoded as UTF-8).
-  Stream<EpgProgram> parseBytes(Stream<List<int>> bytes) =>
-      parseChunks(bytes.transform(const Utf8Decoder(allowMalformed: true)));
+  ///
+  /// [onChannel] is called for every `<channel>` element (not filtered by
+  /// [channelIds]); in XMLTV these come before the programmes.
+  Stream<EpgProgram> parseBytes(
+    Stream<List<int>> bytes, {
+    void Function(XmltvChannel channel)? onChannel,
+  }) => parseChunks(
+    bytes.transform(const Utf8Decoder(allowMalformed: true)),
+    onChannel: onChannel,
+  );
 
   /// Parses an XMLTV document from a stream of text chunks.
-  Stream<EpgProgram> parseChunks(Stream<String> chunks) async* {
-    final state = _XmltvState(channelIds);
+  Stream<EpgProgram> parseChunks(
+    Stream<String> chunks, {
+    void Function(XmltvChannel channel)? onChannel,
+  }) async* {
+    final state = _XmltvState(channelIds, onChannel);
     try {
       await for (final events in chunks.toXmlEvents()) {
         for (final event in events) {
@@ -39,7 +63,10 @@ class XmltvParser {
   }
 
   /// Parses an XMLTV document held in memory.
-  Stream<EpgProgram> parseString(String xml) => parseChunks(Stream.value(xml));
+  Stream<EpgProgram> parseString(
+    String xml, {
+    void Function(XmltvChannel channel)? onChannel,
+  }) => parseChunks(Stream.value(xml), onChannel: onChannel);
 
   static final _timePattern = RegExp(
     r'^(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?(\d{2})?'
@@ -69,11 +96,18 @@ class XmltvParser {
   }
 }
 
-/// Collects the parts of one `<programme>` element from XML events.
+/// Collects the parts of one `<programme>` (or `<channel>`) element from XML
+/// events.
 class _XmltvState {
-  _XmltvState(this._channelIds);
+  _XmltvState(this._channelIds, this._onChannel);
 
   final Set<String>? _channelIds;
+  final void Function(XmltvChannel channel)? _onChannel;
+
+  /// Id of the open `<channel>`, when one is open and [_onChannel] is set.
+  String? _channelElementId;
+  final _displayNames = <String>[];
+  bool _inDisplayName = false;
 
   bool _inProgramme = false;
   String? _channel;
@@ -93,8 +127,33 @@ class _XmltvState {
       case XmlStartElementEvent(name: 'programme'):
         // A new programme while one is open means broken nesting: drop the
         // unfinished one.
+        _channelElementId = null;
         _begin(event);
         return event.isSelfClosing ? _finish() : null;
+      case XmlStartElementEvent(name: 'channel') when _onChannel != null:
+        _channelElementId = null;
+        _displayNames.clear();
+        _inDisplayName = false;
+        for (final attribute in event.attributes) {
+          if (attribute.name == 'id') {
+            _channelElementId = attribute.value.trim();
+          }
+        }
+        if (event.isSelfClosing) _finishChannel();
+      case XmlStartElementEvent(name: 'display-name')
+          when _channelElementId != null && !event.isSelfClosing:
+        _inDisplayName = true;
+        _text.clear();
+      case XmlTextEvent() when _inDisplayName:
+        _text.write(event.value);
+      case XmlCDATAEvent() when _inDisplayName:
+        _text.write(event.value);
+      case XmlEndElementEvent(name: 'display-name') when _inDisplayName:
+        _inDisplayName = false;
+        final name = _text.toString().trim();
+        if (name.isNotEmpty) _displayNames.add(name);
+      case XmlEndElementEvent(name: 'channel') when _channelElementId != null:
+        _finishChannel();
       case XmlStartElementEvent() when _inProgramme:
         if (event.isSelfClosing) return null;
         _depth++;
@@ -121,6 +180,16 @@ class _XmltvState {
         break;
     }
     return null;
+  }
+
+  void _finishChannel() {
+    final id = _channelElementId;
+    _channelElementId = null;
+    _inDisplayName = false;
+    if (id == null || id.isEmpty) return;
+    _onChannel?.call(
+      XmltvChannel(id: id, displayNames: List.unmodifiable(_displayNames)),
+    );
   }
 
   void _begin(XmlStartElementEvent event) {

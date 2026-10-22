@@ -1,13 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../data/app_settings.dart';
 import '../data/connection_tester.dart';
+import '../data/device_time_zone.dart';
+import '../data/epg_repository.dart';
 import '../data/provider_storage.dart';
 import '../player/mpv/external_mpv_player.dart';
 import '../player/mpv/video_embed.dart';
+import 'guide_controller.dart';
 
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
@@ -40,13 +46,28 @@ class SavedProviderNotifier extends AsyncNotifier<ProviderConfig?> {
   /// [ProviderStorageException] without changing the current state.
   Future<void> save(ProviderConfig config) async {
     await ref.read(providerStorageProvider).save(config);
+    final previous = state.value;
+    if (previous == null ||
+        encodeProviderConfig(previous) != encodeProviderConfig(config)) {
+      await _clearGuideCache();
+    }
     state = AsyncData(config);
   }
 
   /// Forgets the saved provider. Throws [ProviderStorageException].
   Future<void> remove() async {
     await ref.read(providerStorageProvider).delete();
+    await _clearGuideCache();
     state = const AsyncData(null);
+  }
+
+  /// The cached guide belongs to the old provider.
+  Future<void> _clearGuideCache() async {
+    try {
+      await ref.read(epgRepositoryProvider).clear();
+    } catch (e) {
+      debugPrint('Could not clear the guide cache (${e.runtimeType})');
+    }
   }
 }
 
@@ -119,6 +140,67 @@ final visibleChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
     ];
   });
 });
+
+/// Where non-secret settings are persisted. Overridden in tests.
+final settingsStorageProvider = Provider<SettingsStorage>(
+  (ref) => FileSettingsStorage(),
+);
+
+/// User settings; defaults until loaded.
+final appSettingsProvider =
+    AsyncNotifierProvider<AppSettingsNotifier, AppSettings>(
+      AppSettingsNotifier.new,
+    );
+
+class AppSettingsNotifier extends AsyncNotifier<AppSettings> {
+  @override
+  Future<AppSettings> build() => ref.watch(settingsStorageProvider).load();
+
+  /// Applies [settings] at once and saves them. Throws if saving fails.
+  Future<void> set(AppSettings settings) async {
+    state = AsyncData(settings);
+    await ref.read(settingsStorageProvider).save(settings);
+  }
+}
+
+/// IANA name of the device's time zone. Overridden in tests.
+final deviceTimeZoneProvider = Provider<String>((ref) => deviceTimeZone());
+
+/// Converts guide times for display, from the time zone and shift settings.
+final guideTimeProvider = Provider<GuideTime>((ref) {
+  final settings = ref.watch(appSettingsProvider).value ?? const AppSettings();
+  return GuideTime.named(
+    settings.guideTimeZone ?? ref.watch(deviceTimeZoneProvider),
+    shiftHours: settings.guideShiftHours,
+  );
+});
+
+/// The current time in UTC, updated every 30 seconds for now/next and the
+/// guide's time line. Overridden in tests.
+final clockProvider = NotifierProvider<Clock, DateTime>(Clock.new);
+
+class Clock extends Notifier<DateTime> {
+  static const interval = Duration(seconds: 30);
+
+  @override
+  DateTime build() {
+    final timer = Timer.periodic(interval, (_) => state = _now());
+    ref.onDispose(timer.cancel);
+    return _now();
+  }
+
+  static DateTime _now() => DateTime.now().toUtc();
+}
+
+/// Downloads and caches the TV guide. Overridden in tests.
+final epgRepositoryProvider = Provider<EpgRepository>(
+  (ref) => FileEpgRepository(),
+);
+
+/// The TV guide of the active provider.
+final guideProvider = NotifierProvider<GuideController, GuideState>(
+  GuideController.new,
+);
 
 /// Whether the player shows its debug overlay, hwdec selector and log.
 final playerDebugProvider = NotifierProvider<PlayerDebug, bool>(

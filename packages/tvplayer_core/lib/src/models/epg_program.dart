@@ -49,6 +49,15 @@ final class EpgProgram {
 
   Duration get duration => stop.difference(start);
 
+  EpgProgram copyWith({DateTime? start, DateTime? stop}) => EpgProgram(
+    channelId: channelId,
+    title: title,
+    description: description,
+    category: category,
+    start: start ?? this.start,
+    stop: stop ?? this.stop,
+  );
+
   /// Whether the programme is airing at [time].
   bool isAiringAt(DateTime time) =>
       !time.isBefore(start) && time.isBefore(stop);

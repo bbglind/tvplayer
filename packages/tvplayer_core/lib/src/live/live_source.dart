@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
 
 import '../m3u/m3u_client.dart';
@@ -75,6 +77,14 @@ abstract interface class LiveSource {
   /// Playback URL for [stream]. Contains credentials: never log or show it.
   Uri streamUrl(LiveStream stream);
 
+  /// Whether [downloadGuide] is supported.
+  bool get hasGuide;
+
+  /// Downloads the provider's XMLTV guide into [target]. Throws
+  /// [XtreamException] on failure and [UnsupportedError] when [hasGuide] is
+  /// false.
+  Future<void> downloadGuide(File target);
+
   void close();
 }
 
@@ -112,6 +122,12 @@ class XtreamLiveSource implements LiveSource {
   @override
   Uri streamUrl(LiveStream stream) =>
       _client.liveStreamUrl(int.parse(stream.id));
+
+  @override
+  bool get hasGuide => true;
+
+  @override
+  Future<void> downloadGuide(File target) => _client.downloadXmltv(target);
 
   @override
   void close() => _client.close();
@@ -164,6 +180,14 @@ class M3uLiveSource implements LiveSource {
     if (url == null) throw StateError('Unknown stream ${stream.id}');
     return Uri.parse(url);
   }
+
+  // A playlist's `url-tvg` guide isn't supported yet.
+  @override
+  bool get hasGuide => false;
+
+  @override
+  Future<void> downloadGuide(File target) =>
+      throw UnsupportedError('M3U playlists have no guide yet');
 
   @override
   void close() => _client.close();

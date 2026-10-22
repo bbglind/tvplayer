@@ -4,6 +4,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../player/tv_player_view.dart';
 import '../../state/providers.dart';
+import '../epg/now_next.dart';
 
 /// Full-screen playback of one live channel.
 class PlayerScreen extends ConsumerWidget {
@@ -31,12 +32,19 @@ class PlayerScreen extends ConsumerWidget {
       ),
       body: source == null
           ? const Center(child: Text('No provider configured'))
-          : TvPlayerView(
-              url: source.streamUrl(channel),
-              hwdec: ref.watch(hwdecProvider),
-              hwdecModes: Hwdec.modes,
-              onHwdecChanged: ref.read(hwdecProvider.notifier).set,
-              showDebug: debug,
+          : Column(
+              children: [
+                Expanded(
+                  child: TvPlayerView(
+                    url: source.streamUrl(channel),
+                    hwdec: ref.watch(hwdecProvider),
+                    hwdecModes: Hwdec.modes,
+                    onHwdecChanged: ref.read(hwdecProvider.notifier).set,
+                    showDebug: debug,
+                  ),
+                ),
+                NowNextBar(channel: channel),
+              ],
             ),
     );
   }

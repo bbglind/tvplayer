@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -222,6 +223,60 @@ class XtreamClient {
     path: '${_baseUri.path}/xmltv.php',
     queryParameters: {'username': _username, 'password': _password},
   );
+
+  /// Downloads the full XMLTV guide (`xmltv.php`) into [target], streaming
+  /// it so large guides are never held in memory. [idleTimeout] limits how
+  /// long the panel may stay silent. Throws [XtreamException]; messages
+  /// never contain the URL or credentials. A partial file is deleted.
+  Future<void> downloadXmltv(
+    File target, {
+    Duration idleTimeout = const Duration(seconds: 60),
+  }) async {
+    const what = 'xmltv';
+    final http.StreamedResponse response;
+    try {
+      response = await _http
+          .send(http.Request('GET', xmltvUrl()))
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const XtreamException('Request timed out ($what)');
+    } on http.ClientException catch (e) {
+      throw XtreamException('Network error ($what): ${_redact(e.message)}');
+    } catch (e) {
+      throw XtreamException('Network error ($what): ${e.runtimeType}');
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await response.stream.drain<void>().catchError((_) {});
+      throw const XtreamAuthException();
+    }
+    if (response.statusCode != 200) {
+      await response.stream.drain<void>().catchError((_) {});
+      throw XtreamException(
+        'Unexpected response ($what)',
+        statusCode: response.statusCode,
+      );
+    }
+
+    final sink = target.openWrite();
+    try {
+      await sink.addStream(response.stream.timeout(idleTimeout));
+      await sink.close();
+    } catch (e) {
+      await sink.close().catchError((_) {});
+      if (await target.exists()) await target.delete();
+      throw switch (e) {
+        TimeoutException() => const XtreamException('Download stalled ($what)'),
+        http.ClientException(:final message) => XtreamException(
+          'Network error ($what): ${_redact(message)}',
+        ),
+        FileSystemException(:final message) => XtreamException(
+          'Could not save the guide: $message',
+        ),
+        _ => XtreamException('Download failed ($what): ${e.runtimeType}'),
+      };
+    }
+  }
 
   Uri _streamUrl(String kind, String id, String extension) {
     final ext = extension.startsWith('.') ? extension.substring(1) : extension;

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Times around the end of summer time in Sweden: on 2026-10-25 clocks go
+     back from 03:00 CEST (+0200) to 02:00 CET (+0100), at 01:00 UTC. -->
+<tv>
+  <channel id="kanal1.example">
+    <display-name>SE: Kanal 1 HD</display-name>
+  </channel>
+  <channel id="kanal2.example">
+    <display-name>Kanal 2</display-name>
+    <display-name lang="en">Channel Two</display-name>
+  </channel>
+  <channel id="other.example">
+    <display-name>Other</display-name>
+  </channel>
+  <programme start="20261025013000 +0200" stop="20261025023000 +0200" channel="kanal1.example">
+    <title>Before The Switch</title>
+  </programme>
+  <programme start="20261025023000 +0200" stop="20261025023000 +0100" channel="kanal1.example">
+    <title>Across The Switch</title>
+  </programme>
+  <programme start="20261025023000 +0100" stop="20261025033000 +0100" channel="kanal1.example">
+    <title>After The Switch</title>
+  </programme>
+  <programme start="20261025000000 +0200" stop="20261025060000 +0100" channel="kanal2.example">
+    <title>Night Film</title>
+  </programme>
+  <programme start="20261025000000 +0200" stop="20261025060000 +0100" channel="other.example">
+    <title>Not In Playlist</title>
+  </programme>
+</tv>

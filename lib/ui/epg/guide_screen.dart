@@ -1,0 +1,762 @@
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
+
+import '../../data/errors.dart';
+import '../../state/guide_controller.dart';
+import '../../state/providers.dart';
+import '../player/open_channel.dart';
+
+/// The full TV guide: channels down the side, time across the top.
+class GuideScreen extends ConsumerWidget {
+  const GuideScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final guideState = ref.watch(guideProvider);
+    final catalog = ref.watch(liveCatalogProvider);
+    if (!guideState.supported) {
+      return const _Message(
+        icon: Icons.event_busy,
+        title: 'No TV guide',
+        text: 'The TV guide is only available for Xtream providers.',
+      );
+    }
+    final guide = guideState.guide;
+    if (guide == null) {
+      if (guideState.error case final error? when !guideState.loading) {
+        return _Message(
+          icon: Icons.error_outline,
+          title: 'Could not load the TV guide',
+          text: error,
+          onRetry: ref.read(guideProvider.notifier).refresh,
+        );
+      }
+      return const _Message(
+        title: 'Loading the TV guide…',
+        text: 'The first download can take a while for large guides.',
+        loading: true,
+      );
+    }
+    return catalog.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _Message(
+        icon: Icons.error_outline,
+        title: 'Could not load channels',
+        text: describeProviderError(error),
+        onRetry: () => ref.invalidate(liveCatalogProvider),
+      ),
+      data: (catalog) {
+        final channels = catalog.channelsIn(
+          ref.watch(selectedCategoryProvider),
+        );
+        return Column(
+          children: [
+            _Toolbar(catalog: catalog, state: guideState),
+            if (guideState.loading)
+              const LinearProgressIndicator(minHeight: 2)
+            else
+              const SizedBox(height: 2),
+            Expanded(
+              child: channels.isEmpty
+                  ? const Center(child: Text('No channels'))
+                  : GuideGrid(channels: channels, guide: guide),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Toolbar extends ConsumerWidget {
+  const _Toolbar({required this.catalog, required this.state});
+
+  final LiveCatalog catalog;
+  final GuideState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final time = ref.watch(guideTimeProvider);
+    final selected = ref.watch(selectedCategoryProvider);
+    final guide = state.guide;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          Flexible(
+            child: DropdownButton<String?>(
+              key: const Key('guide.category'),
+              value: selected,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              items: [
+                const DropdownMenuItem(child: Text('All channels')),
+                for (final c in catalog.categories)
+                  DropdownMenuItem(
+                    value: c.id,
+                    child: Text(c.name, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: ref.read(selectedCategoryProvider.notifier).select,
+            ),
+          ),
+          const Spacer(),
+          if (state.error case final error?)
+            Tooltip(
+              message: 'Last update failed: $error',
+              child: Icon(
+                Icons.warning_amber,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          const SizedBox(width: 8),
+          if (guide != null)
+            Text(
+              'Updated ${formatGuideDate(time, guide.fetchedAt)} '
+              '${time.formatLocalHm(guide.fetchedAt)} · ${time.zoneName}'
+              '${time.shiftHours == 0 ? '' : ' (${formatShift(time.shiftHours)})'}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          IconButton(
+            tooltip: 'Refresh TV guide',
+            icon: const Icon(Icons.refresh),
+            onPressed: state.loading
+                ? null
+                : ref.read(guideProvider.notifier).refresh,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `+2 h` / `-1 h`.
+String formatShift(int hours) => '${hours > 0 ? '+' : ''}$hours h';
+
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// `Sun 25 Oct` for the real moment [time] in the display zone.
+String formatGuideDate(GuideTime time, DateTime moment) {
+  final l = time.local(moment);
+  return '${_weekdays[l.weekday - 1]} ${l.day} ${_months[l.month - 1]}';
+}
+
+class _Message extends StatelessWidget {
+  const _Message({
+    this.icon,
+    required this.title,
+    required this.text,
+    this.onRetry,
+    this.loading = false,
+  });
+
+  final IconData? icon;
+  final String title;
+  final String text;
+  final VoidCallback? onRetry;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (loading)
+            const CircularProgressIndicator()
+          else if (icon != null)
+            Icon(icon, size: 48),
+          const SizedBox(height: 12),
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(text, textAlign: TextAlign.center),
+          if (onRetry != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The guide grid. The channel column stays put when scrolling sideways and
+/// the time row stays put when scrolling up and down: each is its own
+/// scroll view, kept in step with the programme area.
+class GuideGrid extends ConsumerStatefulWidget {
+  const GuideGrid({super.key, required this.channels, required this.guide});
+
+  final List<LiveStream> channels;
+  final EpgGuide guide;
+
+  static const rowHeight = 56.0;
+  static const headerHeight = 40.0;
+  static const channelWidth = 200.0;
+  static const pixelsPerMinute = 4.0;
+
+  /// How far back the grid starts, before the current hour.
+  static const past = Duration(hours: 2);
+
+  /// The grid shows at least this much, and at most [maxSpan].
+  static const minSpan = Duration(hours: 24);
+  static const maxSpan = Duration(days: 8);
+
+  @override
+  ConsumerState<GuideGrid> createState() => GuideGridState();
+}
+
+class GuideGridState extends ConsumerState<GuideGrid> {
+  /// Programmes are built for a window around the visible area; the window
+  /// moves in steps of this many minutes of scrolling.
+  static const _stepMinutes = 120;
+
+  late final DateTime _opened = ref.read(clockProvider);
+  late final ScrollController _bodyH;
+  late final ScrollController _headerH;
+  final _bodyV = ScrollController();
+  final _channelsV = ScrollController();
+  int _step = 0;
+
+  static const _px = GuideGrid.pixelsPerMinute;
+
+  /// Start of the grid (a UTC instant on a display-zone hour).
+  DateTime _start(GuideTime time) =>
+      time.startOfHour(_opened.subtract(GuideGrid.past));
+
+  double _x(DateTime start, DateTime moment) =>
+      moment.difference(start).inSeconds / 60 * _px;
+
+  @override
+  void initState() {
+    super.initState();
+    final start = _start(ref.read(guideTimeProvider));
+    final initial = math.max(0.0, _x(start, _opened) - 30 * _px);
+    _bodyH = ScrollController(initialScrollOffset: initial);
+    _headerH = ScrollController(initialScrollOffset: initial);
+    _step = _stepOf(initial);
+    _bodyV.addListener(() => _sync(_bodyV, _channelsV));
+    _channelsV.addListener(() => _sync(_channelsV, _bodyV));
+    _bodyH.addListener(_onHorizontal);
+  }
+
+  int _stepOf(double offset) => offset ~/ (_stepMinutes * _px);
+
+  static void _sync(ScrollController from, ScrollController to) {
+    if (!from.hasClients || !to.hasClients) return;
+    if (to.offset != from.offset) to.jumpTo(from.offset);
+  }
+
+  void _onHorizontal() {
+    _sync(_bodyH, _headerH);
+    final step = _stepOf(_bodyH.offset);
+    if (step != _step) setState(() => _step = step);
+  }
+
+  /// Scrolls so the current time is near the left edge.
+  void scrollToNow() {
+    final start = _start(ref.read(guideTimeProvider));
+    final now = ref.read(clockProvider);
+    final target = (_x(start, now) - 30 * _px).clamp(
+      0.0,
+      _bodyH.position.maxScrollExtent,
+    );
+    _bodyH.animateTo(
+      target,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _bodyH.dispose();
+    _headerH.dispose();
+    _bodyV.dispose();
+    _channelsV.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final time = ref.watch(guideTimeProvider);
+    final now = ref.watch(clockProvider);
+    final start = _start(time);
+    var span = GuideGrid.minSpan;
+    if (widget.guide.end case final end?) {
+      final guideSpan = time.adjust(end).difference(start);
+      if (guideSpan > span) span = guideSpan;
+    }
+    if (span > GuideGrid.maxSpan) span = GuideGrid.maxSpan;
+    final width = span.inMinutes * _px;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final visibleMinutes =
+            (constraints.maxWidth - GuideGrid.channelWidth) / _px;
+        final from = start.add(Duration(minutes: (_step - 1) * _stepMinutes));
+        final to = from.add(
+          Duration(minutes: visibleMinutes.ceil() + 3 * _stepMinutes),
+        );
+        final window = (from: from, to: to);
+        return ScrollConfiguration(
+          // Let the mouse drag the grid too, not only touch and trackpads.
+          behavior: ScrollConfiguration.of(context)
+              .copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+          child: Column(
+            children: [
+              SizedBox(
+                height: GuideGrid.headerHeight,
+                child: Row(
+                  children: [
+                    _Corner(
+                      controller: _bodyH,
+                      time: time,
+                      start: start,
+                      onNow: scrollToNow,
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        key: const Key('guide.header'),
+                        controller: _headerH,
+                        scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: _TimeHeader(
+                          time: time,
+                          start: start,
+                          width: width,
+                          window: window,
+                          nowX: _x(start, now),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: GuideGrid.channelWidth,
+                      child: ListView.builder(
+                        key: const Key('guide.channels'),
+                        controller: _channelsV,
+                        itemExtent: GuideGrid.rowHeight,
+                        itemCount: widget.channels.length,
+                        itemBuilder: (context, i) =>
+                            _ChannelCell(channel: widget.channels[i]),
+                      ),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(
+                      child: Scrollbar(
+                        controller: _bodyH,
+                        child: SingleChildScrollView(
+                          key: const Key('guide.body'),
+                          controller: _bodyH,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: width,
+                            child: Stack(
+                              children: [
+                                ListView.builder(
+                                  key: const Key('guide.rows'),
+                                  controller: _bodyV,
+                                  itemExtent: GuideGrid.rowHeight,
+                                  itemCount: widget.channels.length,
+                                  itemBuilder: (context, i) => _GuideRow(
+                                    channel: widget.channels[i],
+                                    guide: widget.guide,
+                                    time: time,
+                                    start: start,
+                                    window: window,
+                                    now: now,
+                                    width: width,
+                                  ),
+                                ),
+                                Positioned(
+                                  key: const Key('guide.nowLine'),
+                                  left: _x(start, now) - 1,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: 2,
+                                  child: IgnorePointer(
+                                    child: ColoredBox(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .error,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+typedef _Window = ({DateTime from, DateTime to});
+
+/// Top-left cell: the date at the left edge of the grid and a "now" button.
+class _Corner extends StatelessWidget {
+  const _Corner({
+    required this.controller,
+    required this.time,
+    required this.start,
+    required this.onNow,
+  });
+
+  final ScrollController controller;
+  final GuideTime time;
+  final DateTime start;
+  final VoidCallback onNow;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: GuideGrid.channelWidth + 1,
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) {
+                final offset = controller.hasClients
+                    ? controller.offset
+                    : controller.initialScrollOffset;
+                final left = start.add(
+                  Duration(
+                    seconds: (offset / GuideGrid.pixelsPerMinute * 60).round(),
+                  ),
+                );
+                return Text(
+                  formatGuideDate(time, left),
+                  key: const Key('guide.date'),
+                  style: Theme.of(context).textTheme.titleSmall,
+                );
+              },
+            ),
+          ),
+          TextButton(onPressed: onNow, child: const Text('Now')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Time labels every half hour, and a marker at the current time.
+class _TimeHeader extends StatelessWidget {
+  const _TimeHeader({
+    required this.time,
+    required this.start,
+    required this.width,
+    required this.window,
+    required this.nowX,
+  });
+
+  final GuideTime time;
+  final DateTime start;
+  final double width;
+  final _Window window;
+  final double nowX;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labels = <Widget>[];
+    // [start] is on a display-zone hour; half-hour steps stay on the
+    // half hour across daylight saving changes.
+    var tick = start;
+    final end = start.add(
+      Duration(minutes: (width / GuideGrid.pixelsPerMinute).round()),
+    );
+    while (tick.isBefore(end)) {
+      if (!tick.isBefore(window.from) && tick.isBefore(window.to)) {
+        final local = time.local(tick);
+        final midnight = local.hour == 0 && local.minute == 0;
+        labels.add(
+          Positioned(
+            left: tick.difference(start).inMinutes * GuideGrid.pixelsPerMinute,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.only(left: 6),
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: theme.dividerColor)),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                midnight
+                    ? '${formatGuideDate(time, tick)} ${time.formatLocalHm(tick)}'
+                    : time.formatLocalHm(tick),
+                style: midnight
+                    ? theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      )
+                    : theme.textTheme.labelLarge,
+              ),
+            ),
+          ),
+        );
+      }
+      tick = tick.add(const Duration(minutes: 30));
+    }
+    return SizedBox(
+      width: width,
+      height: GuideGrid.headerHeight,
+      child: Stack(
+        children: [
+          ...labels,
+          Positioned(
+            left: nowX - 1,
+            bottom: 0,
+            width: 2,
+            height: 10,
+            child: ColoredBox(color: theme.colorScheme.error),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChannelCell extends ConsumerWidget {
+  const _ChannelCell({required this.channel});
+
+  final LiveStream channel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => openChannel(context, ref, channel),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: theme.dividerColor)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              if (channel.number case final number?)
+                SizedBox(
+                  width: 40,
+                  child: Text('$number', style: theme.textTheme.bodySmall),
+                ),
+              Expanded(
+                child: Text(
+                  channel.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideRow extends ConsumerWidget {
+  const _GuideRow({
+    required this.channel,
+    required this.guide,
+    required this.time,
+    required this.start,
+    required this.window,
+    required this.now,
+    required this.width,
+  });
+
+  final LiveStream channel;
+  final EpgGuide guide;
+  final GuideTime time;
+  final DateTime start;
+  final _Window window;
+  final DateTime now;
+  final double width;
+
+  double _x(DateTime t) =>
+      t.difference(start).inSeconds / 60 * GuideGrid.pixelsPerMinute;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final guideNow = time.unadjust(now);
+    final programs = guide.between(
+      channel,
+      time.unadjust(window.from),
+      time.unadjust(window.to),
+    );
+    final cells = <Widget>[];
+    for (final p in programs) {
+      final left = math.max(0.0, _x(time.adjust(p.start)));
+      final right = math.min(width, _x(time.adjust(p.stop)));
+      if (right <= left) continue;
+      final airing = p.isAiringAt(guideNow);
+      cells.add(
+        Positioned(
+          left: left,
+          width: right - left,
+          top: 0,
+          bottom: 0,
+          child: _ProgramCell(
+            key: Key(
+              'guide.program.${channel.id}.'
+              '${p.start.millisecondsSinceEpoch ~/ 1000}',
+            ),
+            program: p,
+            label: time.formatRange(p.start, p.stop),
+            airing: airing,
+            onTap: airing
+                ? () => openChannel(context, ref, channel)
+                : () => _showDetails(context, p),
+          ),
+        ),
+      );
+    }
+    if (cells.isEmpty && guide.programsFor(channel).isEmpty) {
+      cells.add(
+        Positioned(
+          left: math.max(0.0, _x(window.from)) + 8,
+          top: 0,
+          bottom: 0,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'No guide information',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ),
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Stack(children: cells),
+    );
+  }
+
+  void _showDetails(BuildContext context, EpgProgram p) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(p.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${channel.name} · ${formatGuideDate(time, time.adjust(p.start))} '
+              '${time.formatRange(p.start, p.stop)}',
+            ),
+            if (p.category case final category?) ...[
+              const SizedBox(height: 4),
+              Text(category, style: Theme.of(context).textTheme.bodySmall),
+            ],
+            if (p.description case final description?) ...[
+              const SizedBox(height: 12),
+              Text(description),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgramCell extends StatelessWidget {
+  const _ProgramCell({
+    super.key,
+    required this.program,
+    required this.label,
+    required this.airing,
+    required this.onTap,
+  });
+
+  final EpgProgram program;
+  final String label;
+  final bool airing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: Material(
+        color: airing ? scheme.primaryContainer : scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(4),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Tooltip(
+            message: '$label  ${program.title}',
+            waitDuration: const Duration(milliseconds: 600),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    program.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    softWrap: false,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: airing ? scheme.onPrimaryContainer : null,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    softWrap: false,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: airing ? scheme.onPrimaryContainer : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
