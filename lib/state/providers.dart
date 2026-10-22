@@ -4,16 +4,21 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../data/app_settings.dart';
 import '../data/connection_tester.dart';
 import '../data/device_time_zone.dart';
 import '../data/epg_repository.dart';
+import '../data/poster_cache.dart';
 import '../data/provider_storage.dart';
+import '../data/vod_repository.dart';
 import '../player/mpv/external_mpv_player.dart';
 import '../player/mpv/video_embed.dart';
 import 'guide_controller.dart';
+import 'vod_controller.dart';
+import 'watch_controller.dart';
 
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
@@ -49,7 +54,7 @@ class SavedProviderNotifier extends AsyncNotifier<ProviderConfig?> {
     final previous = state.value;
     if (previous == null ||
         encodeProviderConfig(previous) != encodeProviderConfig(config)) {
-      await _clearGuideCache();
+      await _clearCaches(previous);
     }
     state = AsyncData(config);
   }
@@ -57,16 +62,23 @@ class SavedProviderNotifier extends AsyncNotifier<ProviderConfig?> {
   /// Forgets the saved provider. Throws [ProviderStorageException].
   Future<void> remove() async {
     await ref.read(providerStorageProvider).delete();
-    await _clearGuideCache();
+    await _clearCaches(state.value);
     state = const AsyncData(null);
   }
 
-  /// The cached guide belongs to the old provider.
-  Future<void> _clearGuideCache() async {
+  /// The cached guide and catalogues belong to the old provider. Its watch
+  /// history is kept, in case it comes back.
+  Future<void> _clearCaches(ProviderConfig? previous) async {
     try {
       await ref.read(epgRepositoryProvider).clear();
     } catch (e) {
       debugPrint('Could not clear the guide cache (${e.runtimeType})');
+    }
+    if (previous == null) return;
+    try {
+      await ref.read(vodRepositoryProvider).clear(providerKey(previous));
+    } catch (e) {
+      debugPrint('Could not clear the catalogue cache (${e.runtimeType})');
     }
   }
 }
@@ -82,6 +94,90 @@ final liveSourceProvider = Provider<LiveSource?>((ref) {
   ref.onDispose(source.close);
   return source;
 });
+
+/// Short hash identifying the saved provider ([providerKey]); null when
+/// none is configured. Keys per-provider caches and watch history.
+final providerKeyProvider = Provider<String?>((ref) {
+  final config = ref.watch(savedProviderProvider).value;
+  return config == null ? null : providerKey(config);
+});
+
+/// Movies and series of the saved provider; null when none is configured
+/// or it has none (M3U).
+final vodSourceProvider = Provider<VodSource?>((ref) {
+  final config = ref.watch(savedProviderProvider).value;
+  if (config == null) return null;
+  final source = VodSource.forConfig(
+    config,
+    httpClient: ref.watch(httpClientProvider),
+  );
+  ref.onDispose(() => source?.close());
+  return source;
+});
+
+/// Where movie and series details come from. Only the provider for now;
+/// more sources (e.g. TMDB) can be added with [CombinedMetadataSource].
+final metadataSourceProvider = Provider<MetadataSource?>((ref) {
+  final source = ref.watch(vodSourceProvider);
+  return source == null ? null : ProviderMetadataSource(source);
+});
+
+/// Disk cache of the movie and series catalogues. Overridden in tests.
+final vodRepositoryProvider = Provider<VodRepository>(
+  (ref) => FileVodRepository(),
+);
+
+final movieCatalogProvider =
+    NotifierProvider<MovieCatalogController, VodState<Movie>>(
+      MovieCatalogController.new,
+    );
+
+final seriesCatalogProvider =
+    NotifierProvider<SeriesCatalogController, VodState<Series>>(
+      SeriesCatalogController.new,
+    );
+
+final movieFilterProvider = NotifierProvider<VodFilterNotifier, VodFilter>(
+  VodFilterNotifier.new,
+);
+
+final seriesFilterProvider = NotifierProvider<VodFilterNotifier, VodFilter>(
+  VodFilterNotifier.new,
+);
+
+/// Creates the watch history store of a provider (by [providerKey]).
+/// Overridden in tests.
+final watchStoreProvider = Provider<WatchStore Function(String key)>(
+  (ref) =>
+      (key) => _FileWatchStore(key),
+);
+
+/// Resume positions and watched marks of the saved provider.
+final watchProvider = NotifierProvider<WatchController, WatchData>(
+  WatchController.new,
+);
+
+/// Poster and logo images, cached on disk. Overridden in tests.
+final posterLoaderProvider = Provider<PosterLoader>(
+  (ref) => PosterCache(client: ref.watch(httpClientProvider)),
+);
+
+/// [JsonFileWatchStore] in the app support directory, resolved lazily.
+class _FileWatchStore implements WatchStore {
+  _FileWatchStore(this._key);
+
+  final String _key;
+
+  Future<WatchStore> get _store async => JsonFileWatchStore(
+    File('${(await getApplicationSupportDirectory()).path}/watch/$_key.json'),
+  );
+
+  @override
+  Future<WatchData> load() async => (await _store).load();
+
+  @override
+  Future<void> save(WatchData data) async => (await _store).save(data);
+}
 
 /// Categories and channels of the active provider.
 ///

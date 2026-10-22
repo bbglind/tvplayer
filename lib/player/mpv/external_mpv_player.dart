@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../url_redactor.dart';
 import 'mpv_ipc.dart';
@@ -21,6 +22,12 @@ class ExternalPlaybackState {
     this.error,
     this.voDrops,
     this.decoderDrops,
+    this.tracks = const [],
+    this.audioId,
+    this.subtitleId,
+    this.volume,
+    this.fileLoaded = false,
+    this.endedAtEof = false,
   });
 
   /// Increases with every [ExternalMpvPlayer.open].
@@ -43,6 +50,35 @@ class ExternalPlaybackState {
   /// mpv `decoder-frame-drop-count`; null until known.
   final int? decoderDrops;
 
+  /// mpv `track-list`: video, audio and subtitle tracks.
+  final List<MediaTrack> tracks;
+
+  /// Selected audio track (mpv `aid`); null for none or unknown.
+  final int? audioId;
+
+  /// Selected subtitle track (mpv `sid`); null when subtitles are off.
+  final int? subtitleId;
+
+  /// mpv `volume` in percent; null until known.
+  final double? volume;
+
+  /// Whether mpv has opened the media, so [tracks] is filled in.
+  final bool fileLoaded;
+
+  /// Whether playback ran to the end of the media (rather than being
+  /// stopped or failing).
+  final bool endedAtEof;
+
+  List<MediaTrack> get audioTracks => [
+    for (final t in tracks)
+      if (t.type == TrackType.audio) t,
+  ];
+
+  List<MediaTrack> get subtitleTracks => [
+    for (final t in tracks)
+      if (t.type == TrackType.subtitle) t,
+  ];
+
   ExternalPlaybackState copyWith({
     ExternalPlayerStatus? status,
     Duration? Function()? position,
@@ -51,6 +87,12 @@ class ExternalPlaybackState {
     String? error,
     int? Function()? voDrops,
     int? Function()? decoderDrops,
+    List<MediaTrack>? tracks,
+    int? Function()? audioId,
+    int? Function()? subtitleId,
+    double? volume,
+    bool? fileLoaded,
+    bool? endedAtEof,
   }) => ExternalPlaybackState(
     session: session,
     status: status ?? this.status,
@@ -60,6 +102,12 @@ class ExternalPlaybackState {
     error: error ?? this.error,
     voDrops: voDrops == null ? this.voDrops : voDrops(),
     decoderDrops: decoderDrops == null ? this.decoderDrops : decoderDrops(),
+    tracks: tracks ?? this.tracks,
+    audioId: audioId == null ? this.audioId : audioId(),
+    subtitleId: subtitleId == null ? this.subtitleId : subtitleId(),
+    volume: volume ?? this.volume,
+    fileLoaded: fileLoaded ?? this.fileLoaded,
+    endedAtEof: endedAtEof ?? this.endedAtEof,
   );
 }
 
@@ -107,9 +155,10 @@ class ExternalMpvPlayer extends ChangeNotifier {
   }
 
   /// Closes any running mpv, then plays [url] in a new one titled [title],
-  /// embedded into X11 window [wid] if given (see [MpvLaunchConfig.wid]).
-  /// Returns the new session id; progress is reported through [state].
-  int open(Uri url, {required String title, int? wid}) {
+  /// embedded into X11 window [wid] if given (see [MpvLaunchConfig.wid]),
+  /// from [start] if given. Returns the new session id; progress is
+  /// reported through [state].
+  int open(Uri url, {required String title, int? wid, Duration? start}) {
     final session = _state.session + 1;
     final previous = _run;
     final run = _run = _MpvRun(_quitTimeout);
@@ -117,7 +166,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
       session: session,
       status: ExternalPlayerStatus.starting,
     );
-    unawaited(_play(run, previous, url, title, wid));
+    unawaited(_play(run, previous, url, title, wid, start));
     return session;
   }
 
@@ -127,6 +176,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
     Uri url,
     String title,
     int? wid,
+    Duration? start,
   ) async {
     await previous?.close();
     final redactor = UrlRedactor(url);
@@ -148,6 +198,14 @@ class ExternalMpvPlayer extends ChangeNotifier {
       await ipc.observeProperty(1, 'time-pos');
       await ipc.observeProperty(2, 'duration');
       await ipc.observeProperty(3, 'pause');
+      await ipc.observeProperty(4, 'track-list');
+      await ipc.observeProperty(5, 'aid');
+      await ipc.observeProperty(6, 'sid');
+      await ipc.observeProperty(7, 'volume');
+      if (start != null && start > Duration.zero) {
+        // Applies to the next file loaded.
+        await ipc.command(['set_property', 'start', _secondsText(start)]);
+      }
       await ipc.command(['loadfile', url.toString()]);
       run.statsTimer = Timer.periodic(_statsInterval, (_) => _pollDrops(run));
       if (_isCurrent(run) && _state.status == ExternalPlayerStatus.starting) {
@@ -177,8 +235,16 @@ class ExternalMpvPlayer extends ChangeNotifier {
           'time-pos' => _state.copyWith(position: () => _seconds(data)),
           'duration' => _state.copyWith(duration: () => _seconds(data)),
           'pause' => _state.copyWith(paused: data == true),
+          'track-list' => _state.copyWith(tracks: parseMpvTrackList(data)),
+          'aid' => _state.copyWith(audioId: () => _trackId(data)),
+          'sid' => _state.copyWith(subtitleId: () => _trackId(data)),
+          'volume' when data is num => _state.copyWith(volume: data.toDouble()),
           _ => _state,
         };
+      case 'file-loaded':
+        state = _state.copyWith(fileLoaded: true);
+      case 'end-file' when event.fields['reason'] == 'eof':
+        state = _state.copyWith(endedAtEof: true);
       case 'end-file' when event.fields['reason'] == 'error':
         final detail = event.fields['file_error'];
         state = _state.copyWith(
@@ -218,6 +284,12 @@ class ExternalMpvPlayer extends ChangeNotifier {
     }
   }
 
+  /// An `aid`/`sid` value: a track id, or `false`/`"no"` for none.
+  static int? _trackId(Object? value) => value is num ? value.toInt() : null;
+
+  static String _secondsText(Duration d) =>
+      (d.inMilliseconds / 1000).toStringAsFixed(3);
+
   static Duration? _seconds(Object? value) => value is num
       ? Duration(microseconds: (value * Duration.microsecondsPerSecond).round())
       : null;
@@ -254,6 +326,45 @@ class ExternalMpvPlayer extends ChangeNotifier {
   /// Seeks the current mpv to [position].
   Future<void> seek(Duration position) =>
       _command(['seek', position.inMilliseconds / 1000, 'absolute']);
+
+  /// Seeks the current mpv by [offset] (negative: back).
+  Future<void> seekBy(Duration offset) =>
+      _command(['seek', offset.inMilliseconds / 1000, 'relative']);
+
+  /// Changes the volume by [percent] points (mpv clamps it).
+  Future<void> changeVolume(int percent) =>
+      _command(['add', 'volume', percent]);
+
+  /// Selects audio track [id].
+  Future<void> setAudioTrack(int id) => _command(['set_property', 'aid', id]);
+
+  /// Selects subtitle track [id]; null turns subtitles off.
+  Future<void> setSubtitleTrack(int? id) =>
+      _command(['set_property', 'sid', id ?? 'no']);
+
+  /// Loads a subtitle file (a local path or URL) into the current mpv and
+  /// selects it. [path] may be secret (e.g. a download URL), so it is
+  /// never logged. Returns false when mpv couldn't load it.
+  Future<bool> addSubtitleFile(
+    String path, {
+    String? title,
+    String? lang,
+  }) async {
+    final ipc = _run?.ipc;
+    if (ipc == null) return false;
+    try {
+      await ipc.command([
+        'sub-add',
+        path,
+        'select',
+        if (title != null || lang != null) title ?? '',
+        ?lang,
+      ]);
+      return true;
+    } on MpvIpcException {
+      return false;
+    }
+  }
 
   Future<void> _command(List<Object?> args) async {
     try {

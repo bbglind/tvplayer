@@ -18,3 +18,15 @@ String formatResolution(String w, String h) {
 /// unknown count.
 String formatDrops(int? vo, int? decoder) =>
     'dropped (vo/dec): ${vo ?? '-'} / ${decoder ?? '-'}';
+
+/// Season and episode as `S01E02`.
+String formatEpisodeCode(int season, int episode) =>
+    'S${season.toString().padLeft(2, '0')}E${episode.toString().padLeft(2, '0')}';
+
+/// A length as `1 h 30 min` or `45 min`.
+String formatRuntime(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes.remainder(60);
+  if (h == 0) return '$m min';
+  return m == 0 ? '$h h' : '$h h $m min';
+}

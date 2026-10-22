@@ -8,6 +8,7 @@ import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
 import '../epg/guide_screen.dart' show formatGuideDate, formatShift;
 import '../setup/setup_screen.dart';
+import 'language_list_editor.dart';
 import 'time_zone_picker.dart';
 
 /// Provider management, TV guide settings and player options.
@@ -76,6 +77,30 @@ class SettingsScreen extends ConsumerWidget {
       context,
       ref,
       settings.copyWith(guideTimeZone: () => choice.zone),
+    );
+  }
+
+  Future<void> _editLanguages(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings, {
+    required bool subtitles,
+  }) async {
+    final codes = await showLanguageListEditor(
+      context,
+      title: subtitles ? 'Subtitle languages' : 'Audio languages',
+      initial: subtitles ? settings.subtitleLanguages : settings.audioLanguages,
+      emptyHint: subtitles
+          ? 'No subtitles will be chosen automatically'
+          : "Each stream's default audio is used",
+    );
+    if (codes == null || !context.mounted) return;
+    await _saveSettings(
+      context,
+      ref,
+      subtitles
+          ? settings.copyWith(subtitleLanguages: codes)
+          : settings.copyWith(audioLanguages: codes),
     );
   }
 
@@ -186,6 +211,48 @@ class SettingsScreen extends ConsumerWidget {
             onPressed: guideState.supported && !guideState.loading
                 ? ref.read(guideProvider.notifier).refresh
                 : null,
+          ),
+        ),
+        const Divider(height: 32),
+        Text(
+          'Subtitles and audio',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        SwitchListTile(
+          key: const Key('settings.subtitlesOn'),
+          title: const Text('Subtitles on by default'),
+          subtitle: const Text(
+            'Off still shows forced subtitles for foreign-language parts.',
+          ),
+          value: settings.subtitlesOn,
+          onChanged: (v) =>
+              _saveSettings(context, ref, settings.copyWith(subtitlesOn: v)),
+        ),
+        ListTile(
+          key: const Key('settings.subtitleLanguages'),
+          leading: const Icon(Icons.subtitles_outlined),
+          title: const Text('Subtitle languages'),
+          subtitle: Text(
+            describeLanguages(settings.subtitleLanguages, empty: 'None'),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _editLanguages(context, ref, settings, subtitles: true),
+        ),
+        ListTile(
+          key: const Key('settings.audioLanguages'),
+          leading: const Icon(Icons.record_voice_over_outlined),
+          title: const Text('Audio languages'),
+          subtitle: Text(
+            describeLanguages(settings.audioLanguages, empty: 'Stream default'),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _editLanguages(context, ref, settings, subtitles: false),
+        ),
+        const ListTile(
+          dense: true,
+          subtitle: Text(
+            'Choosing a track while playing a series is remembered for the '
+            'rest of that series.',
           ),
         ),
         const Divider(height: 32),

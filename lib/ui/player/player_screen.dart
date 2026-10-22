@@ -1,25 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../../player/playback_request.dart';
 import '../../player/tv_player_view.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
+import 'open_channel.dart';
 
-/// Full-screen playback of one live channel.
+/// Full-screen playback with the embedded media_kit player (platforms
+/// without the external mpv).
 class PlayerScreen extends ConsumerWidget {
-  const PlayerScreen({super.key, required this.channel});
+  const PlayerScreen({super.key, required this.request});
 
-  final LiveStream channel;
+  final PlaybackRequest request;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final source = ref.watch(liveSourceProvider);
+    final url = playbackUrl(ref, request);
     final debug = ref.watch(playerDebugProvider);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(channel.name),
+        title: Text(request.title),
         actions: [
           IconButton(
             tooltip: debug ? 'Hide debug info' : 'Show debug info',
@@ -30,20 +32,22 @@ class PlayerScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: source == null
+      body: url == null
           ? const Center(child: Text('No provider configured'))
           : Column(
               children: [
                 Expanded(
                   child: TvPlayerView(
-                    url: source.streamUrl(channel),
+                    url: url,
                     hwdec: ref.watch(hwdecProvider),
                     hwdecModes: Hwdec.modes,
                     onHwdecChanged: ref.read(hwdecProvider.notifier).set,
                     showDebug: debug,
+                    fixedLength: request.fixedLength,
                   ),
                 ),
-                NowNextBar(channel: channel),
+                if (request case LivePlayback(:final channel))
+                  NowNextBar(channel: channel),
               ],
             ),
     );

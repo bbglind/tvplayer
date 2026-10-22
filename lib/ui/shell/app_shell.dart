@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../epg/guide_screen.dart';
 import '../live/live_tv_screen.dart';
 import '../settings/settings_screen.dart';
+import '../vod/movies_screen.dart';
+import '../vod/series_screen.dart';
 
 /// Main layout: left navigation rail plus the selected section.
 class AppShell extends StatefulWidget {
@@ -57,28 +59,12 @@ class _AppShellState extends State<AppShell> {
             child: switch (_index) {
               0 => const LiveTvScreen(),
               1 => const GuideScreen(),
-              2 => const _ComingSoon('Movies'),
-              3 => const _ComingSoon('Series'),
+              2 => const MoviesScreen(),
+              3 => const SeriesScreen(),
               _ => const SettingsScreen(),
             },
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        '$title: coming soon',
-        style: Theme.of(context).textTheme.titleMedium,
       ),
     );
   }

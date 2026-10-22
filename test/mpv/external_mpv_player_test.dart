@@ -58,6 +58,10 @@ void main() {
       ['observe_property', 1, 'time-pos'],
       ['observe_property', 2, 'duration'],
       ['observe_property', 3, 'pause'],
+      ['observe_property', 4, 'track-list'],
+      ['observe_property', 5, 'aid'],
+      ['observe_property', 6, 'sid'],
+      ['observe_property', 7, 'volume'],
       ['loadfile', _url.toString()],
     ]);
 
@@ -92,10 +96,99 @@ void main() {
     expect(mpv.arguments, contains('--wid=4242'));
     await player.togglePause();
     await player.seek(const Duration(seconds: 90, milliseconds: 500));
-    expect(mpv.commands.skip(4), [
+    expect(mpv.commands.skip(8), [
       ['cycle', 'pause'],
       ['seek', 90.5, 'absolute'],
     ]);
+  });
+
+  test('starts at a resume position, set before the file loads', () async {
+    player.open(_url, title: 'Film', start: const Duration(minutes: 42));
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    final commands = started.single.commands;
+    final set = commands.indexWhere((c) => c.first == 'set_property');
+    expect(commands[set], ['set_property', 'start', '2520.000']);
+    expect(commands[set + 1].first, 'loadfile');
+  });
+
+  test('reports tracks, selection, volume, loading and the end', () async {
+    player.open(_url, title: 'News');
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    final mpv = started.single;
+    expect(player.state.fileLoaded, isFalse);
+    mpv.send({
+      'event': 'property-change',
+      'id': 4,
+      'name': 'track-list',
+      'data': [
+        {'id': 1, 'type': 'audio', 'lang': 'swe', 'selected': true},
+        {'id': 1, 'type': 'sub', 'lang': 'swe', 'codec': 'dvb_teletext'},
+        {'id': 2, 'type': 'sub', 'lang': 'eng'},
+      ],
+    });
+    mpv.send({'event': 'property-change', 'id': 5, 'name': 'aid', 'data': 1});
+    mpv.send({'event': 'property-change', 'id': 6, 'name': 'sid', 'data': 2});
+    mpv.send({
+      'event': 'property-change',
+      'id': 7,
+      'name': 'volume',
+      'data': 85.0,
+    });
+    mpv.send({'event': 'file-loaded'});
+    var s = await waitFor((s) => s.fileLoaded && s.volume != null);
+    expect(s.audioTracks.single.language?.code, 'sv');
+    expect(s.subtitleTracks.map((t) => t.id), [1, 2]);
+    expect(s.audioId, 1);
+    expect(s.subtitleId, 2);
+    expect(s.volume, 85);
+    expect(s.endedAtEof, isFalse);
+
+    // Subtitles off: mpv sends false.
+    mpv.send({
+      'event': 'property-change',
+      'id': 6,
+      'name': 'sid',
+      'data': false,
+    });
+    s = await waitFor((s) => s.subtitleId == null);
+
+    mpv.send({'event': 'end-file', 'reason': 'eof'});
+    s = await waitFor((s) => s.endedAtEof);
+    expect(s.error, isNull);
+  });
+
+  test('track, volume and relative seek commands go over IPC', () async {
+    player.open(_url, title: 'News');
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    final mpv = started.single;
+    final before = mpv.commands.length;
+    await player.setAudioTrack(2);
+    await player.setSubtitleTrack(3);
+    await player.setSubtitleTrack(null);
+    await player.changeVolume(-5);
+    await player.seekBy(const Duration(seconds: -10));
+    expect(await player.addSubtitleFile('/tmp/subs.srt'), isTrue);
+    expect(
+      await player.addSubtitleFile(
+        '/tmp/subs.sv.srt',
+        title: 'Svenska',
+        lang: 'sv',
+      ),
+      isTrue,
+    );
+    expect(mpv.commands.skip(before), [
+      ['set_property', 'aid', 2],
+      ['set_property', 'sid', 3],
+      ['set_property', 'sid', 'no'],
+      ['add', 'volume', -5],
+      ['seek', -10.0, 'relative'],
+      ['sub-add', '/tmp/subs.srt', 'select'],
+      ['sub-add', '/tmp/subs.sv.srt', 'select', 'Svenska', 'sv'],
+    ]);
+  });
+
+  test('adding a subtitle file without mpv running fails quietly', () async {
+    expect(await player.addSubtitleFile('/tmp/subs.srt'), isFalse);
   });
 
   test('polls the dropped-frame counters', () async {

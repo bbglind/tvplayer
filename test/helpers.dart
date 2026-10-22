@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,9 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:http/http.dart' as http;
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/epg_repository.dart';
+import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
+import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -148,6 +151,169 @@ class FixedClock extends Clock {
   void set(DateTime value) => state = value;
 }
 
+/// In-memory [VodRepository].
+class FakeVodRepository implements VodRepository {
+  final movies = <String, VodCatalog<Movie>>{};
+  final series = <String, VodCatalog<Series>>{};
+  final cleared = <String>[];
+
+  @override
+  Future<VodCatalog<Movie>?> loadMovies(String key) async => movies[key];
+
+  @override
+  Future<VodCatalog<Series>?> loadSeries(String key) async => series[key];
+
+  @override
+  Future<void> saveMovies(String key, VodCatalog<Movie> catalog) async =>
+      movies[key] = catalog;
+
+  @override
+  Future<void> saveSeries(String key, VodCatalog<Series> catalog) async =>
+      series[key] = catalog;
+
+  @override
+  Future<void> clear(String key) async {
+    cleared.add(key);
+    movies.remove(key);
+    series.remove(key);
+  }
+}
+
+/// In-memory [WatchStore].
+class MemoryWatchStore implements WatchStore {
+  MemoryWatchStore([this.data = WatchData.empty]);
+
+  WatchData data;
+  int saves = 0;
+
+  @override
+  Future<WatchData> load() async => data;
+
+  @override
+  Future<void> save(WatchData data) async {
+    saves++;
+    this.data = data;
+  }
+}
+
+/// [PosterLoader] that never has an image, so tests do no network or disk
+/// access; [requests] records what was asked for.
+class FakePosterLoader implements PosterLoader {
+  final requests = <String>[];
+
+  @override
+  Future<Uint8List> load(String url) async {
+    requests.add(url);
+    throw const PosterException('No images in tests');
+  }
+}
+
+/// [VodSource] serving fixed catalogues and series info.
+class FakeVodSource implements VodSource {
+  FakeVodSource({
+    VodCatalog<Movie>? movies,
+    VodCatalog<Series>? series,
+    this.seriesInfos = const {},
+    this.movieDetails = const {},
+  }) : movies = movies ?? syntheticMovies(count: 0),
+       series = series ?? syntheticSeries(count: 0);
+
+  VodCatalog<Movie> movies;
+  VodCatalog<Series> series;
+  Map<int, SeriesInfo> seriesInfos;
+  Map<int, Movie> movieDetails;
+  int movieLoads = 0;
+  int seriesLoads = 0;
+  Object? failure;
+
+  @override
+  Future<VodCatalog<Movie>> loadMovies({required DateTime now}) async {
+    movieLoads++;
+    if (failure case final f?) throw f;
+    return VodCatalog.movies(
+      categories: movies.categories,
+      items: movies.items,
+      fetchedAt: now,
+    );
+  }
+
+  @override
+  Future<VodCatalog<Series>> loadSeries({required DateTime now}) async {
+    seriesLoads++;
+    if (failure case final f?) throw f;
+    return VodCatalog.series(
+      categories: series.categories,
+      items: series.items,
+      fetchedAt: now,
+    );
+  }
+
+  @override
+  Future<Movie> movieInfo(Movie movie) async =>
+      movieDetails[movie.streamId] ?? movie;
+
+  @override
+  Future<SeriesInfo> seriesInfo(int seriesId) async {
+    final info = seriesInfos[seriesId];
+    if (info == null) throw XtreamException('Series $seriesId not found');
+    return info;
+  }
+
+  @override
+  Uri movieUrl(Movie movie) =>
+      Uri.parse('http://192.0.2.1/movie/user/pass/${movie.streamId}.mkv');
+
+  @override
+  Uri episodeUrl(Episode episode) =>
+      Uri.parse('http://192.0.2.1/series/user/pass/${episode.id}.mkv');
+
+  @override
+  void close() {}
+}
+
+/// [count] synthetic movies spread over [categories] categories.
+VodCatalog<Movie> syntheticMovies({
+  int count = 20000,
+  int categories = 5,
+  DateTime? fetchedAt,
+}) => VodCatalog.movies(
+  categories: [
+    for (var c = 0; c < categories; c++)
+      Category(id: 'm$c', name: 'Movie category $c'),
+  ],
+  items: [
+    for (var i = 0; i < count; i++)
+      Movie(
+        streamId: i,
+        name: 'Movie ${i.toString().padLeft(5, '0')}',
+        categoryId: 'm${i % categories}',
+        posterUrl: 'http://example.com/posters/$i.jpg',
+      ),
+  ],
+  fetchedAt: fetchedAt ?? DateTime.utc(2026),
+);
+
+/// [count] synthetic series spread over [categories] categories.
+VodCatalog<Series> syntheticSeries({
+  int count = 1000,
+  int categories = 3,
+  DateTime? fetchedAt,
+}) => VodCatalog.series(
+  categories: [
+    for (var c = 0; c < categories; c++)
+      Category(id: 's$c', name: 'Series category $c'),
+  ],
+  items: [
+    for (var i = 0; i < count; i++)
+      Series(
+        seriesId: i,
+        name: 'Series ${i.toString().padLeft(4, '0')}',
+        categoryId: 's${i % categories}',
+      ),
+  ],
+  fetchedAt: fetchedAt ?? DateTime.utc(2026),
+);
+
 /// [count] synthetic channels spread over [categories] categories.
 LiveCatalog syntheticCatalog({int count = 5000, int categories = 10}) {
   return LiveCatalog(
@@ -185,22 +351,29 @@ const activeAccountJson = {
 
 /// Wraps [child] in a ProviderScope (no automatic retries) and MaterialApp.
 ///
-/// Settings, the guide cache and the device time zone (`Europe/Stockholm`)
-/// are always faked; pass [settings] or [epg] to inspect them. [now] fixes
-/// the clock.
+/// Settings, the guide and catalogue caches, the watch history, posters and
+/// the device time zone (`Europe/Stockholm`) are always faked; pass
+/// [settings], [epg], [vod] or [watch] to inspect them. [now] fixes the
+/// clock.
 Widget testApp({
   required List<Override> overrides,
   required Widget child,
   SettingsStorage? settings,
   EpgRepository? epg,
+  VodRepository? vod,
+  WatchStore? watch,
   DateTime? now,
 }) {
+  final watchStore = watch ?? MemoryWatchStore();
   return ProviderScope(
     overrides: [
       settingsStorageProvider.overrideWithValue(
         settings ?? FakeSettingsStorage(),
       ),
       epgRepositoryProvider.overrideWithValue(epg ?? FakeEpgRepository()),
+      vodRepositoryProvider.overrideWithValue(vod ?? FakeVodRepository()),
+      watchStoreProvider.overrideWithValue((_) => watchStore),
+      posterLoaderProvider.overrideWithValue(FakePosterLoader()),
       deviceTimeZoneProvider.overrideWithValue('Europe/Stockholm'),
       if (now != null) clockProvider.overrideWith(() => FixedClock(now)),
       ...overrides,

@@ -6,13 +6,17 @@ import 'package:tvplayer/player/mpv/video_embed.dart';
 
 /// Records calls instead of starting mpv; tests drive [state] directly.
 class FakeExternalPlayer extends ExternalMpvPlayer {
-  final opened = <({Uri url, String title, int? wid})>[];
+  final opened = <({Uri url, String title, int? wid, Duration? start})>[];
   final stopped = <int?>[];
   var pauseToggles = 0;
+  final seeks = <Duration>[];
+  final volumeChanges = <int>[];
+  final audioSelections = <int>[];
+  final subtitleSelections = <int?>[];
 
   @override
-  int open(Uri url, {required String title, int? wid}) {
-    opened.add((url: url, title: title, wid: wid));
+  int open(Uri url, {required String title, int? wid, Duration? start}) {
+    opened.add((url: url, title: title, wid: wid, start: start));
     final session = state.session + 1;
     state = ExternalPlaybackState(
       session: session,
@@ -26,6 +30,24 @@ class FakeExternalPlayer extends ExternalMpvPlayer {
 
   @override
   Future<void> togglePause() async => pauseToggles++;
+
+  @override
+  Future<void> seekBy(Duration offset) async => seeks.add(offset);
+
+  @override
+  Future<void> changeVolume(int percent) async => volumeChanges.add(percent);
+
+  @override
+  Future<void> setAudioTrack(int id) async {
+    audioSelections.add(id);
+    state = state.copyWith(audioId: () => id);
+  }
+
+  @override
+  Future<void> setSubtitleTrack(int? id) async {
+    subtitleSelections.add(id);
+    state = state.copyWith(subtitleId: () => id);
+  }
 
   void emit(ExternalPlaybackState s) => state = s;
 }

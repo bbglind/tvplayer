@@ -6,6 +6,7 @@ import '../../data/errors.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
 import '../player/open_channel.dart';
+import '../vod/poster.dart';
 import 'separator_header.dart';
 
 /// Categories on the left, searchable channel list on the right.
@@ -204,11 +205,11 @@ class _ChannelTile extends ConsumerWidget {
         dimension: 40,
         child: logo == null || logo.isEmpty
             ? const Icon(Icons.live_tv)
-            : Image.network(
-                logo,
-                cacheWidth: 80,
+            : Poster(
+                url: logo,
+                decodeWidth: 80,
                 fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(Icons.live_tv),
+                placeholder: Icons.live_tv,
               ),
       ),
       title: Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis),

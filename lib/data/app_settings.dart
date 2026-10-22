@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 /// User preferences that are not secret.
 final class AppSettings {
@@ -9,6 +10,9 @@ final class AppSettings {
     this.guideTimeZone,
     this.guideShiftHours = 0,
     this.showPlaybackStats = false,
+    this.subtitleLanguages = TrackPreferences.defaultSubtitleLanguages,
+    this.audioLanguages = const [],
+    this.subtitlesOn = true,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -24,20 +28,45 @@ final class AppSettings {
   /// Whether the player shows mpv's dropped-frame counters.
   final bool showPlaybackStats;
 
+  /// Preferred subtitle languages in order, as ISO 639-1 codes.
+  final List<String> subtitleLanguages;
+
+  /// Preferred audio languages in order, as ISO 639-1 codes; empty keeps
+  /// each stream's default audio.
+  final List<String> audioLanguages;
+
+  /// Whether subtitles are shown by default.
+  final bool subtitlesOn;
+
+  TrackPreferences get trackPreferences => TrackPreferences(
+    subtitleLanguages: subtitleLanguages,
+    audioLanguages: audioLanguages,
+    subtitlesOn: subtitlesOn,
+  );
+
   AppSettings copyWith({
     String? Function()? guideTimeZone,
     int? guideShiftHours,
     bool? showPlaybackStats,
+    List<String>? subtitleLanguages,
+    List<String>? audioLanguages,
+    bool? subtitlesOn,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
     showPlaybackStats: showPlaybackStats ?? this.showPlaybackStats,
+    subtitleLanguages: subtitleLanguages ?? this.subtitleLanguages,
+    audioLanguages: audioLanguages ?? this.audioLanguages,
+    subtitlesOn: subtitlesOn ?? this.subtitlesOn,
   );
 
   Map<String, Object?> toJson() => {
     'guideTimeZone': ?guideTimeZone,
     'guideShiftHours': guideShiftHours,
     'showPlaybackStats': showPlaybackStats,
+    'subtitleLanguages': subtitleLanguages,
+    'audioLanguages': audioLanguages,
+    'subtitlesOn': subtitlesOn,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -49,7 +78,25 @@ final class AppSettings {
       guideTimeZone: zone is String && zone.isNotEmpty ? zone : null,
       guideShiftHours: shift is int && shift.abs() <= maxShiftHours ? shift : 0,
       showPlaybackStats: json['showPlaybackStats'] == true,
+      subtitleLanguages:
+          _languages(json['subtitleLanguages']) ??
+          TrackPreferences.defaultSubtitleLanguages,
+      audioLanguages: _languages(json['audioLanguages']) ?? const [],
+      subtitlesOn: json['subtitlesOn'] != false,
     );
+  }
+
+  /// Known language codes from a JSON list, without duplicates; null when
+  /// [json] isn't a list.
+  static List<String>? _languages(Object? json) {
+    if (json is! List) return null;
+    final codes = <String>{};
+    for (final item in json) {
+      if (Language.parse(item is String ? item : null) case final l?) {
+        codes.add(l.code);
+      }
+    }
+    return codes.toList();
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/player/mpv/external_mpv_player.dart';
+import 'package:tvplayer/player/playback_request.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/epg/now_next.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
@@ -124,13 +125,14 @@ void main() {
             liveSourceProvider.overrideWithValue(
               FakeLiveSource(syntheticCatalog(count: 1)),
             ),
+            vodSourceProvider.overrideWithValue(FakeVodSource()),
+            providerKeyProvider.overrideWithValue('test'),
             externalMpvProvider.overrideWithValue(player),
             embedMpvProvider.overrideWithValue(true),
             videoEmbedProvider.overrideWithValue(embed),
           ],
           child: const MpvPlayerScreen(
-            channel: LiveStream(id: '0', name: 'Film'),
-            fixedLength: true,
+            request: MoviePlayback(Movie(streamId: 0, name: 'Film')),
           ),
         ),
       );
