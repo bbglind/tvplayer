@@ -103,3 +103,28 @@ String? readMaybeBase64(Object? value) {
     return s;
   }
 }
+
+final _imdbPattern = RegExp(r'tt\d{5,}');
+
+/// Reads an IMDb id (`tt` plus digits), also from a full IMDb URL.
+String? readImdbId(Object? value) {
+  final s = readString(value);
+  if (s == null) return null;
+  return _imdbPattern.firstMatch(s)?.group(0);
+}
+
+final _yearPattern = RegExp(r'^\s*(\d{4})');
+final _yearInNamePattern = RegExp(r'\((\d{4})\)\s*$');
+
+/// The year at the start of a date like `2020-05-01` or `2020`.
+int? readYear(String? date) {
+  final match = date == null ? null : _yearPattern.firstMatch(date);
+  final year = match == null ? null : int.parse(match.group(1)!);
+  return year != null && year > 1800 ? year : null;
+}
+
+/// The year in a trailing `(YYYY)` of a title like `Some Movie (2020)`.
+int? yearInName(String name) {
+  final match = _yearInNamePattern.firstMatch(name);
+  return match == null ? null : int.parse(match.group(1)!);
+}

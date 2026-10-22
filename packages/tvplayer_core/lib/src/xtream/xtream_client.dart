@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -296,23 +298,42 @@ class XtreamClient {
     if (_ownsHttpClient) _http.close();
   }
 
+  /// Responses at least this large are decoded and parsed in a background
+  /// isolate, so big catalogues don't block the caller's isolate (the UI).
+  static const backgroundParseBytes = 256 * 1024;
+
   Future<List<T>> _getList<T>(
     String action,
     T? Function(Map<String, Object?>) parse, [
     Map<String, String> params = const {},
   ]) async {
-    final json = await _get(action, params);
-    return readList(json)
-        .map(readMap)
-        .whereType<Map<String, Object?>>()
-        .map(parse)
-        .whereType<T>()
-        .toList();
+    final bytes = await _fetch(action, params);
+    if (bytes.length < backgroundParseBytes) {
+      return _parseList(bytes, action, parse);
+    }
+    return Isolate.run(() => _parseList(bytes, action, parse));
   }
+
+  static List<T> _parseList<T>(
+    Uint8List bytes,
+    String what,
+    T? Function(Map<String, Object?>) parse,
+  ) => readList(_decode(bytes, what))
+      .map(readMap)
+      .whereType<Map<String, Object?>>()
+      .map(parse)
+      .whereType<T>()
+      .toList();
 
   /// Performs a `player_api.php` request and returns the decoded JSON.
   /// [action] null is the login/account request.
   Future<Object?> _get(
+    String? action, [
+    Map<String, String> params = const {},
+  ]) async => _decode(await _fetch(action, params), action ?? 'login');
+
+  /// Performs a `player_api.php` request and returns the response body.
+  Future<Uint8List> _fetch(
     String? action, [
     Map<String, String> params = const {},
   ]) async {
@@ -349,9 +370,13 @@ class XtreamClient {
       );
     }
 
+    return response.bodyBytes;
+  }
+
+  static Object? _decode(Uint8List bytes, String what) {
     // Decode as UTF-8 regardless of the Content-Type header: panels often
     // omit the charset, which would make package:http fall back to Latin-1.
-    var body = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
+    var body = utf8.decode(bytes, allowMalformed: true).trim();
     if (body.startsWith('﻿')) body = body.substring(1);
     if (body.isEmpty) return null;
     try {

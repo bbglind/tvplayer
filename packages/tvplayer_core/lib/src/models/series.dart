@@ -17,6 +17,8 @@ final class Series {
     this.backdropUrls = const [],
     this.trailerId,
     this.lastModified,
+    this.tmdbId,
+    this.imdbId,
   });
 
   /// Parses a `get_series` entry, or the `info` object of `get_series_info`
@@ -40,6 +42,8 @@ final class Series {
       backdropUrls: readStringList(json['backdrop_path']),
       trailerId: readString(json['youtube_trailer']),
       lastModified: readEpochSeconds(json['last_modified']),
+      tmdbId: readString(json['tmdb_id'] ?? json['tmdb']),
+      imdbId: readImdbId(json['imdb_id'] ?? json['imdb']),
     );
   }
 
@@ -56,6 +60,34 @@ final class Series {
   final List<String> backdropUrls;
   final String? trailerId;
   final DateTime? lastModified;
+  final String? tmdbId;
+
+  /// IMDb id like `tt0903747`, when the panel sends one.
+  final String? imdbId;
+
+  /// Release year from [releaseDate], or a trailing `(YYYY)` in [name].
+  int? get year => readYear(releaseDate) ?? yearInName(name);
+
+  /// The list fields in `get_series` shape, so [fromJson] reads them back.
+  /// Used for the catalogue cache.
+  Map<String, Object?> toJson() => {
+    'series_id': seriesId,
+    'name': name,
+    'cover': ?coverUrl,
+    'category_id': ?categoryId,
+    'plot': ?plot,
+    'genre': ?genre,
+    'cast': ?cast,
+    'director': ?director,
+    'releaseDate': ?releaseDate,
+    'rating': ?rating,
+    if (backdropUrls.isNotEmpty) 'backdrop_path': backdropUrls,
+    'youtube_trailer': ?trailerId,
+    if (lastModified case final t?)
+      'last_modified': t.millisecondsSinceEpoch ~/ 1000,
+    'tmdb_id': ?tmdbId,
+    'imdb_id': ?imdbId,
+  };
 
   @override
   String toString() => 'Series($seriesId, $name)';

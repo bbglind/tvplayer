@@ -12,6 +12,7 @@ final class Movie {
     this.rating,
     this.added,
     this.tmdbId,
+    this.imdbId,
     this.plot,
     this.genre,
     this.cast,
@@ -36,6 +37,7 @@ final class Movie {
       rating: readDouble(json['rating']),
       added: readEpochSeconds(json['added']),
       tmdbId: readString(json['tmdb_id'] ?? json['tmdb']),
+      imdbId: readImdbId(json['imdb_id'] ?? json['imdb']),
     );
   }
 
@@ -56,7 +58,8 @@ final class Movie {
       categoryId: readString(data['category_id']),
       rating: readDouble(info['rating']),
       added: readEpochSeconds(data['added']),
-      tmdbId: readString(info['tmdb_id']),
+      tmdbId: readString(info['tmdb_id'] ?? info['tmdb']),
+      imdbId: readImdbId(info['imdb_id'] ?? info['imdb']),
       plot: readString(info['plot']) ?? readString(info['description']),
       genre: readString(info['genre']),
       cast: readString(info['cast']) ?? readString(info['actors']),
@@ -79,6 +82,9 @@ final class Movie {
   final double? rating;
   final DateTime? added;
   final String? tmdbId;
+
+  /// IMDb id like `tt0111161`, when the panel sends one.
+  final String? imdbId;
   final String? plot;
   final String? genre;
   final String? cast;
@@ -89,6 +95,23 @@ final class Movie {
   final Duration? duration;
   final List<String> backdropUrls;
   final String? trailerId;
+
+  /// Release year from [releaseDate], or a trailing `(YYYY)` in [name].
+  int? get year => readYear(releaseDate) ?? yearInName(name);
+
+  /// The list fields in `get_vod_streams` shape, so [fromJson] reads them
+  /// back. Used for the catalogue cache.
+  Map<String, Object?> toJson() => {
+    'stream_id': streamId,
+    'name': name,
+    'container_extension': ?containerExtension,
+    'stream_icon': ?posterUrl,
+    'category_id': ?categoryId,
+    'rating': ?rating,
+    if (added case final added?) 'added': added.millisecondsSinceEpoch ~/ 1000,
+    'tmdb_id': ?tmdbId,
+    'imdb_id': ?imdbId,
+  };
 
   @override
   String toString() => 'Movie($streamId, $name)';
