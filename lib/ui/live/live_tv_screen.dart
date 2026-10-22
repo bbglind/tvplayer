@@ -4,7 +4,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/errors.dart';
 import '../../state/providers.dart';
-import '../player/external_player_screen.dart';
+import '../player/mpv_player_screen.dart';
 import '../player/player_screen.dart';
 
 /// Categories on the left, searchable channel list on the right.
@@ -205,7 +205,7 @@ class _ChannelTile extends ConsumerWidget {
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => ref.read(useExternalMpvProvider)
-              ? ExternalPlayerScreen(channel: channel)
+              ? MpvPlayerScreen(channel: channel)
               : PlayerScreen(channel: channel),
         ),
       ),

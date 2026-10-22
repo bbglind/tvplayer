@@ -35,7 +35,13 @@ class MpvLaunchConfig {
   List<String> get arguments => [
     '--hwdec=$hwdec',
     '--force-window=immediate',
-    if (wid != null) '--wid=$wid',
+    if (wid != null) ...[
+      '--wid=$wid',
+      // Leave mouse and keys to the app: clicks then reach the native video
+      // area (double-click for fullscreen) and Esc reaches Flutter.
+      '--input-cursor=no',
+      '--input-vo-keyboard=no',
+    ],
     '--title=${escapePropertyExpansion(title)}',
     '--input-ipc-server=$ipcPath',
     // Wait for the URL over IPC, then quit when playback ends.

@@ -83,6 +83,19 @@ void main() {
     expect(s.duration, const Duration(minutes: 10));
   });
 
+  test('embeds into the given window; pause and seek go over IPC', () async {
+    player.open(_url, title: 'News', wid: 4242);
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    final mpv = started.single;
+    expect(mpv.arguments, contains('--wid=4242'));
+    await player.togglePause();
+    await player.seek(const Duration(seconds: 90, milliseconds: 500));
+    expect(mpv.commands.skip(4), [
+      ['cycle', 'pause'],
+      ['seek', 90.5, 'absolute'],
+    ]);
+  });
+
   test('reports mpv exiting', () async {
     player.open(_url, title: 'News');
     await waitFor((s) => s.status == ExternalPlayerStatus.playing);

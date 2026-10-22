@@ -66,7 +66,6 @@ class ExternalMpvPlayer extends ChangeNotifier {
     this._start = Process.start,
     MpvIpcConnector connect = _connect,
     this.hwdec = 'vaapi',
-    this.wid,
     this._quitTimeout = const Duration(seconds: 2),
   }) : _connectIpc = connect;
 
@@ -77,9 +76,6 @@ class ExternalMpvPlayer extends ChangeNotifier {
   final MpvIpcConnector _connectIpc;
   final Duration _quitTimeout;
   final String hwdec;
-
-  /// X11 window id to embed mpv into; see [MpvLaunchConfig.wid].
-  int? wid;
 
   ExternalPlaybackState _state = const ExternalPlaybackState();
   _MpvRun? _run;
@@ -94,9 +90,10 @@ class ExternalMpvPlayer extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Closes any running mpv, then plays [url] in a new one titled [title].
+  /// Closes any running mpv, then plays [url] in a new one titled [title],
+  /// embedded into X11 window [wid] if given (see [MpvLaunchConfig.wid]).
   /// Returns the new session id; progress is reported through [state].
-  int open(Uri url, {required String title}) {
+  int open(Uri url, {required String title, int? wid}) {
     final session = _state.session + 1;
     final previous = _run;
     final run = _run = _MpvRun(_quitTimeout);
@@ -104,7 +101,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
       session: session,
       status: ExternalPlayerStatus.starting,
     );
-    unawaited(_play(run, previous, url, title));
+    unawaited(_play(run, previous, url, title, wid));
     return session;
   }
 
@@ -113,6 +110,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
     _MpvRun? previous,
     Uri url,
     String title,
+    int? wid,
   ) async {
     await previous?.close();
     final redactor = UrlRedactor(url);
@@ -203,6 +201,21 @@ class ExternalMpvPlayer extends ChangeNotifier {
   }
 
   bool _isCurrent(_MpvRun run) => !_disposed && identical(run, _run);
+
+  /// Toggles pause of the current mpv.
+  Future<void> togglePause() => _command(['cycle', 'pause']);
+
+  /// Seeks the current mpv to [position].
+  Future<void> seek(Duration position) =>
+      _command(['seek', position.inMilliseconds / 1000, 'absolute']);
+
+  Future<void> _command(List<Object?> args) async {
+    try {
+      await _run?.ipc?.command(args);
+    } on MpvIpcException {
+      // mpv is gone or refused; its state updates tell the rest.
+    }
+  }
 
   /// Closes mpv, if running. With [session], only if that session is still
   /// the current one.

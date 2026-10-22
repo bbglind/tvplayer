@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "video_embed.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -65,7 +66,8 @@ static void my_application_activate(GApplication* application) {
   gdk_rgba_parse(&background_color, "#000000");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
-  gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
+  // Overlay with a native child window for embedded mpv.
+  video_embed_new(window, view);
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.

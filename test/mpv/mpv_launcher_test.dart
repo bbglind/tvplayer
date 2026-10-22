@@ -24,7 +24,14 @@ void main() {
 
   test('adds --wid for embedding', () {
     const embedded = MpvLaunchConfig(title: 't', ipcPath: '/s', wid: 12345);
-    expect(embedded.arguments, contains('--wid=12345'));
+    expect(
+      embedded.arguments,
+      containsAll([
+        '--wid=12345',
+        '--input-cursor=no',
+        '--input-vo-keyboard=no',
+      ]),
+    );
     expect(config.arguments.where((a) => a.startsWith('--wid')), isEmpty);
   });
 

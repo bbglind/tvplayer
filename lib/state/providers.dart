@@ -7,6 +7,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../data/connection_tester.dart';
 import '../data/provider_storage.dart';
 import '../player/mpv/external_mpv_player.dart';
+import '../player/mpv/video_embed.dart';
 
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
@@ -158,4 +159,18 @@ final externalMpvProvider = Provider<ExternalMpvPlayer>((ref) {
   final player = ExternalMpvPlayer();
   ref.onDispose(player.dispose);
   return player;
+});
+
+/// Whether the external mpv should try to embed into the app window (X11
+/// only; falls back to a separate window). `TVPLAYER_EMBED_MPV=0` turns it
+/// off, e.g. to compare against the separate window.
+final embedMpvProvider = Provider<bool>(
+  (ref) => Platform.environment['TVPLAYER_EMBED_MPV'] != '0',
+);
+
+/// The native video area of the Linux runner.
+final videoEmbedProvider = Provider<VideoEmbed>((ref) {
+  final embed = VideoEmbed();
+  ref.onDispose(embed.dispose);
+  return embed;
 });
