@@ -19,6 +19,8 @@ class ExternalPlaybackState {
     this.duration,
     this.paused = false,
     this.error,
+    this.voDrops,
+    this.decoderDrops,
   });
 
   /// Increases with every [ExternalMpvPlayer.open].
@@ -35,12 +37,20 @@ class ExternalPlaybackState {
   /// User-facing error; never contains the stream URL.
   final String? error;
 
+  /// mpv `frame-drop-count` (frames dropped at output); null until known.
+  final int? voDrops;
+
+  /// mpv `decoder-frame-drop-count`; null until known.
+  final int? decoderDrops;
+
   ExternalPlaybackState copyWith({
     ExternalPlayerStatus? status,
     Duration? Function()? position,
     Duration? Function()? duration,
     bool? paused,
     String? error,
+    int? Function()? voDrops,
+    int? Function()? decoderDrops,
   }) => ExternalPlaybackState(
     session: session,
     status: status ?? this.status,
@@ -48,6 +58,8 @@ class ExternalPlaybackState {
     duration: duration == null ? this.duration : duration(),
     paused: paused ?? this.paused,
     error: error ?? this.error,
+    voDrops: voDrops == null ? this.voDrops : voDrops(),
+    decoderDrops: decoderDrops == null ? this.decoderDrops : decoderDrops(),
   );
 }
 
@@ -67,6 +79,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
     MpvIpcConnector connect = _connect,
     this.hwdec = 'vaapi',
     this._quitTimeout = const Duration(seconds: 2),
+    this._statsInterval = const Duration(seconds: 1),
   }) : _connectIpc = connect;
 
   static Future<MpvIpc> _connect(String path, {Future<void>? abort}) =>
@@ -75,6 +88,9 @@ class ExternalMpvPlayer extends ChangeNotifier {
   final ProcessStarter _start;
   final MpvIpcConnector _connectIpc;
   final Duration _quitTimeout;
+
+  /// How often the dropped-frame counters are polled.
+  final Duration _statsInterval;
   final String hwdec;
 
   ExternalPlaybackState _state = const ExternalPlaybackState();
@@ -133,6 +149,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
       await ipc.observeProperty(2, 'duration');
       await ipc.observeProperty(3, 'pause');
       await ipc.command(['loadfile', url.toString()]);
+      run.statsTimer = Timer.periodic(_statsInterval, (_) => _pollDrops(run));
       if (_isCurrent(run) && _state.status == ExternalPlayerStatus.starting) {
         state = _state.copyWith(status: ExternalPlayerStatus.playing);
       }
@@ -173,12 +190,41 @@ class ExternalMpvPlayer extends ChangeNotifier {
     }
   }
 
+  /// Reads the dropped-frame counters (not observed: they can change every
+  /// frame, a once-a-second poll is enough for a readout).
+  Future<void> _pollDrops(_MpvRun run) async {
+    final ipc = run.ipc;
+    if (ipc == null || run.polling || !_isCurrent(run)) return;
+    run.polling = true;
+    try {
+      final vo = await _intProperty(ipc, 'frame-drop-count');
+      final dec = await _intProperty(ipc, 'decoder-frame-drop-count');
+      if (_isCurrent(run) &&
+          (vo != _state.voDrops || dec != _state.decoderDrops)) {
+        state = _state.copyWith(voDrops: () => vo, decoderDrops: () => dec);
+      }
+    } finally {
+      run.polling = false;
+    }
+  }
+
+  /// [name] as an int, or null while mpv has no value (e.g. no video yet).
+  static Future<int?> _intProperty(MpvIpc ipc, String name) async {
+    try {
+      final value = await ipc.command(['get_property', name]);
+      return value is num ? value.toInt() : null;
+    } on MpvIpcException {
+      return null;
+    }
+  }
+
   static Duration? _seconds(Object? value) => value is num
       ? Duration(microseconds: (value * Duration.microsecondsPerSecond).round())
       : null;
 
   Future<void> _onExit(_MpvRun run) async {
     run.exited = true;
+    run.statsTimer?.cancel();
     // mpv's last events (e.g. an end-file error) may still be in flight.
     await run.ipc?.done.timeout(_quitTimeout, onTimeout: () {});
     unawaited(run.close());
@@ -256,11 +302,14 @@ class _MpvRun {
   /// by calling [close] again.
   bool closed = false;
   bool exited = false;
+  Timer? statsTimer;
+  bool polling = false;
 
   /// Asks mpv to quit, then escalates to SIGTERM and SIGKILL, and removes
   /// the socket directory. Safe to call repeatedly.
   Future<void> close() async {
     closed = true;
+    statsTimer?.cancel();
     final p = process;
     if (p != null && !exited) {
       try {
@@ -290,6 +339,7 @@ class _MpvRun {
 
   void killNow() {
     closed = true;
+    statsTimer?.cancel();
     if (!exited) process?.kill();
     ipc?.close();
     try {

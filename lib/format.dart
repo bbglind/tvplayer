@@ -13,3 +13,8 @@ String formatResolution(String w, String h) {
   if (w.isEmpty || h.isEmpty) return '-';
   return '${w}x$h';
 }
+
+/// mpv dropped-frame counters as `dropped (vo/dec): 3 / 0`, with `-` for an
+/// unknown count.
+String formatDrops(int? vo, int? decoder) =>
+    'dropped (vo/dec): ${vo ?? '-'} / ${decoder ?? '-'}';

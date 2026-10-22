@@ -22,6 +22,8 @@ void main() {
         return mpv.process;
       },
       quitTimeout: const Duration(milliseconds: 200),
+      // Polling has its own test; keep it out of the command logs here.
+      statsInterval: const Duration(hours: 1),
     );
   });
 
@@ -94,6 +96,58 @@ void main() {
       ['cycle', 'pause'],
       ['seek', 90.5, 'absolute'],
     ]);
+  });
+
+  test('polls the dropped-frame counters', () async {
+    final p = ExternalMpvPlayer(
+      start: (exe, args) async {
+        final mpv = FakeMpv(args);
+        started.add(mpv);
+        await mpv.listen();
+        return mpv.process;
+      },
+      statsInterval: const Duration(milliseconds: 20),
+    );
+    addTearDown(p.dispose);
+    p.open(_url, title: 'News');
+    final mpv = await Future.doWhile(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      return started.isEmpty;
+    }).then((_) => started.single);
+
+    // Unavailable before the first video frame: unknown, not zero.
+    await mpv.loaded;
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(p.state.voDrops, isNull);
+    expect(p.state.decoderDrops, isNull);
+
+    mpv.properties['frame-drop-count'] = 0;
+    mpv.properties['decoder-frame-drop-count'] = 0;
+    while (p.state.voDrops == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect((p.state.voDrops, p.state.decoderDrops), (0, 0));
+
+    mpv.properties['frame-drop-count'] = 7;
+    mpv.properties['decoder-frame-drop-count'] = 2;
+    while (p.state.voDrops != 7) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(p.state.decoderDrops, 2);
+    expect(
+      mpv.commands,
+      contains(equals(['get_property', 'frame-drop-count'])),
+    );
+    expect(
+      mpv.commands,
+      contains(equals(['get_property', 'decoder-frame-drop-count'])),
+    );
+
+    // Polling stops with mpv.
+    await p.stop();
+    final count = mpv.commands.length;
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(mpv.commands.length, count);
   });
 
   test('reports mpv exiting', () async {

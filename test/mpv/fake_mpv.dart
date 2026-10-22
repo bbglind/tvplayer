@@ -42,6 +42,10 @@ class FakeMpv {
   final List<String> arguments;
   final process = FakeProcess();
   final commands = <List<Object?>>[];
+
+  /// Values returned for `get_property`; missing ones reply with an error,
+  /// like mpv for an unavailable property.
+  final properties = <String, Object?>{};
   final _clients = <Socket>[];
   ServerSocket? _server;
   final _loaded = Completer<void>();
@@ -73,8 +77,10 @@ class FakeMpv {
     final msg = jsonDecode(line) as Map<String, Object?>;
     final command = (msg['command']! as List).cast<Object?>();
     commands.add(command);
+    final isGet = command.first == 'get_property';
+    final known = !isGet || properties.containsKey(command[1]);
     client.write(
-      '${jsonEncode({'request_id': msg['request_id'], 'error': 'success', 'data': null})}\n',
+      '${jsonEncode({'request_id': msg['request_id'], 'error': known ? 'success' : 'property unavailable', 'data': isGet ? properties[command[1]] : null})}\n',
     );
     if (command.first == 'loadfile' && !_loaded.isCompleted) {
       _loaded.complete();

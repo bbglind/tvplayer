@@ -16,4 +16,10 @@ void main() {
     expect(formatResolution('1920', '1080'), '1920x1080');
     expect(formatResolution('', '1080'), '-');
   });
+
+  test('formatDrops', () {
+    expect(formatDrops(0, 0), 'dropped (vo/dec): 0 / 0');
+    expect(formatDrops(12, 3), 'dropped (vo/dec): 12 / 3');
+    expect(formatDrops(null, null), 'dropped (vo/dec): - / -');
+  });
 }

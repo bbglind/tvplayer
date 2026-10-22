@@ -133,6 +133,17 @@ void main() {
       play();
       await tester.pump();
       expect(find.byKey(const Key('mpv.position')), findsOneWidget);
+      expect(find.text('dropped (vo/dec): - / -'), findsOneWidget);
+      player.emit(
+        player.state.copyWith(voDrops: () => 3, decoderDrops: () => 0),
+      );
+      await tester.pump();
+      expect(find.text('dropped (vo/dec): 3 / 0'), findsOneWidget);
+      // In the controls bar, below the video.
+      expect(
+        tester.getRect(find.byKey(const Key('mpv.drops'))).top,
+        greaterThanOrEqualTo(video.bottom),
+      );
       await tester.tap(find.byTooltip('Pause'));
       expect(player.pauseToggles, 1);
 
@@ -247,6 +258,11 @@ void main() {
       play();
       await tester.pump();
       expect(find.text('Playing in the mpv window'), findsOneWidget);
+      player.emit(
+        player.state.copyWith(voDrops: () => 0, decoderDrops: () => 0),
+      );
+      await tester.pump();
+      expect(find.text('dropped (vo/dec): 0 / 0'), findsOneWidget);
       player.emit(player.state.copyWith(status: ExternalPlayerStatus.exited));
       await tester.pumpAndSettle();
       expect(find.byType(MpvPlayerScreen), findsNothing);

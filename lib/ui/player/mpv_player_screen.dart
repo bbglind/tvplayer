@@ -201,6 +201,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                   ? const LinearProgressIndicator()
                   : _buildSeekBar(context, state),
             ),
+            const SizedBox(width: 16),
+            _DropReadout(state),
             const SizedBox(width: 8),
             IconButton(
               tooltip: 'Fullscreen (double-click video, Esc to leave)',
@@ -300,6 +302,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                 key: const Key('mpv.position'),
               ),
             ],
+            if (state.status == ExternalPlayerStatus.playing) ...[
+              const SizedBox(height: 8),
+              _DropReadout(state),
+            ],
             const SizedBox(height: 16),
             failed
                 ? FilledButton.icon(
@@ -315,6 +321,24 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// mpv's dropped-frame counters; mpv's own stats overlay isn't reachable
+/// when embedded (its key bindings are off).
+class _DropReadout extends StatelessWidget {
+  const _DropReadout(this.state);
+
+  final ExternalPlaybackState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      formatDrops(state.voDrops, state.decoderDrops),
+      key: const Key('mpv.drops'),
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(fontFamily: 'monospace'),
     );
   }
 }
