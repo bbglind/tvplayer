@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../data/connection_tester.dart';
 import '../data/provider_storage.dart';
+import '../player/mpv/external_mpv_player.dart';
 
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
@@ -144,3 +147,15 @@ class Hwdec extends Notifier<String> {
 
   void set(String mode) => state = mode;
 }
+
+/// Whether channels play in an external mpv window instead of the embedded
+/// media_kit player. On Linux the embedded player drops frames where plain
+/// `mpv --hwdec=vaapi` doesn't.
+final useExternalMpvProvider = Provider<bool>((ref) => Platform.isLinux);
+
+/// The single external mpv; closed with the app.
+final externalMpvProvider = Provider<ExternalMpvPlayer>((ref) {
+  final player = ExternalMpvPlayer();
+  ref.onDispose(player.dispose);
+  return player;
+});

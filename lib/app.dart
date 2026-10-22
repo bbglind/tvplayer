@@ -1,3 +1,5 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,8 +8,33 @@ import 'state/providers.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
 
-class TvPlayerApp extends StatelessWidget {
+class TvPlayerApp extends ConsumerStatefulWidget {
   const TvPlayerApp({super.key});
+
+  @override
+  ConsumerState<TvPlayerApp> createState() => _TvPlayerAppState();
+}
+
+class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
+  // Closing the window must not leave an external mpv running.
+  late final _lifecycle = AppLifecycleListener(
+    onExitRequested: () async {
+      await ref.read(externalMpvProvider).stop();
+      return AppExitResponse.exit;
+    },
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle;
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -4,6 +4,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/errors.dart';
 import '../../state/providers.dart';
+import '../player/external_player_screen.dart';
 import '../player/player_screen.dart';
 
 /// Categories on the left, searchable channel list on the right.
@@ -179,13 +180,13 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
   }
 }
 
-class _ChannelTile extends StatelessWidget {
+class _ChannelTile extends ConsumerWidget {
   const _ChannelTile({required this.channel});
 
   final LiveStream channel;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final logo = channel.logoUrl;
     return ListTile(
       leading: SizedBox.square(
@@ -202,7 +203,11 @@ class _ChannelTile extends StatelessWidget {
       title: Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: channel.number == null ? null : Text('${channel.number}'),
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => PlayerScreen(channel: channel)),
+        MaterialPageRoute<void>(
+          builder: (_) => ref.read(useExternalMpvProvider)
+              ? ExternalPlayerScreen(channel: channel)
+              : PlayerScreen(channel: channel),
+        ),
       ),
     );
   }
