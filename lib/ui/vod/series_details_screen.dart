@@ -7,6 +7,7 @@ import '../../data/errors.dart';
 import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
+import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -196,18 +197,29 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
                   ),
                 ],
                 const SizedBox(height: 20),
-                if (next != null)
-                  FilledButton.icon(
-                    key: const Key('series.playNext'),
-                    autofocus: true,
-                    onPressed: () => _play(info, next),
-                    icon: const Icon(Icons.play_arrow),
-                    label: Text(
-                      '${resume != null ? 'Resume' : 'Play'} '
-                      '${formatEpisodeCode(next.season, next.episodeNumber)}'
-                      '${resume != null ? ' from ${formatDuration(resume)}' : ''}',
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    if (next != null)
+                      FilledButton.icon(
+                        key: const Key('series.playNext'),
+                        autofocus: true,
+                        onPressed: () => _play(info, next),
+                        icon: const Icon(Icons.play_arrow),
+                        label: Text(
+                          '${resume != null ? 'Resume' : 'Play'} '
+                          '${formatEpisodeCode(next.season, next.episodeNumber)}'
+                          '${resume != null ? ' from ${formatDuration(resume)}' : ''}',
+                        ),
+                      ),
+                    FavouriteButton(
+                      item: seriesItemRef(series),
+                      name: series.name,
+                      labelled: true,
                     ),
-                  ),
+                  ],
+                ),
                 const SizedBox(height: 20),
                 if ((meta?.plot ?? series.plot) case final plot?)
                   Text(

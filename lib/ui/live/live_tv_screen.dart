@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/errors.dart';
+import '../../state/category_selection.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
+import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../shell/category_layout.dart';
+import '../shell/category_list.dart';
 import '../vod/poster.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -31,6 +34,7 @@ class LiveTvScreen extends ConsumerWidget {
       ),
       data: (catalog) => CategoryLayout(
         section: 'live',
+        headerAction: const CategoryEditButton(section: 'live'),
         list: _CategoryList(catalog: catalog),
         content: const _ChannelPane(),
       ),
@@ -81,26 +85,15 @@ class _CategoryList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(selectedCategoryProvider);
-    final notifier = ref.read(selectedCategoryProvider.notifier);
-    final categories = catalog.categories;
-    return ListView.builder(
-      key: const Key('live.categories'),
-      padding: const EdgeInsets.fromLTRB(16, 0, 12, 16),
-      itemCount: categories.length + 1,
-      itemBuilder: (context, i) {
-        final category = i == 0 ? null : categories[i - 1];
-        final id = category?.id;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: CategoryPill(
-            label: category?.name ?? 'All channels',
-            count: id == null ? catalog.channelCount : catalog.countIn(id),
-            selected: id == selected,
-            onTap: () => notifier.select(id),
-          ),
-        );
-      },
+    return CategoryList(
+      section: 'live',
+      kind: ContentKind.live,
+      allLabel: 'All channels',
+      categories: catalog.categories,
+      allCount: catalog.countExcluding,
+      countIn: catalog.countIn,
+      selected: ref.watch(liveSelectionProvider),
+      onSelect: ref.read(selectedCategoryProvider.notifier).select,
     );
   }
 }
@@ -127,9 +120,26 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
     ref.read(channelQueryProvider.notifier).set(q);
   }
 
+  /// Items of the selected one of my categories that the provider no
+  /// longer lists, matching the search.
+  List<FavouriteMembership> _missing() {
+    final catalog = ref.watch(liveCatalogProvider).value;
+    final selection = ref.watch(liveSelectionProvider);
+    if (catalog == null || selection is! MyCategory) return const [];
+    final query = ref.watch(channelQueryProvider).trim().toLowerCase();
+    return [
+      for (final m in ref.watch(favouritesProvider).itemsIn(selection.id))
+        if (catalog.byStableId(m.item.id) == null &&
+            m.name.toLowerCase().contains(query))
+          m,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final channels = ref.watch(visibleChannelsProvider).value ?? const [];
+    final missing = _missing();
+    final mine = ref.watch(liveSelectionProvider) is MyCategory;
     return Column(
       children: [
         Padding(
@@ -164,16 +174,27 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
           ),
         ),
         Expanded(
-          child: channels.isEmpty
-              ? const Center(child: Text('No channels'))
+          child: channels.isEmpty && missing.isEmpty
+              ? Center(
+                  child: Text(
+                    mine && _search.text.isEmpty
+                        ? 'No channels yet. Add some with the star on a '
+                              'channel.'
+                        : 'No channels',
+                  ),
+                )
               : ListView.builder(
                   key: const Key('live.channels'),
                   padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
                   itemExtent: ChannelRow.extent(context),
-                  itemCount: channels.length,
+                  itemCount: channels.length + missing.length,
                   itemBuilder: (context, i) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: channels[i].isSeparator
+                    child: i >= channels.length
+                        ? _MissingChannelRow(
+                            membership: missing[i - channels.length],
+                          )
+                        : channels[i].isSeparator
                         ? SeparatorHeader(
                             channel: channels[i],
                             radius: AppRadius.card,
@@ -187,13 +208,18 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
   }
 }
 
-/// A channel in the list: number, logo tile, name and what's on now.
-class ChannelRow extends ConsumerWidget {
+/// A channel in the list: number, logo tile, name and what's on now, and
+/// a favourite star (shown on hover or focus, or when it is a favourite).
+/// Right click, long press or the Menu key open its context menu.
+class ChannelRow extends StatefulWidget {
   const ChannelRow({super.key, required this.channel});
 
   final LiveStream channel;
 
   static const _padding = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+
+  /// Room for the star at the right end.
+  static const _starSpace = 44.0;
 
   /// Height of a row plus the gap below it. Grows with the text scale, so
   /// the name, now/next line and progress bar always fit: a fixed height
@@ -213,62 +239,179 @@ class ChannelRow extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final text = Theme.of(context).textTheme;
-    final logo = channel.logoUrl;
-    return AppTile(
-      padding: _padding,
-      onTap: () => openChannel(context, ref, channel),
-      child: Row(
+  State<ChannelRow> createState() => _ChannelRowState();
+}
+
+class _ChannelRowState extends State<ChannelRow> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final channel = widget.channel;
+    final item = liveItemRef(channel);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      // The star sits beside the context menu, not in it: menu anchors
+      // nest.
+      child: Stack(
         children: [
-          SizedBox(
-            width: 36,
-            child: Text(
-              channel.number == null ? '' : '${channel.number}',
-              style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.all(Radius.circular(AppRadius.small)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            padding: const EdgeInsets.all(4),
-            child: logo == null || logo.isEmpty
-                ? const Icon(
-                    Icons.live_tv_outlined,
-                    size: 20,
-                    color: AppColors.textMuted,
-                  )
-                : Poster(
-                    url: logo,
-                    decodeWidth: 88,
-                    fit: BoxFit.contain,
-                    placeholder: Icons.live_tv_outlined,
-                    background: AppColors.background,
+          Positioned.fill(
+            child: ItemContextMenu(
+              item: item,
+              name: channel.name,
+              child: Consumer(
+                builder: (context, ref, _) => AppTile(
+                  padding: ChannelRow._padding.copyWith(
+                    right: ChannelRow._padding.right + ChannelRow._starSpace,
                   ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  channel.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.titleMedium,
+                  onTap: () => openChannel(context, ref, channel),
+                  child: _ChannelContent(
+                    number: channel.number,
+                    logoUrl: channel.logoUrl,
+                    title: channel.name,
+                    below: NowNextLine(channel: channel),
+                  ),
                 ),
-                NowNextLine(channel: channel),
-              ],
+              ),
+            ),
+          ),
+          Positioned(
+            right: 6,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: FavouriteButton(
+                item: item,
+                name: channel.name,
+                revealed: _hovered,
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Number, logo tile, [title] and the line [below] it.
+class _ChannelContent extends StatelessWidget {
+  const _ChannelContent({
+    required this.number,
+    required this.logoUrl,
+    required this.title,
+    required this.below,
+    this.dimmed = false,
+  });
+
+  final int? number;
+  final String? logoUrl;
+  final String title;
+  final Widget below;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final logo = logoUrl;
+    return Row(
+      children: [
+        SizedBox(
+          width: 36,
+          child: Text(
+            number == null ? '' : '$number',
+            style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        Container(
+          width: 44,
+          height: 44,
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.all(Radius.circular(AppRadius.small)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          padding: const EdgeInsets.all(4),
+          child: logo == null || logo.isEmpty
+              ? const Icon(
+                  Icons.live_tv_outlined,
+                  size: 20,
+                  color: AppColors.textMuted,
+                )
+              : Poster(
+                  url: logo,
+                  decodeWidth: 88,
+                  fit: BoxFit.contain,
+                  placeholder: Icons.live_tv_outlined,
+                  background: AppColors.background,
+                ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: dimmed
+                    ? text.titleMedium?.copyWith(color: AppColors.textSecondary)
+                    : text.titleMedium,
+              ),
+              below,
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A channel in one of my categories that the provider no longer lists:
+/// its remembered name, and the star to remove it.
+class _MissingChannelRow extends StatelessWidget {
+  const _MissingChannelRow({required this.membership});
+
+  final FavouriteMembership membership;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: AppTile(
+            padding: ChannelRow._padding.copyWith(
+              right: ChannelRow._padding.right + ChannelRow._starSpace,
+            ),
+            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('The provider no longer lists this channel.'),
+              ),
+            ),
+            child: _ChannelContent(
+              number: null,
+              logoUrl: null,
+              title: membership.name,
+              dimmed: true,
+              below: Text('Not available', style: text.bodySmall),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 6,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: FavouriteButton(
+              item: membership.item,
+              name: membership.name,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

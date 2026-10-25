@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:tvplayer_core/tvplayer_core.dart';
+
 import '../../data/poster_cache.dart';
 import '../../state/providers.dart';
+import '../favourites/favourite_menu.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
@@ -134,6 +137,9 @@ class WatchedBadge extends StatelessWidget {
 
 /// A grid or row item: poster with watched badge or progress bar, title
 /// and an optional second line. The focus ring goes around the poster.
+///
+/// With a [favourite] item it gets a favourite star at the top left (shown
+/// on hover or focus, or when it is a favourite) and a context menu.
 class PosterCard extends StatefulWidget {
   const PosterCard({
     super.key,
@@ -144,6 +150,7 @@ class PosterCard extends StatefulWidget {
     this.watched = false,
     this.progress,
     this.placeholder = Icons.movie_outlined,
+    this.favourite,
   });
 
   final String title;
@@ -155,6 +162,7 @@ class PosterCard extends StatefulWidget {
   /// Watched fraction for a progress bar; null for none.
   final double? progress;
   final IconData placeholder;
+  final ItemRef? favourite;
 
   @override
   State<PosterCard> createState() => _PosterCardState();
@@ -167,10 +175,43 @@ class _PosterCardState extends State<PosterCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final favourite = widget.favourite;
+    final card = _buildCard(theme);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: favourite == null
+          ? card
+          // The star sits beside the context menu, not in it: menu
+          // anchors nest.
+          : Stack(
+              children: [
+                Positioned.fill(
+                  child: ItemContextMenu(
+                    item: favourite,
+                    name: widget.title,
+                    child: card,
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  top: 10,
+                  child: FavouriteButton(
+                    item: favourite,
+                    name: widget.title,
+                    revealed: _hovered || _focused,
+                    backdrop: AppColors.scrim.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildCard(ThemeData theme) {
     return InkWell(
       onTap: widget.onTap,
       onFocusChange: (f) => setState(() => _focused = f),
-      onHover: (h) => setState(() => _hovered = h),
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       child: Padding(
         padding: const EdgeInsets.all(6),

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
-import 'package:tvplayer/ui/theme/widgets.dart';
 
 import 'helpers.dart';
 
@@ -58,7 +57,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Channel 1234'), findsOneWidget);
-    expect(find.byType(CategoryPill), findsNWidgets(11)); // 10 + All.
+    // The category list ignores the search.
+    expect(find.text('All channels'), findsOneWidget);
+    expect(find.text('Category 3'), findsOneWidget);
     expect(find.byType(ChannelRow), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('live.search')), 'nothing');

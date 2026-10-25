@@ -8,8 +8,10 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/app_settings.dart';
 import '../../data/errors.dart';
+import '../../state/category_selection.dart';
 import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
+import '../favourites/category_icons.dart';
 import '../live/separator_header.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -56,9 +58,7 @@ class GuideScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(liveCatalogProvider),
       ),
       data: (catalog) {
-        final channels = catalog.channelsIn(
-          ref.watch(selectedCategoryProvider),
-        );
+        final channels = ref.watch(categoryChannelsProvider).value ?? const [];
         return Column(
           children: [
             _Toolbar(catalog: catalog, state: guideState),
@@ -87,14 +87,16 @@ class _Toolbar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final time = ref.watch(guideTimeProvider);
-    final selected = ref.watch(selectedCategoryProvider);
+    final selected = ref.watch(liveSelectionProvider);
+    final favourites = ref.watch(favouritesProvider);
+    final hidden = favourites.hiddenIds(ContentKind.live);
     final guide = state.guide;
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 20, 12),
       child: Row(
         children: [
           Flexible(
-            child: DropdownButton<String?>(
+            child: DropdownButton<CategorySelection>(
               key: const Key('guide.category'),
               value: selected,
               isExpanded: true,
@@ -104,14 +106,35 @@ class _Toolbar extends ConsumerWidget {
               focusColor: AppColors.hover,
               style: Theme.of(context).textTheme.titleMedium,
               items: [
-                const DropdownMenuItem(child: Text('All channels')),
-                for (final c in catalog.categories)
+                for (final c in favourites.categoriesOf(ContentKind.live))
                   DropdownMenuItem(
-                    value: c.id,
-                    child: Text(c.name, overflow: TextOverflow.ellipsis),
+                    value: MyCategory(c.id),
+                    child: Row(
+                      children: [
+                        Icon(categoryIcon(c.icon), size: 18),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(c.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
                   ),
+                const DropdownMenuItem(
+                  value: AllCategories(),
+                  child: Text('All channels'),
+                ),
+                for (final c in catalog.categories)
+                  if (!hidden.contains(c.id))
+                    DropdownMenuItem(
+                      value: ProviderCategory(c.id),
+                      child: Text(c.name, overflow: TextOverflow.ellipsis),
+                    ),
               ],
-              onChanged: ref.read(selectedCategoryProvider.notifier).select,
+              onChanged: (s) {
+                if (s != null) {
+                  ref.read(selectedCategoryProvider.notifier).select(s);
+                }
+              },
             ),
           ),
           const Spacer(),

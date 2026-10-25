@@ -29,6 +29,7 @@ class MoviesScreen extends ConsumerWidget {
     final filterNotifier = ref.read(movieFilterProvider.notifier);
     return VodBrowser<Movie>(
       what: 'movies',
+      kind: ContentKind.movie,
       state: state,
       filter: filter,
       onCategory: filterNotifier.selectCategory,
@@ -41,6 +42,7 @@ class MoviesScreen extends ConsumerWidget {
               PosterCard(
                 key: ValueKey('continue.${movie.streamId}'),
                 title: movie.name,
+                favourite: movieItemRef(movie),
                 subtitle: 'Resume at ${formatDuration(progress.position)}',
                 imageUrl: movie.posterUrl,
                 progress: progress.fraction,
@@ -52,6 +54,7 @@ class MoviesScreen extends ConsumerWidget {
         return PosterCard(
           key: ValueKey(movie.streamId),
           title: movie.name,
+          favourite: movieItemRef(movie),
           subtitle: movie.year?.toString(),
           imageUrl: movie.posterUrl,
           watched: progress?.watched ?? false,

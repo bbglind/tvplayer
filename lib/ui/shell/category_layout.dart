@@ -13,17 +13,20 @@ import '../theme/widgets.dart';
 /// and a [ShowCategoriesButton] in it brings the list back. The state is
 /// remembered per [section] (`live`, `movies`, `series`). The list's right
 /// edge can be dragged to resize it; the width is shared by all sections.
+/// [headerAction] goes to the right of the header (e.g. an edit button).
 class CategoryLayout extends ConsumerStatefulWidget {
   const CategoryLayout({
     super.key,
     required this.section,
     required this.list,
     required this.content,
+    this.headerAction,
   });
 
   final String section;
   final Widget list;
   final Widget content;
+  final Widget? headerAction;
 
   @override
   ConsumerState<CategoryLayout> createState() => _CategoryLayoutState();
@@ -100,10 +103,20 @@ class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 28, 12, 8),
-                child: _CategoriesHeader(
-                  key: Key('${widget.section}.categories.hide'),
-                  focusNode: _header,
-                  onTap: () => _setHidden(true),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _CategoriesHeader(
+                        key: Key('${widget.section}.categories.hide'),
+                        focusNode: _header,
+                        onTap: () => _setHidden(true),
+                      ),
+                    ),
+                    if (widget.headerAction case final action?) ...[
+                      const SizedBox(width: 4),
+                      action,
+                    ],
+                  ],
                 ),
               ),
               Expanded(child: widget.list),

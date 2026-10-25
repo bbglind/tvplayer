@@ -6,6 +6,7 @@ import '../../data/errors.dart';
 import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
+import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -166,6 +167,11 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                       label: Text(
                         watched ? 'Mark as unwatched' : 'Mark as watched',
                       ),
+                    ),
+                    FavouriteButton(
+                      item: movieItemRef(movie),
+                      name: movie.name,
+                      labelled: true,
                     ),
                   ],
                 ),

@@ -16,6 +16,8 @@ import '../data/provider_storage.dart';
 import '../data/vod_repository.dart';
 import '../player/mpv/external_mpv_player.dart';
 import '../player/mpv/video_embed.dart';
+import 'category_selection.dart';
+import 'favourites_controller.dart';
 import 'guide_controller.dart';
 import 'vod_controller.dart';
 import 'watch_controller.dart';
@@ -157,6 +159,32 @@ final watchProvider = NotifierProvider<WatchController, WatchData>(
   WatchController.new,
 );
 
+/// Creates the favourites store of a provider (by [providerKey]).
+/// Overridden in tests.
+final favouritesStoreProvider = Provider<FavouritesStore Function(String key)>(
+  (ref) =>
+      (key) => _FileFavouritesStore(key),
+);
+
+/// My categories and hidden provider categories of the saved provider.
+final favouritesProvider =
+    NotifierProvider<FavouritesController, FavouritesData>(
+      FavouritesController.new,
+    );
+
+/// The section (`live`, `movies`, `series`) whose category list is in
+/// edit mode, if any.
+final categoryEditingProvider = NotifierProvider<CategoryEditing, String?>(
+  CategoryEditing.new,
+);
+
+class CategoryEditing extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void toggle(String section) => state = state == section ? null : section;
+}
+
 /// Poster and logo images, cached on disk. Overridden in tests.
 final posterLoaderProvider = Provider<PosterLoader>(
   (ref) => PosterCache(client: ref.watch(httpClientProvider)),
@@ -179,6 +207,26 @@ class _FileWatchStore implements WatchStore {
   Future<void> save(WatchData data) async => (await _store).save(data);
 }
 
+/// [JsonFileFavouritesStore] in the app support directory, resolved
+/// lazily.
+class _FileFavouritesStore implements FavouritesStore {
+  _FileFavouritesStore(this._key);
+
+  final String _key;
+
+  Future<FavouritesStore> get _store async => JsonFileFavouritesStore(
+    File(
+      '${(await getApplicationSupportDirectory()).path}/favourites/$_key.json',
+    ),
+  );
+
+  @override
+  Future<FavouritesData> load() async => (await _store).load();
+
+  @override
+  Future<void> save(FavouritesData data) async => (await _store).save(data);
+}
+
 /// Categories and channels of the active provider.
 ///
 /// This is the session cache: the catalog is fetched once and kept in memory
@@ -190,21 +238,48 @@ final liveCatalogProvider = FutureProvider<LiveCatalog>((ref) async {
   return source.load();
 });
 
-/// Selected category id; null means all channels. Resets when the provider
-/// changes.
-final selectedCategoryProvider = NotifierProvider<SelectedCategory, String?>(
-  SelectedCategory.new,
-);
+/// Selected live category, shared by Live TV and the TV guide. Resets when
+/// the provider changes. Read [liveSelectionProvider] for what to show.
+final selectedCategoryProvider =
+    NotifierProvider<SelectedCategory, CategorySelection>(SelectedCategory.new);
 
-class SelectedCategory extends Notifier<String?> {
+class SelectedCategory extends Notifier<CategorySelection> {
   @override
-  String? build() {
+  CategorySelection build() {
     ref.watch(liveSourceProvider);
-    return null;
+    return const AllCategories();
   }
 
-  void select(String? categoryId) => state = categoryId;
+  void select(CategorySelection selection) => state = selection;
 }
+
+/// [selectedCategoryProvider], falling back to all channels when the
+/// selected category was deleted or hidden.
+final liveSelectionProvider = Provider<CategorySelection>(
+  (ref) => ref
+      .watch(selectedCategoryProvider)
+      .resolve(ref.watch(favouritesProvider), ContentKind.live),
+);
+
+/// Channels of the selected category: for all channels without hidden
+/// categories, for one of my categories the ones the provider still has, in
+/// the order they were added.
+final categoryChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
+  final catalog = ref.watch(liveCatalogProvider);
+  final selection = ref.watch(liveSelectionProvider);
+  final favourites = ref.watch(favouritesProvider);
+  return catalog.whenData(
+    (c) => switch (selection) {
+      AllCategories() => c.channelsExcluding(
+        favourites.hiddenIds(ContentKind.live),
+      ),
+      ProviderCategory(:final id) => c.channelsIn(id),
+      MyCategory(:final id) => [
+        for (final m in favourites.itemsIn(id)) ?c.byStableId(m.item.id),
+      ],
+    },
+  );
+});
 
 /// Channel search text. Resets when the provider changes.
 final channelQueryProvider = NotifierProvider<ChannelQuery, String>(
@@ -224,11 +299,8 @@ class ChannelQuery extends Notifier<String> {
 /// Channels of the selected category whose name contains the search text
 /// (case-insensitive). Separators are kept, except while searching.
 final visibleChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
-  final catalog = ref.watch(liveCatalogProvider);
-  final category = ref.watch(selectedCategoryProvider);
   final query = ref.watch(channelQueryProvider).trim().toLowerCase();
-  return catalog.whenData((c) {
-    final channels = c.channelsIn(category);
+  return ref.watch(categoryChannelsProvider).whenData((channels) {
     if (query.isEmpty) return channels;
     return [
       for (final ch in channels)

@@ -125,7 +125,6 @@ void main() {
       testApp(
         overrides: [
           liveSourceProvider.overrideWithValue(source),
-          providerStorageProvider.overrideWithValue(FakeProviderStorage()),
           useExternalMpvProvider.overrideWithValue(true),
           externalMpvProvider.overrideWithValue(player),
           embedMpvProvider.overrideWithValue(false),

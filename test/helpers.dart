@@ -198,6 +198,24 @@ class MemoryWatchStore implements WatchStore {
   }
 }
 
+/// In-memory [FavouritesStore].
+class MemoryFavouritesStore implements FavouritesStore {
+  MemoryFavouritesStore([FavouritesData? data])
+    : data = data ?? FavouritesData.empty;
+
+  FavouritesData data;
+  int saves = 0;
+
+  @override
+  Future<FavouritesData> load() async => data;
+
+  @override
+  Future<void> save(FavouritesData data) async {
+    saves++;
+    this.data = data;
+  }
+}
+
 /// [PosterLoader] that never has an image, so tests do no network or disk
 /// access; [requests] records what was asked for.
 class FakePosterLoader implements PosterLoader {
@@ -354,28 +372,36 @@ const activeAccountJson = {
 /// Wraps [child] in a ProviderScope (no automatic retries) and MaterialApp
 /// with the app's [InputModeScope].
 ///
-/// Settings, the guide and catalogue caches, the watch history, posters and
-/// the device time zone (`Europe/Stockholm`) are always faked; pass
-/// [settings], [epg], [vod] or [watch] to inspect them. [now] fixes the
+/// The provider storage (empty unless [providerStorage] is given),
+/// settings, the guide and catalogue caches, the watch history, favourites,
+/// posters and the device time zone (`Europe/Stockholm`) are always faked;
+/// pass [settings], [epg], [vod], [watch] or [favourites] to inspect them. [now] fixes the
 /// clock.
 Widget testApp({
   required List<Override> overrides,
   required Widget child,
+  ProviderStorage? providerStorage,
   SettingsStorage? settings,
   EpgRepository? epg,
   VodRepository? vod,
   WatchStore? watch,
+  FavouritesStore? favourites,
   DateTime? now,
 }) {
   final watchStore = watch ?? MemoryWatchStore();
+  final favouritesStore = favourites ?? MemoryFavouritesStore();
   return ProviderScope(
     overrides: [
+      providerStorageProvider.overrideWithValue(
+        providerStorage ?? FakeProviderStorage(),
+      ),
       settingsStorageProvider.overrideWithValue(
         settings ?? FakeSettingsStorage(),
       ),
       epgRepositoryProvider.overrideWithValue(epg ?? FakeEpgRepository()),
       vodRepositoryProvider.overrideWithValue(vod ?? FakeVodRepository()),
       watchStoreProvider.overrideWithValue((_) => watchStore),
+      favouritesStoreProvider.overrideWithValue((_) => favouritesStore),
       posterLoaderProvider.overrideWithValue(FakePosterLoader()),
       deviceTimeZoneProvider.overrideWithValue('Europe/Stockholm'),
       if (now != null) clockProvider.overrideWith(() => FixedClock(now)),

@@ -191,7 +191,9 @@ class AppTile extends StatelessWidget {
 }
 
 /// An entry in a vertical category list: a pill, accent when selected,
-/// with an optional item count.
+/// with an optional leading [icon] and item count. [dimmed] shows a hidden
+/// entry; set [checked] when tapping toggles something rather than
+/// selecting.
 class CategoryPill extends StatelessWidget {
   const CategoryPill({
     super.key,
@@ -199,65 +201,88 @@ class CategoryPill extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.count,
+    this.icon,
+    this.dimmed = false,
+    this.checked,
+    this.tooltip,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
   final int? count;
+  final IconData? icon;
+  final bool dimmed;
+  final bool? checked;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final fg = selected ? AppColors.onAccent : AppColors.textSecondary;
+    final fg = selected
+        ? AppColors.onAccent
+        : dimmed
+        ? AppColors.textDisabled
+        : AppColors.textSecondary;
+    Widget pill = Material(
+      color: selected ? AppColors.accent : Colors.transparent,
+      shape: const StadiumBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: selected
+            ? AppColors.accentHover
+            : AppColors.textPrimary.withValues(alpha: 0.07),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 40),
+          child: Padding(
+            padding: EdgeInsets.only(left: icon == null ? 16 : 12, right: 16),
+            child: Row(
+              children: [
+                if (icon case final icon?) ...[
+                  Icon(icon, size: 18, color: fg),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: TruncatedText(
+                    label,
+                    style: text.labelLarge?.copyWith(
+                      color: fg,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '$count',
+                    style: text.bodySmall?.copyWith(
+                      color: selected
+                          ? fg
+                          : dimmed
+                          ? AppColors.textDisabled
+                          : AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (tooltip case final message?) {
+      pill = Tooltip(message: message, child: pill);
+    }
     return Semantics(
-      selected: selected,
+      selected: checked == null ? selected : null,
+      checked: checked,
       child: FocusRing(
         radius: AppRadius.pill,
         inset: true,
         // An accent ring doesn't show on the accent fill.
         color: selected ? AppColors.textPrimary : AppColors.accent,
-        child: Material(
-          color: selected ? AppColors.accent : Colors.transparent,
-          shape: const StadiumBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            hoverColor: selected
-                ? AppColors.accentHover
-                : AppColors.textPrimary.withValues(alpha: 0.07),
-            child: SizedBox(
-              height: 40,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TruncatedText(
-                        label,
-                        style: text.labelLarge?.copyWith(
-                          color: fg,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    if (count != null) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        '$count',
-                        style: text.bodySmall?.copyWith(
-                          color: selected ? fg : AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+        child: pill,
       ),
     );
   }

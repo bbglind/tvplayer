@@ -10,8 +10,9 @@ import '../epg/guide_screen.dart' show formatGuideDate, formatShift;
 import '../setup/setup_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/widgets.dart';
+import 'category_settings_screen.dart';
 import 'language_list_editor.dart';
+import 'settings_section.dart';
 import 'time_zone_picker.dart';
 
 /// Provider management, TV guide settings and player options.
@@ -115,10 +116,11 @@ class SettingsScreen extends ConsumerWidget {
     final time = ref.watch(guideTimeProvider);
     final guideState = ref.watch(guideProvider);
     final guide = guideState.guide;
+    final favourites = ref.watch(favouritesProvider);
     return ListView(
       padding: AppSpacing.page,
       children: [
-        _Section(
+        SettingsSection(
           title: 'Provider',
           children: [
             ListTile(
@@ -164,7 +166,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
-        _Section(
+        SettingsSection(
           title: 'TV guide',
           children: [
             ListTile(
@@ -235,7 +237,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
-        _Section(
+        SettingsSection(
           title: 'Subtitles and audio',
           children: [
             SwitchListTile(
@@ -285,7 +287,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
-        _Section(
+        SettingsSection(
           title: 'Player',
           children: [
             SwitchListTile(
@@ -309,60 +311,48 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ],
-    );
-  }
-}
-
-/// A settings group: an overline title and a panel with its rows,
-/// separated by dividers. List rows get the keyboard focus ring.
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.section),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title.toUpperCase(),
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-              const SizedBox(height: 12),
-              Panel(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final (i, child) in children.indexed) ...[
-                      if (i > 0)
-                        const Divider(height: 9, indent: 16, endIndent: 16),
-                      // Buttons draw their own ring.
-                      if (child is ListTile || child is SwitchListTile)
-                        FocusRing(
-                          radius: AppRadius.small,
-                          inset: true,
-                          child: child,
-                        )
-                      else
-                        child,
-                    ],
-                  ],
+        SettingsSection(
+          title: 'Categories',
+          children: [
+            for (final (kind, icon, label) in [
+              (ContentKind.live, Icons.live_tv_outlined, 'Live TV'),
+              (ContentKind.movie, Icons.movie_outlined, 'Movies'),
+              (ContentKind.series, Icons.tv_outlined, 'Series'),
+            ])
+              ListTile(
+                key: Key('settings.categories.${kind.name}'),
+                leading: Icon(icon),
+                title: Text(label),
+                subtitle: Text(describeCategories(favourites, kind)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CategorySettingsScreen(kind: kind),
+                  ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
-      ),
+        SettingsSection(
+          title: 'Search',
+          children: [
+            SwitchListTile(
+              key: const Key('settings.searchHidden'),
+              title: const Text('Show hidden categories in global search'),
+              subtitle: const Text(
+                'Also find channels, movies and series in provider categories '
+                'you have hidden.',
+              ),
+              value: settings.showHiddenInGlobalSearch,
+              onChanged: (v) => _saveSettings(
+                context,
+                ref,
+                settings.copyWith(showHiddenInGlobalSearch: v),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

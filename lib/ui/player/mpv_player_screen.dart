@@ -14,6 +14,8 @@ import '../../player/playback_request.dart';
 import '../../state/providers.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
+import '../favourites/favourite_menu.dart';
+import '../favourites/favourite_panel.dart';
 import '../theme/app_colors.dart';
 import 'open_channel.dart';
 import 'player_shortcuts.dart';
@@ -66,6 +68,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   bool _fullscreen = false;
   double? _seekDragValue;
   bool _showTracks = false;
+
+  /// Whether the favourites panel is open (live channels only). A panel
+  /// rather than a menu: nothing can be drawn over the embedded video.
+  bool _showFavourites = false;
 
   /// The episode played to its end and the next one is offered.
   bool _ended = false;
@@ -361,7 +367,17 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
             children: [
               Expanded(child: video),
               if (_showTracks)
-                SizedBox(width: 300, child: _buildTrackPanel(state)),
+                SizedBox(width: 300, child: _buildTrackPanel(state))
+              else if (_showFavourites)
+                if (_request case LivePlayback(:final channel))
+                  SizedBox(
+                    width: 300,
+                    child: FavouritePanel(
+                      item: liveItemRef(channel),
+                      name: channel.name,
+                      onClose: () => setState(() => _showFavourites = false),
+                    ),
+                  ),
             ],
           ),
         ),
@@ -393,9 +409,35 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     icon: const Icon(Icons.subtitles_outlined),
     selectedIcon: const Icon(Icons.subtitles),
     onPressed: enabled
-        ? () => setState(() => _showTracks = !_showTracks)
+        ? () => setState(() {
+            _showTracks = !_showTracks;
+            _showFavourites = false;
+          })
         : null,
   );
+
+  /// The star of the live channel; opens the favourites panel.
+  Widget _buildFavouriteButton() {
+    final channel = (_request as LivePlayback).channel;
+    final favourite = ref.watch(
+      favouritesProvider.select((d) => d.isFavourite(liveItemRef(channel))),
+    );
+    return IconButton(
+      key: const Key('player.favourite'),
+      tooltip: favourite ? 'In favourites' : 'Add to favourites',
+      style: IconButton.styleFrom(
+        backgroundColor: AppColors.hover,
+        shape: const StadiumBorder(),
+      ),
+      isSelected: favourite,
+      icon: const Icon(Icons.star_border),
+      selectedIcon: const Icon(Icons.star),
+      onPressed: () => setState(() {
+        _showFavourites = !_showFavourites;
+        _showTracks = false;
+      }),
+    );
+  }
 
   Widget _buildControls(
     BuildContext context,
@@ -438,6 +480,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               ),
             ],
             const SizedBox(width: 8),
+            if (_request is LivePlayback) ...[
+              _buildFavouriteButton(),
+              const SizedBox(width: 4),
+            ],
             _buildTracksButton(!starting),
             IconButton(
               tooltip: 'Fullscreen (f or double-click, Esc to leave)',
@@ -554,6 +600,12 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               if (live != null) ...[
                 const SizedBox(height: 16),
                 NowNextBar(channel: live),
+                const SizedBox(height: 8),
+                FavouriteButton(
+                  item: liveItemRef(live),
+                  name: live.name,
+                  labelled: true,
+                ),
               ],
               if (playing) ...[
                 const SizedBox(height: 8),

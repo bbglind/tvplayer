@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../data/errors.dart';
+import 'category_selection.dart';
 import 'providers.dart';
 
 /// A movie or series catalogue as shown by the UI.
@@ -145,10 +146,9 @@ class SeriesCatalogController extends VodController<Series> {
 /// Category and search text of a movie or series tab.
 @immutable
 final class VodFilter {
-  const VodFilter({this.categoryId, this.query = ''});
+  const VodFilter({this.category = const AllCategories(), this.query = ''});
 
-  /// Null: all items.
-  final String? categoryId;
+  final CategorySelection category;
   final String query;
 }
 
@@ -160,9 +160,9 @@ class VodFilterNotifier extends Notifier<VodFilter> {
     return const VodFilter();
   }
 
-  void selectCategory(String? id) =>
-      state = VodFilter(categoryId: id, query: state.query);
+  void selectCategory(CategorySelection category) =>
+      state = VodFilter(category: category, query: state.query);
 
   void setQuery(String query) =>
-      state = VodFilter(categoryId: state.categoryId, query: query);
+      state = VodFilter(category: state.category, query: query);
 }

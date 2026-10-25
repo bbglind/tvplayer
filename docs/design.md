@@ -110,6 +110,17 @@ weights 400, 500, 600, 700.
   time; channel column stays fixed.
 - **Player overlay**: `scrim` background, controls in `textPrimary`, accent
   progress fill, secondary pills for Subtitles / Audio.
+- **Favourite star**: filled accent star when the item is in at least one of
+  my categories; otherwise an outline star that shows only on hover or
+  focus. At the right end of channel rows; at the top left of posters, on a
+  translucent `scrim` tile.
+- **Context menu**: channels, movies and series open one on right click,
+  long press (touch) and Menu key / Shift+F10. Menus and dialogs can't be
+  drawn over the embedded mpv video: next to it, use a side panel (like the
+  track panel) instead.
+- **My categories**: in category lists above the provider categories, with
+  their icon (outline, 18), name and count; an edit mode reorders them and
+  hides provider categories (eye toggle, hidden ones dimmed).
 
 ## Icons
 

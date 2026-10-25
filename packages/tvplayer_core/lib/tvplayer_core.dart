@@ -1,13 +1,15 @@
 /// UI-independent core of tvplayer: models plus Xtream, M3U and XMLTV
 /// clients/parsers, the TV guide (matching and time zones), movie and
 /// series catalogues, metadata sources, audio/subtitle track selection and
-/// watch history. Pure Dart, no Flutter dependency.
+/// watch history, favourites and hidden categories. Pure Dart, no Flutter dependency.
 library;
 
 export 'src/epg/channel_name.dart';
 export 'src/epg/epg_builder.dart';
 export 'src/epg/epg_guide.dart';
 export 'src/epg/guide_time.dart';
+export 'src/favourites/favourites_data.dart';
+export 'src/favourites/favourites_logic.dart';
 export 'src/live/live_source.dart';
 export 'src/m3u/m3u_client.dart';
 export 'src/metadata/metadata_source.dart';

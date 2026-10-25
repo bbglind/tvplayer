@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
 
 import 'helpers.dart';
@@ -15,9 +14,7 @@ void main() {
     final settings = FakeSettingsStorage();
     await tester.pumpWidget(
       testApp(
-        overrides: [
-          providerStorageProvider.overrideWithValue(FakeProviderStorage()),
-        ],
+        overrides: [],
         settings: settings,
         child: const Scaffold(body: SettingsScreen()),
       ),

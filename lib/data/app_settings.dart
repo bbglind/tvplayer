@@ -18,6 +18,7 @@ final class AppSettings {
     this.hiddenCategoryLists = const {},
     this.categoryListWidth = defaultCategoryListWidth,
     this.guideChannelWidth = defaultGuideChannelWidth,
+    this.showHiddenInGlobalSearch = false,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -71,6 +72,9 @@ final class AppSettings {
   static const minGuideChannelWidth = 140.0;
   static const maxGuideChannelWidth = 400.0;
 
+  /// Whether global search also finds items in hidden provider categories.
+  final bool showHiddenInGlobalSearch;
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -89,6 +93,7 @@ final class AppSettings {
     Set<String>? hiddenCategoryLists,
     double? categoryListWidth,
     double? guideChannelWidth,
+    bool? showHiddenInGlobalSearch,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -101,6 +106,8 @@ final class AppSettings {
     hiddenCategoryLists: hiddenCategoryLists ?? this.hiddenCategoryLists,
     categoryListWidth: categoryListWidth ?? this.categoryListWidth,
     guideChannelWidth: guideChannelWidth ?? this.guideChannelWidth,
+    showHiddenInGlobalSearch:
+        showHiddenInGlobalSearch ?? this.showHiddenInGlobalSearch,
   );
 
   Map<String, Object?> toJson() => {
@@ -115,6 +122,7 @@ final class AppSettings {
     'hiddenCategoryLists': hiddenCategoryLists.toList(),
     'categoryListWidth': categoryListWidth,
     'guideChannelWidth': guideChannelWidth,
+    'showHiddenInGlobalSearch': showHiddenInGlobalSearch,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -154,6 +162,7 @@ final class AppSettings {
         maxGuideChannelWidth,
         defaultGuideChannelWidth,
       ),
+      showHiddenInGlobalSearch: json['showHiddenInGlobalSearch'] == true,
     );
   }
 

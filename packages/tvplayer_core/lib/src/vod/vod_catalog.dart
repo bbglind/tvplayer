@@ -17,6 +17,7 @@ final class VodCatalog<T extends Object> {
   }) : _names = [for (final item in items) nameOf(item).toLowerCase()] {
     for (final (i, item) in items.indexed) {
       _byId[idOf(item)] = item;
+      _index[item] = i;
       if (categoryOf(item) case final id?) (_byCategory[id] ??= []).add(i);
     }
   }
@@ -61,6 +62,7 @@ final class VodCatalog<T extends Object> {
   final List<String> _names;
   final Map<String, List<int>> _byCategory = {};
   final Map<Object, T> _byId = {};
+  final Map<T, int> _index = Map.identity();
 
   /// The item with [id] (a movie's stream id or a series id), if present.
   T? byId(Object id) => _byId[id];
@@ -68,19 +70,50 @@ final class VodCatalog<T extends Object> {
   /// Number of items in [categoryId].
   int countIn(String categoryId) => _byCategory[categoryId]?.length ?? 0;
 
+  /// Number of items outside the [hidden] categories.
+  int countExcluding(Set<String> hidden) =>
+      items.length - hidden.fold(0, (n, id) => n + countIn(id));
+
   /// Items in [categoryId] (all items when null) whose name contains
-  /// [query], case-insensitively.
-  List<T> filter({String? categoryId, String query = ''}) {
+  /// [query], case-insensitively. With no [categoryId], items in the
+  /// [hidden] categories are left out.
+  List<T> filter({
+    String? categoryId,
+    String query = '',
+    Set<String> hidden = const {},
+  }) {
     final q = query.trim().toLowerCase();
-    final Iterable<int> indexes = categoryId == null
-        ? Iterable.generate(items.length)
-        : _byCategory[categoryId] ?? const [];
-    if (categoryId == null && q.isEmpty) return items;
+    final Iterable<int> indexes;
+    if (categoryId != null) {
+      indexes = _byCategory[categoryId] ?? const [];
+    } else if (hidden.isEmpty) {
+      if (q.isEmpty) return items;
+      indexes = Iterable.generate(items.length);
+    } else {
+      final skip = {for (final id in hidden) ...?_byCategory[id]};
+      indexes = [
+        for (var i = 0; i < items.length; i++)
+          if (!skip.contains(i)) i,
+      ];
+    }
     return [
       for (final i in indexes)
         if (q.isEmpty || _names[i].contains(q)) items[i],
     ];
   }
+
+  /// The items with [ids] that are in the catalogue, in that order, whose
+  /// name contains [query].
+  List<T> pick(Iterable<Object> ids, {String query = ''}) {
+    final q = query.trim().toLowerCase();
+    return [
+      for (final id in ids)
+        if (_byId[id] case final item?)
+          if (q.isEmpty || _nameOf(item).contains(q)) item,
+    ];
+  }
+
+  String _nameOf(T item) => _names[_index[item]!];
 
   /// The catalogue as JSON, for the disk cache. Pass [toJson] for the item
   /// type (e.g. [Movie.toJson]).

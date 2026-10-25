@@ -46,10 +46,8 @@ Future<void> _pumpGate(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     testApp(
-      overrides: [
-        providerStorageProvider.overrideWithValue(storage),
-        httpClientProvider.overrideWithValue(client ?? _panel()),
-      ],
+      providerStorage: storage,
+      overrides: [httpClientProvider.overrideWithValue(client ?? _panel())],
       child: const RootGate(),
     ),
   );

@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../../state/category_selection.dart';
+import '../../state/providers.dart';
 import '../../state/vod_controller.dart';
 import '../shell/category_layout.dart';
+import '../shell/category_list.dart';
 import '../theme/widgets.dart';
+import 'poster.dart';
 
 /// Categories on the left; search, a "Continue watching" row and a lazily
 /// built poster grid on the right. Shared by the Movies and Series tabs.
-class VodBrowser<T extends Object> extends StatefulWidget {
+class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
   const VodBrowser({
     super.key,
     required this.what,
+    required this.kind,
     required this.state,
     required this.filter,
     required this.onCategory,
@@ -22,9 +28,12 @@ class VodBrowser<T extends Object> extends StatefulWidget {
 
   /// "movies" or "series", for labels and widget keys.
   final String what;
+
+  /// [ContentKind.movie] or [ContentKind.series].
+  final ContentKind kind;
   final VodState<T> state;
   final VodFilter filter;
-  final ValueChanged<String?> onCategory;
+  final ValueChanged<CategorySelection> onCategory;
   final ValueChanged<String> onQuery;
   final VoidCallback onRefresh;
 
@@ -36,16 +45,17 @@ class VodBrowser<T extends Object> extends StatefulWidget {
   final List<Widget> continueWatching;
 
   @override
-  State<VodBrowser<T>> createState() => _VodBrowserState<T>();
+  ConsumerState<VodBrowser<T>> createState() => _VodBrowserState<T>();
 }
 
-class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
+class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   late final _search = TextEditingController(text: widget.filter.query);
 
-  // The filtered list, kept while catalogue and filter stay the same (e.g.
-  // when only watch progress changed).
+  // The filtered list, kept while catalogue, filter and favourites stay the
+  // same (e.g. when only watch progress changed).
   VodCatalog<T>? _filteredCatalog;
   VodFilter? _filteredBy;
+  FavouritesData? _filteredFavourites;
   List<T> _filtered = const [];
 
   @override
@@ -54,19 +64,51 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
     super.dispose();
   }
 
+  CategorySelection get _selection => widget.filter.category.resolve(
+    ref.watch(favouritesProvider),
+    widget.kind,
+  );
+
   List<T> _items(VodCatalog<T> catalog) {
     final filter = widget.filter;
+    final favourites = ref.watch(favouritesProvider);
     if (!identical(catalog, _filteredCatalog) ||
-        filter.categoryId != _filteredBy?.categoryId ||
-        filter.query != _filteredBy?.query) {
+        filter.category != _filteredBy?.category ||
+        filter.query != _filteredBy?.query ||
+        !identical(favourites, _filteredFavourites)) {
       _filteredCatalog = catalog;
       _filteredBy = filter;
-      _filtered = catalog.filter(
-        categoryId: filter.categoryId,
-        query: filter.query,
-      );
+      _filteredFavourites = favourites;
+      _filtered = switch (_selection) {
+        AllCategories() => catalog.filter(
+          query: filter.query,
+          hidden: favourites.hiddenIds(widget.kind),
+        ),
+        ProviderCategory(:final id) => catalog.filter(
+          categoryId: id,
+          query: filter.query,
+        ),
+        MyCategory(:final id) => catalog.pick([
+          for (final m in favourites.itemsIn(id)) ?int.tryParse(m.item.id),
+        ], query: filter.query),
+      };
     }
     return _filtered;
+  }
+
+  /// Items of the selected one of my categories that the provider no
+  /// longer lists, matching the search.
+  List<FavouriteMembership> _missing(VodCatalog<T> catalog) {
+    if (_selection case MyCategory(:final id)) {
+      final query = widget.filter.query.trim().toLowerCase();
+      return [
+        for (final m in ref.watch(favouritesProvider).itemsIn(id))
+          if (catalog.byId(int.tryParse(m.item.id) ?? m.item.id) == null &&
+              m.name.toLowerCase().contains(query))
+            m,
+      ];
+    }
+    return const [];
   }
 
   @override
@@ -102,11 +144,15 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
     }
     return CategoryLayout(
       section: what,
-      list: _CategoryList(
-        key: Key('$what.categories'),
-        what: what,
-        catalog: catalog,
-        selected: widget.filter.categoryId,
+      headerAction: CategoryEditButton(section: what),
+      list: CategoryList(
+        section: what,
+        kind: widget.kind,
+        allLabel: 'All $what',
+        categories: catalog.categories,
+        allCount: catalog.countExcluding,
+        countIn: catalog.countIn,
+        selected: _selection,
         onSelect: widget.onCategory,
       ),
       content: _buildMain(context, catalog),
@@ -117,6 +163,8 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
     final state = widget.state;
     final what = widget.what;
     final items = _items(catalog);
+    final missing = _missing(catalog);
+    final mine = _selection is MyCategory;
     final searching = widget.filter.query.trim().isNotEmpty;
     final showContinue = !searching && widget.continueWatching.isNotEmpty;
     return Column(
@@ -178,10 +226,17 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
                 ),
                 _sectionTitle(context, 'All $what'),
               ],
-              if (items.isEmpty)
+              if (items.isEmpty && missing.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: Center(child: Text('No $what')),
+                  child: Center(
+                    child: Text(
+                      mine && !searching
+                          ? 'No $what yet. Add some with the star on a '
+                                'poster.'
+                          : 'No $what',
+                    ),
+                  ),
                 )
               else
                 SliverPadding(
@@ -193,9 +248,10 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
                           maxCrossAxisExtent: 160,
                           childAspectRatio: 0.52,
                         ),
-                    itemCount: items.length,
-                    itemBuilder: (context, i) =>
-                        widget.itemBuilder(context, items[i]),
+                    itemCount: items.length + missing.length,
+                    itemBuilder: (context, i) => i < items.length
+                        ? widget.itemBuilder(context, items[i])
+                        : _missingCard(context, missing[i - items.length]),
                   ),
                 ),
             ],
@@ -205,49 +261,27 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
     );
   }
 
+  /// An item of my category that the provider no longer lists: its
+  /// remembered name and the star to remove it.
+  Widget _missingCard(BuildContext context, FavouriteMembership m) =>
+      PosterCard(
+        key: ValueKey('missing.${m.item.id}'),
+        title: m.name,
+        subtitle: 'Not available',
+        imageUrl: null,
+        placeholder: Icons.block,
+        favourite: m.item,
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('The provider no longer lists “${m.name}”.')),
+        ),
+      );
+
   Widget _sectionTitle(BuildContext context, String text) => SliverToBoxAdapter(
     child: Padding(
       padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
       child: Text(text, style: Theme.of(context).textTheme.titleLarge),
     ),
   );
-}
-
-class _CategoryList extends StatelessWidget {
-  const _CategoryList({
-    super.key,
-    required this.what,
-    required this.catalog,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  final String what;
-  final VodCatalog<Object> catalog;
-  final String? selected;
-  final ValueChanged<String?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final categories = catalog.categories;
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 12, 16),
-      itemCount: categories.length + 1,
-      itemBuilder: (context, i) {
-        final category = i == 0 ? null : categories[i - 1];
-        final id = category?.id;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: CategoryPill(
-            label: category?.name ?? 'All $what',
-            count: id == null ? catalog.items.length : catalog.countIn(id),
-            selected: id == selected,
-            onTap: () => onSelect(id),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _ErrorView extends StatelessWidget {

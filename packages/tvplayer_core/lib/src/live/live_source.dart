@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../m3u/m3u_client.dart';
 import '../models/category.dart';
 import '../models/live_channel.dart';
+import '../models/m3u_entry.dart';
 import '../models/provider_config.dart';
 import '../xtream/xtream_client.dart';
 
@@ -19,10 +20,16 @@ final class LiveStream {
     this.logoUrl,
     this.number,
     this.epgChannelId,
-  });
+    String? stableId,
+  }) : stableId = stableId ?? id;
 
   /// Unique within its [LiveCatalog].
   final String id;
+
+  /// Stays the same when the provider's list changes, so favourites can
+  /// refer to it: the Xtream stream id, or for M3U the `tvg-id` (plus the
+  /// name when several entries share it), else the name. Defaults to [id].
+  final String stableId;
   final String name;
   final List<String> categoryIds;
   final String? logoUrl;
@@ -66,6 +73,7 @@ final class LiveCatalog {
         (_byCategory[id] ??= []).add(channel);
         if (!separator) _counts[id] = (_counts[id] ?? 0) + 1;
       }
+      _byStableId.putIfAbsent(channel.stableId, () => channel);
     }
   }
 
@@ -75,6 +83,7 @@ final class LiveCatalog {
   final List<LiveStream> channels;
   final Map<String, List<LiveStream>> _byCategory = {};
   final Map<String, int> _counts = {};
+  final Map<String, LiveStream> _byStableId = {};
 
   int _channelCount = 0;
 
@@ -88,6 +97,35 @@ final class LiveCatalog {
 
   /// Number of real channels in [categoryId], without separators.
   int countIn(String categoryId) => _counts[categoryId] ?? 0;
+
+  /// The first channel with [LiveStream.stableId] [stableId].
+  LiveStream? byStableId(String stableId) => _byStableId[stableId];
+
+  /// Whether [channel] is left out of "All channels" when the categories
+  /// [hidden] are hidden: only when all its categories are.
+  static bool isHidden(LiveStream channel, Set<String> hidden) =>
+      hidden.isNotEmpty &&
+      channel.categoryIds.isNotEmpty &&
+      channel.categoryIds.every(hidden.contains);
+
+  /// All channels (with separators) except those in [hidden] categories
+  /// only.
+  List<LiveStream> channelsExcluding(Set<String> hidden) => hidden.isEmpty
+      ? channels
+      : [
+          for (final c in channels)
+            if (!isHidden(c, hidden)) c,
+        ];
+
+  /// Number of real channels outside [hidden] categories.
+  int countExcluding(Set<String> hidden) {
+    if (hidden.isEmpty) return channelCount;
+    var count = 0;
+    for (final c in channels) {
+      if (!c.isSeparator && !isHidden(c, hidden)) count++;
+    }
+    return count;
+  }
 }
 
 /// Loads live TV from a provider and resolves playback URLs.
@@ -168,6 +206,29 @@ class XtreamLiveSource implements LiveSource {
   void close() => _client.close();
 }
 
+/// [LiveStream.stableId]s for playlist [entries]: `tvg:<tvg-id>` when the
+/// id is unique in the playlist, `tvg:<tvg-id>|<name>` when several entries
+/// share it (HD and SD variants often do), else `name:<name>`.
+List<String> m3uStableIds(List<M3uEntry> entries) {
+  String? tvg(M3uEntry e) {
+    final id = e.tvgId?.trim();
+    return id == null || id.isEmpty ? null : id;
+  }
+
+  final counts = <String, int>{};
+  for (final e in entries) {
+    if (tvg(e) case final id?) counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return [
+    for (final e in entries)
+      switch (tvg(e)) {
+        final id? when counts[id] == 1 => 'tvg:$id',
+        final id? => 'tvg:$id|${e.name.trim()}',
+        null => 'name:${e.name.trim()}',
+      },
+  ];
+}
+
 /// [LiveSource] backed by an M3U playlist. Categories are the playlist's
 /// `group-title`s, in order of first appearance.
 class M3uLiveSource implements LiveSource {
@@ -183,6 +244,7 @@ class M3uLiveSource implements LiveSource {
   Future<LiveCatalog> load() async {
     final entries = await _client.fetch();
     _urls.clear();
+    final stableIds = m3uStableIds(entries);
     final groups = <String>{};
     final channels = <LiveStream>[];
     for (final (i, e) in entries.indexed) {
@@ -197,6 +259,7 @@ class M3uLiveSource implements LiveSource {
           categoryIds: [group],
           logoUrl: e.tvgLogo,
           epgChannelId: e.tvgId,
+          stableId: stableIds[i],
         ),
       );
     }

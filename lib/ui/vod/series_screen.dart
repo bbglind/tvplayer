@@ -31,6 +31,7 @@ class SeriesScreen extends ConsumerWidget {
     final filterNotifier = ref.read(seriesFilterProvider.notifier);
     return VodBrowser<Series>(
       what: 'series',
+      kind: ContentKind.series,
       state: state,
       filter: filter,
       onCategory: filterNotifier.selectCategory,
@@ -47,6 +48,7 @@ class SeriesScreen extends ConsumerWidget {
         return PosterCard(
           key: ValueKey(series.seriesId),
           title: series.name,
+          favourite: seriesItemRef(series),
           subtitle: series.year?.toString(),
           imageUrl: series.coverUrl,
           placeholder: Icons.tv,
@@ -74,6 +76,7 @@ class SeriesScreen extends ConsumerWidget {
     return PosterCard(
       key: ValueKey('continue.${series.seriesId}'),
       title: series.name,
+      favourite: seriesItemRef(series),
       subtitle: [?code, ?progress.nextTitle].join(' · '),
       imageUrl: series.coverUrl,
       placeholder: Icons.tv,
