@@ -138,8 +138,12 @@ English for now.
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).
-- "Continue watching" shows only started items in the selected category;
-  with none, the row and its heading are left out.
+- "Continue watching" lists started items, most recently watched first.
+  Under "All movies"/"All series" it shows all of them except those in
+  hidden categories; under a provider category only those in that
+  category. Under one of my categories it shows all of them except those
+  in hidden categories, with the ones in the selected category first. With
+  none, the row and its heading are left out.
 - The favourites menu saves each checkbox at once; "Done", Esc or a click
   outside closes it.
 

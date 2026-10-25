@@ -422,7 +422,7 @@ void main() {
       // Movie i is in provider category m(i % 5); m2 is hidden.
       final store = MemoryFavouritesStore(
         _data(
-          movies: ['Weekend'],
+          movies: ['Weekend', 'Later'],
           members: [('movie0', '3', 'Movie 00003')],
           hiddenMovies: {'m2'},
         ),
@@ -444,18 +444,22 @@ void main() {
       final row = find.byKey(const Key('movies.continue'));
       Finder heading(String text) =>
           find.descendant(of: grid, matching: find.text(text));
+      // Titles in the row, in row order.
       List<String> continuing() => [
-        for (final id in [2, 3, 6])
-          if (find
-              .descendant(of: row, matching: find.text('Movie 0000$id'))
-              .evaluate()
-              .isNotEmpty)
-            'Movie 0000$id',
+        for (final e
+            in find
+                .descendant(
+                  of: row,
+                  matching: find.textContaining(RegExp(r'^Movie 0000\d$')),
+                )
+                .evaluate())
+          (e.widget as Text).data!,
       ];
 
-      // All movies: everything started outside hidden categories.
+      // All movies: everything started outside hidden categories, most
+      // recently watched first.
       expect(heading('All movies'), findsOneWidget);
-      expect(continuing(), ['Movie 00003', 'Movie 00006']);
+      expect(continuing(), ['Movie 00006', 'Movie 00003']);
 
       await tester.tap(find.text('Movie category 1'));
       await tester.pumpAndSettle();
@@ -465,8 +469,16 @@ void main() {
 
       await tester.tap(find.byKey(const Key('movies.my.Weekend')));
       await tester.pumpAndSettle();
+      // My category: its own started items first, then the rest outside
+      // hidden categories.
       expect(heading('Weekend'), findsOneWidget);
-      expect(continuing(), ['Movie 00003']);
+      expect(continuing(), ['Movie 00003', 'Movie 00006']);
+
+      // None of its own started: still the rest, in the usual order.
+      await tester.tap(find.byKey(const Key('movies.my.Later')));
+      await tester.pumpAndSettle();
+      expect(heading('Later'), findsOneWidget);
+      expect(continuing(), ['Movie 00006', 'Movie 00003']);
 
       // Nothing started here: no row and no heading.
       await tester.tap(find.text('Movie category 4'));

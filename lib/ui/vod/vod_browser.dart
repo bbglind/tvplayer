@@ -48,9 +48,11 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
   /// An item's reference for my categories.
   final ItemRef Function(T item) itemRef;
 
-  /// Started items with their cards for the "Continue watching" row. Only
-  /// those in the selected category show; the row is hidden when none do
-  /// and while searching.
+  /// Started items with their cards for the "Continue watching" row, most
+  /// recently watched first. Under "All" or a provider category only those
+  /// in the selected category show; under one of my categories all show
+  /// (except hidden categories), its own items first. The row is hidden
+  /// when none show and while searching.
   final List<(T, Widget)> continueWatching;
 
   @override
@@ -114,6 +116,29 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     MyCategory(:final id) =>
       favourites.categoriesContaining(widget.itemRef(item)).contains(id),
   };
+
+  /// Cards for the "Continue watching" row. Under one of my categories,
+  /// its own started items come first, then the rest outside the hidden
+  /// categories; each part keeps its order.
+  List<Widget> _continueCards(FavouritesData favourites) {
+    if (_selection is! MyCategory) {
+      return [
+        for (final (item, card) in widget.continueWatching)
+          if (_inSelection(item, favourites)) card,
+      ];
+    }
+    final hidden = favourites.hiddenIds(widget.kind);
+    final first = <Widget>[];
+    final rest = <Widget>[];
+    for (final (item, card) in widget.continueWatching) {
+      if (_inSelection(item, favourites)) {
+        first.add(card);
+      } else if (!hidden.contains(widget.categoryOf(item))) {
+        rest.add(card);
+      }
+    }
+    return [...first, ...rest];
+  }
 
   /// The name of the selected category, for the heading above the grid.
   String _selectionName(VodCatalog<T> catalog) => switch (_selection) {
@@ -197,10 +222,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     final favourites = ref.watch(favouritesProvider);
     final continueCards = searching
         ? const <Widget>[]
-        : [
-            for (final (item, card) in widget.continueWatching)
-              if (_inSelection(item, favourites)) card,
-          ];
+        : _continueCards(favourites);
     final showContinue = continueCards.isNotEmpty;
     return Column(
       children: [
