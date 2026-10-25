@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/vod_controller.dart';
+import '../theme/widgets.dart';
 
 /// Categories on the left; search, a "Continue watching" row and a lazily
 /// built poster grid on the right. Shared by the Movies and Series tabs.
@@ -125,32 +126,18 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 16),
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                child: SearchField(
                   key: Key('$what.search'),
                   controller: _search,
                   onChanged: widget.onQuery,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: 'Search $what',
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _search.clear();
-                              widget.onQuery('');
-                            },
-                          ),
-                  ),
+                  hintText: 'Search $what',
                 ),
               ),
+              const SizedBox(width: 8),
               if (state.error case final error?)
                 Tooltip(
                   message: 'Last update failed: $error',
@@ -168,7 +155,10 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
             ],
           ),
         ),
-        if (state.loading) const LinearProgressIndicator(minHeight: 2),
+        if (state.loading)
+          const LinearProgressIndicator(minHeight: 2)
+        else
+          const SizedBox(height: 2),
         Expanded(
           child: CustomScrollView(
             key: Key('$what.grid'),
@@ -178,13 +168,13 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
                 SliverToBoxAdapter(
                   child: SizedBox(
                     key: Key('$what.continue'),
-                    height: 250,
+                    height: 270,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
                       children: [
                         for (final card in widget.continueWatching)
-                          SizedBox(width: 140, child: card),
+                          SizedBox(width: 150, child: card),
                       ],
                     ),
                   ),
@@ -198,7 +188,7 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
                   // Only the visible posters are built.
                   sliver: SliverGrid.builder(
                     gridDelegate:
@@ -220,8 +210,8 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
 
   Widget _sectionTitle(BuildContext context, String text) => SliverToBoxAdapter(
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+      padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
+      child: Text(text, style: Theme.of(context).textTheme.titleLarge),
     ),
   );
 }
@@ -244,22 +234,19 @@ class _CategoryList extends StatelessWidget {
   Widget build(BuildContext context) {
     final categories = catalog.categories;
     return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 28, 12, 16),
       itemCount: categories.length + 1,
       itemBuilder: (context, i) {
         final category = i == 0 ? null : categories[i - 1];
         final id = category?.id;
-        return ListTile(
-          dense: true,
-          selected: id == selected,
-          title: Text(
-            category?.name ?? 'All $what',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: CategoryPill(
+            label: category?.name ?? 'All $what',
+            count: id == null ? catalog.items.length : catalog.countIn(id),
+            selected: id == selected,
+            onTap: () => onSelect(id),
           ),
-          trailing: Text(
-            '${id == null ? catalog.items.length : catalog.countIn(id)}',
-          ),
-          onTap: () => onSelect(id),
         );
       },
     );

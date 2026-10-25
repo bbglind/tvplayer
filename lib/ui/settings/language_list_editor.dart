@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
+
 /// `Svenska (Swedish)`, or just `English`.
 String languageName(Language language) =>
     language.nativeName == language.englishName
@@ -77,40 +81,53 @@ class _LanguageListDialogState extends State<_LanguageListDialog> {
                       ),
                       children: [
                         for (final (i, l) in _chosen.indexed)
-                          ListTile(
+                          FocusRing(
                             key: ValueKey(l.code),
-                            leading: ReorderableDragStartListener(
-                              index: i,
-                              child: const Icon(Icons.drag_handle),
-                            ),
-                            title: Text('${i + 1}. ${languageName(l)}'),
-                            trailing: IconButton(
-                              tooltip: 'Remove ${l.englishName}',
-                              icon: const Icon(Icons.close),
-                              onPressed: () =>
-                                  setState(() => _chosen.remove(l)),
+                            radius: AppRadius.small,
+                            inset: true,
+                            child: ListTile(
+                              leading: ReorderableDragStartListener(
+                                index: i,
+                                child: const Icon(Icons.drag_handle),
+                              ),
+                              title: Text('${i + 1}. ${languageName(l)}'),
+                              trailing: IconButton(
+                                tooltip: 'Remove ${l.englishName}',
+                                icon: const Icon(Icons.close),
+                                onPressed: () =>
+                                    setState(() => _chosen.remove(l)),
+                              ),
                             ),
                           ),
                       ],
                     ),
             ),
-            PopupMenuButton<Language>(
-              key: const Key('languages.add'),
-              tooltip: 'Add a language',
-              onSelected: (l) => setState(() => _chosen.add(l)),
-              itemBuilder: (context) => [
-                for (final l in available)
-                  PopupMenuItem(value: l, child: Text(languageName(l))),
-              ],
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add),
-                    SizedBox(width: 8),
-                    Text('Add language'),
-                  ],
+            FocusRing(
+              radius: AppRadius.small,
+              child: PopupMenuButton<Language>(
+                key: const Key('languages.add'),
+                tooltip: 'Add a language',
+                onSelected: (l) => setState(() => _chosen.add(l)),
+                itemBuilder: (context) => [
+                  for (final l in available)
+                    PopupMenuItem(value: l, child: Text(languageName(l))),
+                ],
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, color: AppColors.accent),
+                      SizedBox(width: 8),
+                      Text(
+                        'Add language',
+                        style: TextStyle(
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

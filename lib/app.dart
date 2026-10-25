@@ -7,6 +7,7 @@ import 'data/provider_storage.dart';
 import 'state/providers.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
+import 'ui/theme/app_theme.dart';
 
 class TvPlayerApp extends ConsumerStatefulWidget {
   const TvPlayerApp({super.key});
@@ -40,12 +41,7 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'tvplayer',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
-      ),
+      theme: AppTheme.dark(),
       home: const RootGate(),
     );
   }

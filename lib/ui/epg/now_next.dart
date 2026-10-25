@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/providers.dart';
+import '../theme/app_colors.dart';
+import '../theme/widgets.dart';
 
 /// Now and next programme of [channel] at the current time, or null when
 /// the guide has nothing for it.
@@ -15,7 +17,15 @@ NowNext? watchNowNext(WidgetRef ref, LiveStream channel) {
   return result.now == null && result.next == null ? null : result;
 }
 
-/// One line for a channel list: `20:00–21:00 News · 21:00 Film`.
+/// How far [program] has run at [clock] (both real UTC instants), 0–1.
+double airedFraction(EpgProgram program, DateTime clock) =>
+    program.duration.inSeconds == 0
+    ? 0
+    : (clock.difference(program.start).inSeconds / program.duration.inSeconds)
+          .clamp(0.0, 1.0);
+
+/// For a channel list: `News · until 21:00` with a progress bar, or
+/// `Next: 21:00 Film` when nothing is on.
 class NowNextLine extends ConsumerWidget {
   const NowNextLine({super.key, required this.channel});
 
@@ -27,28 +37,27 @@ class NowNextLine extends ConsumerWidget {
     if (nowNext == null) return const SizedBox.shrink();
     final time = ref.watch(guideTimeProvider);
     final (:now, :next) = nowNext;
-    final theme = Theme.of(context);
-    return Text.rich(
-      TextSpan(
-        children: [
-          if (now != null) ...[
-            TextSpan(
-              text: '${time.formatRange(now.start, now.stop)} ',
-              style: TextStyle(color: theme.colorScheme.primary),
-            ),
-            TextSpan(text: now.title),
-          ],
-          if (now != null && next != null) const TextSpan(text: '  ·  '),
-          if (next != null)
-            TextSpan(
-              text: '${time.formatHm(next.start)} ${next.title}',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-            ),
-        ],
-      ),
+    final style = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: AppColors.textSecondary);
+    final text = Text(
+      now != null
+          ? '${now.title} · until ${time.formatHm(now.stop)}'
+          : 'Next: ${time.formatHm(next!.start)} ${next.title}',
       key: Key('nowNext.${channel.id}'),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    if (now == null) return text;
+    final clock = time.unadjust(ref.watch(clockProvider));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        text,
+        const SizedBox(height: 6),
+        ProgressStrip(airedFraction(now, clock)),
+      ],
     );
   }
 }
@@ -71,14 +80,16 @@ class NowNextBar extends ConsumerWidget {
     Widget row(String label, EpgProgram p) => Row(
       children: [
         SizedBox(
-          width: 48,
-          child: Text(label, style: theme.textTheme.labelMedium),
+          width: 60,
+          child: Text(label.toUpperCase(), style: theme.textTheme.labelMedium),
         ),
         SizedBox(
           width: 104,
           child: Text(
             time.formatRange(p.start, p.stop),
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
         ),
         Expanded(
@@ -94,20 +105,16 @@ class NowNextBar extends ConsumerWidget {
 
     return Material(
       key: const Key('player.nowNext'),
+      color: AppColors.surface,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (now != null) ...[
               row('Now', now),
               const SizedBox(height: 4),
-              LinearProgressIndicator(
-                value: now.duration.inSeconds == 0
-                    ? 0
-                    : clock.difference(now.start).inSeconds /
-                          now.duration.inSeconds,
-              ),
+              ProgressStrip(airedFraction(now, clock), height: 4),
               const SizedBox(height: 4),
             ],
             if (next != null) row('Next', next),

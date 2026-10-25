@@ -40,6 +40,10 @@ Future<void> _pumpGate(
   required FakeProviderStorage storage,
   http.Client? client,
 }) async {
+  // Wide enough for the sidebar to show its labels.
+  tester.view.physicalSize = const Size(1280, 800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     testApp(
       overrides: [

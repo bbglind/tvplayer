@@ -32,6 +32,9 @@ Before committing, check the staged diff for anything that looks personal.
   Dart package (no Flutter imports) so it can be reused across platforms. The
   Flutter app depends on it; it never depends on the app.
 
+### UI
+- UI styling follows docs/design.md; use the tokens in lib/ui/theme/ instead of hard-coded colours.
+
 ### Environment
 - Don't use `sudo`. If something needs root, stop and give the user the exact
   command to run.

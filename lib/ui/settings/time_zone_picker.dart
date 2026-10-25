@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
+
 /// Result of [showTimeZonePicker]: [zone] null means the device's zone.
 typedef TimeZoneChoice = ({String? zone});
 
@@ -30,6 +34,9 @@ class _TimeZoneDialogState extends State<_TimeZoneDialog> {
   final _zones = GuideTime.zoneNames();
   String _query = '';
 
+  static Widget _ringed(Widget tile) =>
+      FocusRing(radius: AppRadius.small, inset: true, child: tile);
+
   @override
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase().replaceAll(' ', '_');
@@ -49,9 +56,11 @@ class _TimeZoneDialogState extends State<_TimeZoneDialog> {
               key: const Key('timeZone.search'),
               autofocus: true,
               decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(Icons.search, size: 18),
                 hintText: 'Search, e.g. Stockholm',
                 isDense: true,
+                // The dialog itself is `surface`.
+                fillColor: AppColors.card,
               ),
               onChanged: (v) => setState(() => _query = v),
             ),
@@ -61,21 +70,25 @@ class _TimeZoneDialogState extends State<_TimeZoneDialog> {
                 itemCount: matches.length + 1,
                 itemBuilder: (context, i) {
                   if (i == 0) {
-                    return ListTile(
-                      dense: true,
-                      selected: widget.current == null,
-                      title: const Text('Device time zone'),
-                      subtitle: Text(widget.deviceZone),
-                      onTap: () => Navigator.pop(context, (zone: null)),
+                    return _ringed(
+                      ListTile(
+                        dense: true,
+                        selected: widget.current == null,
+                        title: const Text('Device time zone'),
+                        subtitle: Text(widget.deviceZone),
+                        onTap: () => Navigator.pop(context, (zone: null)),
+                      ),
                     );
                   }
                   final zone = matches[i - 1];
-                  return ListTile(
-                    dense: true,
-                    selected: zone == widget.current,
-                    title: Text(zone.replaceAll('_', ' ')),
-                    trailing: Text(GuideTime.named(zone).offsetAt(now)),
-                    onTap: () => Navigator.pop(context, (zone: zone)),
+                  return _ringed(
+                    ListTile(
+                      dense: true,
+                      selected: zone == widget.current,
+                      title: Text(zone.replaceAll('_', ' ')),
+                      trailing: Text(GuideTime.named(zone).offsetAt(now)),
+                      onTap: () => Navigator.pop(context, (zone: zone)),
+                    ),
                   );
                 },
               ),

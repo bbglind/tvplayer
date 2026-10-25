@@ -8,6 +8,9 @@ import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
 import '../player/open_channel.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
 import 'poster.dart';
 
 /// One series: details, a tab per season (specials last) with watched
@@ -156,7 +159,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     final nextProgress = next == null ? null : watch.episode(next.id);
     final resume = resumePosition(nextProgress);
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.page.copyWith(bottom: 24),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -165,7 +168,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
             child: AspectRatio(
               aspectRatio: 2 / 3,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 child: Poster(
                   url: meta?.posterUrl ?? series.coverUrl,
                   decodeWidth: 360,
@@ -174,23 +177,25 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 32),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   meta?.title ?? series.name,
-                  style: theme.textTheme.headlineSmall,
+                  style: theme.textTheme.headlineMedium,
                 ),
-                if (facts.isNotEmpty)
+                if (facts.isNotEmpty) ...[
+                  const SizedBox(height: 6),
                   Text(
                     facts.join(' · '),
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: AppColors.textMuted,
                     ),
                   ),
-                const SizedBox(height: 12),
+                ],
+                const SizedBox(height: 20),
                 if (next != null)
                   FilledButton.icon(
                     key: const Key('series.playNext'),
@@ -203,13 +208,15 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
                       '${resume != null ? ' from ${formatDuration(resume)}' : ''}',
                     ),
                   ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
                 if ((meta?.plot ?? series.plot) case final plot?)
                   Text(
                     plot,
                     maxLines: 6,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 if ((meta?.cast ?? series.cast) case final cast?) ...[
                   const SizedBox(height: 8),
@@ -244,12 +251,14 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
         ? null
         : seasonProgress(info, selected, watch);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(36, 8, 36, 16),
       child: Row(
         children: [
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              // Room for the focus ring.
+              padding: const EdgeInsets.all(4),
               child: Row(
                 children: [
                   for (final tab in tabs)
@@ -287,11 +296,16 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
 
   Widget _seasonChip(SeriesInfo info, SeasonTab tab, WatchData watch) {
     final progress = seasonProgress(info, tab.number, watch);
+    final selected = tab.number == _season;
     return ChoiceChip(
       key: Key('season.${tab.number}'),
-      selected: tab.number == _season,
+      selected: selected,
       avatar: progress.complete
-          ? const Icon(Icons.check_circle, key: Key('season.complete'))
+          ? Icon(
+              Icons.check_circle,
+              key: const Key('season.complete'),
+              color: selected ? AppColors.onAccent : AppColors.success,
+            )
           : null,
       label: Text('${tab.name} · ${progress.label}'),
       onSelected: (_) => setState(() => _season = tab.number),
@@ -327,10 +341,11 @@ class _EpisodeTile extends StatelessWidget {
     return Opacity(
       // Watched episodes step back.
       opacity: watched ? 0.55 : 1,
-      child: InkWell(
-        onTap: onPlay,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(40, 0, 40, 8),
+        child: AppTile(
+          onTap: onPlay,
+          padding: const EdgeInsets.all(10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -339,7 +354,7 @@ class _EpisodeTile extends StatelessWidget {
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(AppRadius.small),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -373,7 +388,7 @@ class _EpisodeTile extends StatelessWidget {
                           child: Text(
                             '${episode.episodeNumber}. '
                             '${meta?.title ?? episode.title}',
-                            style: theme.textTheme.titleSmall,
+                            style: theme.textTheme.titleMedium,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -384,7 +399,7 @@ class _EpisodeTile extends StatelessWidget {
                             Icons.check_circle,
                             key: const Key('episode.watched'),
                             size: 18,
-                            color: theme.colorScheme.primary,
+                            color: AppColors.success,
                           ),
                         ],
                       ],
@@ -400,7 +415,9 @@ class _EpisodeTile extends StatelessWidget {
                         plot,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ],

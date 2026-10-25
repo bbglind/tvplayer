@@ -5,6 +5,7 @@ import '../../player/playback_request.dart';
 import '../../player/tv_player_view.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
+import '../theme/app_colors.dart';
 import 'open_channel.dart';
 
 /// Full-screen playback with the embedded media_kit player (platforms
@@ -19,7 +20,7 @@ class PlayerScreen extends ConsumerWidget {
     final url = playbackUrl(ref, request);
     final debug = ref.watch(playerDebugProvider);
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.scrim,
       appBar: AppBar(
         title: Text(request.title),
         actions: [

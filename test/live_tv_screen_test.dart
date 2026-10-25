@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
+import 'package:tvplayer/ui/theme/widgets.dart';
 
 import 'helpers.dart';
 
@@ -29,7 +30,7 @@ void main() {
     expect(find.text('Channel 0000'), findsOneWidget);
     // Lazy list: off-screen rows aren't built.
     expect(find.text('Channel 4999'), findsNothing);
-    expect(tester.widgetList(find.byType(ListTile)).length, lessThan(100));
+    expect(tester.widgetList(find.byType(ChannelRow)).length, lessThan(100));
   });
 
   testWidgets('selecting a category filters channels', (tester) async {
@@ -57,10 +58,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Channel 1234'), findsOneWidget);
-    expect(
-      find.byType(ListTile),
-      findsNWidgets(11 + 1),
-    ); // 10 categories + All + 1 channel.
+    expect(find.byType(CategoryPill), findsNWidgets(11)); // 10 + All.
+    expect(find.byType(ChannelRow), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('live.search')), 'nothing');
     await tester.pumpAndSettle();

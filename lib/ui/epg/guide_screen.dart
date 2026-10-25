@@ -9,6 +9,9 @@ import '../../data/errors.dart';
 import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
 import '../live/separator_header.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
 import '../player/open_channel.dart';
 
 /// The full TV guide: channels down the side, time across the top.
@@ -85,7 +88,7 @@ class _Toolbar extends ConsumerWidget {
     final selected = ref.watch(selectedCategoryProvider);
     final guide = state.guide;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(28, 20, 20, 12),
       child: Row(
         children: [
           Flexible(
@@ -94,6 +97,10 @@ class _Toolbar extends ConsumerWidget {
               value: selected,
               isExpanded: true,
               underline: const SizedBox.shrink(),
+              dropdownColor: AppColors.card,
+              borderRadius: BorderRadius.circular(AppRadius.small),
+              focusColor: AppColors.hover,
+              style: Theme.of(context).textTheme.titleMedium,
               items: [
                 const DropdownMenuItem(child: Text('All channels')),
                 for (final c in catalog.categories)
@@ -381,10 +388,8 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                                   itemCount: widget.channels.length,
                                   itemBuilder: (context, i) =>
                                       widget.channels[i].isSeparator
-                                      ? ColoredBox(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surfaceContainerHighest,
+                                      ? const ColoredBox(
+                                          color: AppColors.surface,
                                         )
                                       : _GuideRow(
                                           channel: widget.channels[i],
@@ -403,12 +408,8 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                                   top: 0,
                                   bottom: 0,
                                   width: 2,
-                                  child: IgnorePointer(
-                                    child: ColoredBox(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .error,
-                                    ),
+                                  child: const IgnorePointer(
+                                    child: ColoredBox(color: AppColors.accent),
                                   ),
                                 ),
                               ],
@@ -524,10 +525,12 @@ class _TimeHeader extends StatelessWidget {
                     ? '${formatGuideDate(time, tick)} ${time.formatLocalHm(tick)}'
                     : time.formatLocalHm(tick),
                 style: midnight
-                    ? theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    ? theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       )
-                    : theme.textTheme.labelLarge,
+                    : theme.textTheme.titleSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
               ),
             ),
           ),
@@ -546,7 +549,7 @@ class _TimeHeader extends StatelessWidget {
             bottom: 0,
             width: 2,
             height: 10,
-            child: ColoredBox(color: theme.colorScheme.error),
+            child: const ColoredBox(color: AppColors.accent),
           ),
         ],
       ),
@@ -562,29 +565,33 @@ class _ChannelCell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: () => openChannel(context, ref, channel),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: theme.dividerColor)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              if (channel.number case final number?)
-                SizedBox(
-                  width: 40,
-                  child: Text('$number', style: theme.textTheme.bodySmall),
+    return FocusRing(
+      radius: 0,
+      inset: true,
+      child: InkWell(
+        onTap: () => openChannel(context, ref, channel),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: theme.dividerColor)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                if (channel.number case final number?)
+                  SizedBox(
+                    width: 40,
+                    child: Text('$number', style: theme.textTheme.bodySmall),
+                  ),
+                Expanded(
+                  child: Text(
+                    channel.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              Expanded(
-                child: Text(
-                  channel.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -740,64 +747,70 @@ class _ProgramCell extends StatelessWidget {
   /// Text keeps at least this much of the block when pinned.
   static const _minTextWidth = 60.0;
 
+  static const _radius = 8.0;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.all(2),
-      child: Material(
-        color: airing ? scheme.primaryContainer : scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(4),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Tooltip(
-            message: '$label  ${program.title}',
-            waitDuration: const Duration(milliseconds: 600),
-            child: ListenableBuilder(
-              listenable: scroll,
-              // A block that starts left of the visible area keeps its text
-              // at the visible edge instead of scrolled out of sight.
-              builder: (context, child) {
-                final offset = scroll.hasClients
-                    ? scroll.offset
-                    : scroll.initialScrollOffset;
-                final double inset = (offset - left).clamp(
-                  0.0,
-                  math.max(0.0, width - _minTextWidth),
-                );
-                return Padding(
-                  padding: EdgeInsets.only(left: inset),
-                  child: child,
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      program.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      softWrap: false,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: airing ? scheme.onPrimaryContainer : null,
-                        fontWeight: FontWeight.w600,
+      child: FocusRing(
+        radius: _radius,
+        inset: true,
+        child: Material(
+          color: airing ? AppColors.hover : AppColors.card,
+          borderRadius: BorderRadius.circular(_radius),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Tooltip(
+              message: '$label  ${program.title}',
+              waitDuration: const Duration(milliseconds: 600),
+              child: ListenableBuilder(
+                listenable: scroll,
+                // A block that starts left of the visible area keeps its text
+                // at the visible edge instead of scrolled out of sight.
+                builder: (context, child) {
+                  final offset = scroll.hasClients
+                      ? scroll.offset
+                      : scroll.initialScrollOffset;
+                  final double inset = (offset - left).clamp(
+                    0.0,
+                    math.max(0.0, width - _minTextWidth),
+                  );
+                  return Padding(
+                    padding: EdgeInsets.only(left: inset),
+                    child: child,
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        program.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        softWrap: false,
+                        style: theme.textTheme.titleSmall,
                       ),
-                    ),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      softWrap: false,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: airing ? scheme.onPrimaryContainer : null,
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        softWrap: false,
+                        // textMuted is too faint on hover for small text.
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: airing ? AppColors.textSecondary : null,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

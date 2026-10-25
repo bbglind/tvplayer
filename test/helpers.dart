@@ -13,6 +13,7 @@ import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
 import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/ui/theme/app_theme.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 /// In-memory [ProviderStorage]. Set [failure] to simulate an unavailable
@@ -379,6 +380,6 @@ Widget testApp({
       ...overrides,
     ],
     retry: (_, _) => null,
-    child: MaterialApp(home: child),
+    child: MaterialApp(theme: AppTheme.dark(), home: child),
   );
 }

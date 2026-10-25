@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/setup_controller.dart';
+import '../theme/app_colors.dart';
 
 /// Add or edit the provider: Xtream (host, username, password) or an M3U
 /// playlist URL, with a connection test.
@@ -107,7 +108,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                           controller.formChanged();
                         },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 if (_type == ProviderType.xtream) ...[
                   TextField(
                     key: const Key('setup.host'),
@@ -119,12 +120,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     keyboardType: TextInputType.url,
                     autocorrect: false,
                   ),
+                  const SizedBox(height: 12),
                   TextField(
                     key: const Key('setup.username'),
                     controller: _username,
                     decoration: const InputDecoration(labelText: 'Username'),
                     autocorrect: false,
                   ),
+                  const SizedBox(height: 12),
                   TextField(
                     key: const Key('setup.password'),
                     controller: _password,
@@ -158,7 +161,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                     keyboardType: TextInputType.url,
                     autocorrect: false,
                   ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 Row(
                   children: [
                     OutlinedButton.icon(
@@ -168,7 +171,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                       icon: state.testing
                           ? const SizedBox.square(
                               dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.textPrimary,
+                              ),
                             )
                           : const Icon(Icons.network_check),
                       label: const Text('Test connection'),
@@ -207,11 +213,12 @@ class _StatusMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Card(
-      color: ok ? scheme.secondaryContainer : scheme.errorContainer,
       child: ListTile(
-        leading: Icon(ok ? Icons.check_circle : Icons.error_outline),
+        leading: Icon(
+          ok ? Icons.check_circle : Icons.error_outline,
+          color: ok ? AppColors.success : AppColors.live,
+        ),
         title: Text(message),
       ),
     );

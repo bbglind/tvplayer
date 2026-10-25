@@ -7,6 +7,8 @@ import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
 import '../player/open_channel.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import 'poster.dart';
 
 /// One movie: poster, facts, plot and cast from the metadata source, and
@@ -66,7 +68,7 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
       if (meta?.duration case final d?) formatRuntime(d),
     ];
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.page,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -77,19 +79,30 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                 AspectRatio(
                   aspectRatio: 2 / 3,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Poster(
-                      url: meta?.posterUrl ?? movie.posterUrl,
-                      decodeWidth: 520,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Poster(
+                          url: meta?.posterUrl ?? movie.posterUrl,
+                          decodeWidth: 520,
+                        ),
+                        if (isInProgress(progress) &&
+                            progress!.fraction != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: WatchProgressBar(progress.fraction!),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-                if (isInProgress(progress) && progress!.fraction != null)
-                  WatchProgressBar(progress.fraction!),
               ],
             ),
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 32),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,29 +112,29 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                     Flexible(
                       child: Text(
                         meta?.title ?? movie.name,
-                        style: theme.textTheme.headlineSmall,
+                        style: theme.textTheme.headlineMedium,
                       ),
                     ),
                     if (watched) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
                       const WatchedBadge(),
                     ],
                   ],
                 ),
                 if (facts.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     facts.join(' · '),
                     key: const Key('movie.facts'),
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
                     if (resume != null) ...[
                       FilledButton.icon(
@@ -157,7 +170,7 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 if (loading)
                   const LinearProgressIndicator()
                 else if (error != null)
@@ -166,7 +179,12 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                 if (meta?.plot case final plot?) ...[
-                  Text(plot, style: theme.textTheme.bodyLarge),
+                  Text(
+                    plot,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                 ],
                 if (meta?.cast case final cast?) _Fact('Cast', cast),
@@ -204,12 +222,17 @@ class _Fact extends StatelessWidget {
           children: [
             TextSpan(
               text: '$label: ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
             ),
             TextSpan(text: value),
           ],
         ),
-        style: theme.textTheme.bodyMedium,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: AppColors.textSecondary,
+        ),
       ),
     );
   }

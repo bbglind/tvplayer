@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/poster_cache.dart';
 import '../../state/providers.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
 
 /// An image loaded through a [PosterLoader] (the disk cache).
 ///
@@ -54,6 +57,7 @@ class Poster extends ConsumerWidget {
     this.decodeWidth = 300,
     this.fit = BoxFit.cover,
     this.placeholder = Icons.movie_outlined,
+    this.background = AppColors.card,
   });
 
   final String? url;
@@ -61,12 +65,15 @@ class Poster extends ConsumerWidget {
   final BoxFit fit;
   final IconData placeholder;
 
+  /// Behind the placeholder icon.
+  final Color background;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final url = this.url;
     final fallback = ColoredBox(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Center(child: Icon(placeholder)),
+      color: background,
+      child: Center(child: Icon(placeholder, color: AppColors.textMuted)),
     );
     if (url == null || url.isEmpty) return fallback;
     return Image(
@@ -85,7 +92,8 @@ class Poster extends ConsumerWidget {
   }
 }
 
-/// A thin bar showing how much was watched.
+/// A thin bar showing how much was watched, for the bottom edge of a
+/// thumbnail: accent over a dark translucent track.
 class WatchProgressBar extends StatelessWidget {
   const WatchProgressBar(this.fraction, {super.key});
 
@@ -97,30 +105,36 @@ class WatchProgressBar extends StatelessWidget {
       key: const Key('poster.progress'),
       value: fraction,
       minHeight: 4,
-      backgroundColor: Colors.black54,
+      color: AppColors.accent,
+      backgroundColor: AppColors.scrim.withValues(alpha: 0.6),
+      borderRadius: BorderRadius.zero,
     );
   }
 }
 
 /// A round check mark on watched items.
 class WatchedBadge extends StatelessWidget {
-  const WatchedBadge({super.key});
+  const WatchedBadge({super.key, this.size = 16});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
       key: const Key('poster.watched'),
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
-      child: Icon(Icons.check, size: 16, color: scheme.onPrimary),
+      padding: const EdgeInsets.all(3),
+      decoration: const BoxDecoration(
+        color: AppColors.success,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(Icons.check, size: size, color: AppColors.onAccent),
     );
   }
 }
 
 /// A grid or row item: poster with watched badge or progress bar, title
-/// and an optional second line.
-class PosterCard extends StatelessWidget {
+/// and an optional second line. The focus ring goes around the poster.
+class PosterCard extends StatefulWidget {
   const PosterCard({
     super.key,
     required this.title,
@@ -143,51 +157,73 @@ class PosterCard extends StatelessWidget {
   final IconData placeholder;
 
   @override
+  State<PosterCard> createState() => _PosterCardState();
+}
+
+class _PosterCardState extends State<PosterCard> {
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      onTap: widget.onTap,
+      onFocusChange: (f) => setState(() => _focused = f),
+      onHover: (h) => setState(() => _hovered = h),
+      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Poster(url: imageUrl, placeholder: placeholder),
-                    if (watched)
-                      const Positioned(top: 6, right: 6, child: WatchedBadge()),
-                    if (progress case final p? when !watched)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: WatchProgressBar(p),
+              child: FocusRing(
+                visible: _focused,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Poster(
+                        url: widget.imageUrl,
+                        placeholder: widget.placeholder,
                       ),
-                  ],
+                      if (_hovered)
+                        ColoredBox(
+                          color: AppColors.textPrimary.withValues(alpha: 0.07),
+                        ),
+                      if (widget.watched)
+                        const Positioned(
+                          top: 8,
+                          right: 8,
+                          child: WatchedBadge(size: 14),
+                        ),
+                      if (widget.progress case final p? when !widget.watched)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: WatchProgressBar(p),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              title,
+              widget.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
+              style: theme.textTheme.titleSmall,
             ),
-            if (subtitle case final s?)
+            if (widget.subtitle case final s?)
               Text(
                 s,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                style: theme.textTheme.bodySmall,
               ),
           ],
         ),

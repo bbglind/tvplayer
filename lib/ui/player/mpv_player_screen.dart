@@ -14,6 +14,7 @@ import '../../player/playback_request.dart';
 import '../../state/providers.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
+import '../theme/app_colors.dart';
 import 'open_channel.dart';
 import 'player_shortcuts.dart';
 import 'track_panel.dart';
@@ -330,7 +331,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       onExitFullscreen: _fullscreen ? () => _setFullscreen(false) : null,
       onCycleSubtitles: playing ? _cycleSubtitles : null,
       child: Scaffold(
-        backgroundColor: _showVideo ? Colors.black : null,
+        backgroundColor: _showVideo ? AppColors.scrim : null,
         appBar: _fullscreen ? null : AppBar(title: Text(_request.title)),
         body: body,
       ),
@@ -348,7 +349,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       onRect: _onVideoRect,
       child: const ColoredBox(
         key: Key('mpv.video'),
-        color: Colors.black,
+        color: AppColors.scrim,
         child: SizedBox.expand(),
       ),
     );
@@ -382,6 +383,12 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   Widget _buildTracksButton(bool enabled) => IconButton(
     tooltip: 'Subtitles and audio (s: next subtitles)',
+    // A secondary pill, as for the other player choices.
+    style: IconButton.styleFrom(
+      backgroundColor: AppColors.hover,
+      disabledBackgroundColor: AppColors.surface,
+      shape: const StadiumBorder(),
+    ),
     isSelected: _showTracks,
     icon: const Icon(Icons.subtitles_outlined),
     selectedIcon: const Icon(Icons.subtitles),
@@ -399,8 +406,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         _mode == _Mode.embedding ||
         state.status == ExternalPlayerStatus.starting;
     return Material(
+      color: AppColors.scrim,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
             IconButton(
@@ -410,7 +418,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
             ),
             Expanded(
               child: starting
-                  ? const LinearProgressIndicator()
+                  ? const LinearProgressIndicator(minHeight: 4)
                   : _request.fixedLength
                   ? _buildSeekBar(context, state)
                   : const SizedBox.shrink(),
@@ -418,7 +426,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
             if (showStats) ...[const SizedBox(width: 16), _DropReadout(state)],
             if (state.volume case final volume?) ...[
               const SizedBox(width: 8),
-              Icon(volume == 0 ? Icons.volume_off : Icons.volume_up, size: 18),
+              Icon(
+                volume == 0 ? Icons.volume_off : Icons.volume_up,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
               Text(
                 ' ${volume.round()}%',
                 key: const Key('mpv.volume'),

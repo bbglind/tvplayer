@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../format.dart';
+import '../ui/theme/app_colors.dart';
 import 'player_session.dart';
 
 /// Reusable video player: video, basic controls and an error banner. With
@@ -94,15 +95,20 @@ class _TvPlayerViewState extends State<TvPlayerView> {
   Widget _buildErrorBanner() {
     return Container(
       width: double.infinity,
-      color: Theme.of(context).colorScheme.errorContainer,
+      color: AppColors.live,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         children: [
-          const Icon(Icons.error_outline),
+          const Icon(Icons.error_outline, color: AppColors.onAccent),
           const SizedBox(width: 8),
-          Expanded(child: SelectableText(_session.lastError!)),
+          Expanded(
+            child: SelectableText(
+              _session.lastError!,
+              style: const TextStyle(color: AppColors.onAccent),
+            ),
+          ),
           IconButton(
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close, color: AppColors.onAccent),
             onPressed: _session.dismissError,
           ),
         ],
@@ -163,14 +169,14 @@ class _TvPlayerViewState extends State<TvPlayerView> {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.7),
+        color: AppColors.scrim.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(4),
       ),
       child: DefaultTextStyle(
         style: const TextStyle(
           fontFamily: 'monospace',
           fontSize: 12,
-          color: Colors.white,
+          color: AppColors.textPrimary,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

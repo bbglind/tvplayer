@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
+
 /// Subtitle (with "Off") and audio track choice, from mpv's track list.
 class TrackPanel extends StatelessWidget {
   const TrackPanel({
@@ -36,24 +40,34 @@ class TrackPanel extends StatelessWidget {
     final subLabels = trackLabels(subs);
     final audioLabels = trackLabels(audio);
     Widget header(String text) => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(text, style: theme.textTheme.titleSmall),
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+      child: Text(text.toUpperCase(), style: theme.textTheme.labelMedium),
     );
     Widget option(String label, bool selected, VoidCallback onTap, Key key) =>
-        ListTile(
-          key: key,
-          dense: true,
-          selected: selected,
-          leading: Icon(
-            selected ? Icons.radio_button_checked : Icons.radio_button_off,
-            size: 20,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: FocusRing(
+            radius: AppRadius.small,
+            inset: true,
+            child: ListTile(
+              key: key,
+              dense: true,
+              selected: selected,
+              leading: Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 20,
+                color: selected ? AppColors.accent : AppColors.textMuted,
+              ),
+              title: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: onTap,
+            ),
           ),
-          title: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-          onTap: onTap,
         );
     return Material(
       key: const Key('player.tracks'),
+      color: AppColors.surface,
       child: ListView(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
         children: [
           Row(
             children: [

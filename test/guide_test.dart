@@ -133,18 +133,15 @@ void main() {
   }
 
   group('Live TV list', () {
-    testWidgets('shows now and next, matched by EPG id and by name', (
+    testWidgets('shows what is on now, matched by EPG id and by name', (
       tester,
     ) async {
       await pump(tester, const LiveTvScreen());
       await tester.pumpAndSettle();
 
       // Across the switch: 02:30 CEST to 02:30 CET.
-      expect(
-        find.text('02:30–02:30 Across The Switch  ·  02:30 After The Switch'),
-        findsOneWidget,
-      );
-      expect(find.text('00:00–06:00 Night Film'), findsOneWidget);
+      expect(find.text('Across The Switch · until 02:30'), findsOneWidget);
+      expect(find.text('Night Film · until 06:00'), findsOneWidget);
       expect(find.byKey(const Key('nowNext.3')), findsNothing);
       expect(epg.refreshes, 0, reason: 'the cached guide is fresh');
     });
@@ -153,10 +150,7 @@ void main() {
       settings.saved = const AppSettings(guideTimeZone: 'UTC');
       await pump(tester, const LiveTvScreen());
       await tester.pumpAndSettle();
-      expect(
-        find.text('00:30–01:30 Across The Switch  ·  01:30 After The Switch'),
-        findsOneWidget,
-      );
+      expect(find.text('Across The Switch · until 01:30'), findsOneWidget);
     });
 
     testWidgets('a shift moves which programme is on now', (tester) async {
@@ -167,10 +161,7 @@ void main() {
       );
       await pump(tester, const LiveTvScreen());
       await tester.pumpAndSettle();
-      expect(
-        find.text('00:30–01:30 Before The Switch  ·  01:30 Across The Switch'),
-        findsOneWidget,
-      );
+      expect(find.text('Before The Switch · until 01:30'), findsOneWidget);
     });
   });
 
@@ -524,6 +515,8 @@ void main() {
       await tester.pumpAndSettle();
       final toggle = find.byKey(const Key('settings.playbackStats'));
       await tester.scrollUntilVisible(toggle, 100);
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
       expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
 
       await tester.tap(toggle);
