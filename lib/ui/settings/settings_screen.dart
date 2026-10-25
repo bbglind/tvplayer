@@ -340,8 +340,7 @@ class SettingsScreen extends ConsumerWidget {
               key: const Key('settings.searchHidden'),
               title: const Text('Show hidden categories in global search'),
               subtitle: const Text(
-                'Also find channels, movies and series in provider categories '
-                'you have hidden.',
+                'Also find channels, movies and series in hidden categories.',
               ),
               value: settings.showHiddenInGlobalSearch,
               onChanged: (v) => _saveSettings(

@@ -34,19 +34,24 @@ class MoviesScreen extends ConsumerWidget {
       filter: filter,
       onCategory: filterNotifier.selectCategory,
       onQuery: filterNotifier.setQuery,
+      categoryOf: (item) => item.categoryId,
+      itemRef: movieItemRef,
       onRefresh: ref.read(movieCatalogProvider.notifier).refresh,
       continueWatching: [
         if (catalog != null)
           for (final (id, progress) in continueMovies(watch))
             if (catalog.byId(id) case final movie?)
-              PosterCard(
-                key: ValueKey('continue.${movie.streamId}'),
-                title: movie.name,
-                favourite: movieItemRef(movie),
-                subtitle: 'Resume at ${formatDuration(progress.position)}',
-                imageUrl: movie.posterUrl,
-                progress: progress.fraction,
-                onTap: () => _open(context, movie),
+              (
+                movie,
+                PosterCard(
+                  key: ValueKey('continue.${movie.streamId}'),
+                  title: movie.name,
+                  favourite: movieItemRef(movie),
+                  subtitle: 'Resume at ${formatDuration(progress.position)}',
+                  imageUrl: movie.posterUrl,
+                  progress: progress.fraction,
+                  onTap: () => _open(context, movie),
+                ),
               ),
       ],
       itemBuilder: (context, movie) {

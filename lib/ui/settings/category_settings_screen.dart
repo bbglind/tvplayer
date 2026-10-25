@@ -10,16 +10,12 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'settings_section.dart';
 
-/// "2 of my categories · 5 hidden", for the settings overview.
+/// "My categories: 2 · 5 hidden", for the settings overview.
 String describeCategories(FavouritesData favourites, ContentKind kind) {
   final mine = favourites.categoriesOf(kind).length;
   final hidden = favourites.hiddenIds(kind).length;
   return [
-    switch (mine) {
-      0 => 'No categories of mine',
-      1 => '1 category of mine',
-      _ => '$mine categories of mine',
-    },
+    'My categories: ${mine == 0 ? 'none' : mine}',
     if (hidden > 0) '$hidden hidden',
   ].join(' · ');
 }
@@ -28,6 +24,13 @@ String _title(ContentKind kind) => switch (kind) {
   ContentKind.live => 'Live TV categories',
   ContentKind.movie => 'Movie categories',
   ContentKind.series => 'Series categories',
+};
+
+/// Where hidden categories of [kind] are left out.
+String _leftOut(ContentKind kind) => switch (kind) {
+  ContentKind.live => 'the category list, "All channels" and the TV guide',
+  ContentKind.movie => 'the category list and "All movies"',
+  ContentKind.series => 'the category list and "All series"',
 };
 
 String _items(ContentKind kind, int count) => switch (kind) {
@@ -142,7 +145,7 @@ class _CategorySettingsScreenState
             ],
           ),
           SettingsSection(
-            title: 'Provider categories',
+            title: 'Categories',
             children: [
               if (provider == null)
                 ListTile(
@@ -161,8 +164,8 @@ class _CategorySettingsScreenState
                     children: [
                       Text(
                         '${hidden.length} of ${provider.categories.length} '
-                        'hidden. Hidden categories are left out of the '
-                        'category list, "All" and the TV guide.',
+                        'hidden. Hidden categories are left out of '
+                        '${_leftOut(kind)}.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),

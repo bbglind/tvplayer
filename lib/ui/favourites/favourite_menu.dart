@@ -30,7 +30,8 @@ void _focusSoon(FocusNode node) =>
     });
 
 /// A checkbox per category of my categories of [item]'s kind, then "New
-/// category…". Stays open while ticking boxes.
+/// category…" and "Done". Stays open while ticking boxes (each tick is
+/// saved at once); Done, Esc or a click outside closes it.
 class _FavouriteMenuItems extends ConsumerWidget {
   const _FavouriteMenuItems({
     required this.item,
@@ -78,6 +79,14 @@ class _FavouriteMenuItems extends ConsumerWidget {
           leadingIcon: const Icon(Icons.add),
           onPressed: onNew,
           child: const Text('New category…'),
+        ),
+        const Divider(height: 9),
+        // Activating a menu item closes the whole menu.
+        MenuItemButton(
+          key: const Key('favourite.menu.done'),
+          leadingIcon: const Icon(Icons.check),
+          onPressed: () {},
+          child: const Text('Done'),
         ),
       ],
     );
@@ -135,7 +144,7 @@ class _FavouriteButtonState extends ConsumerState<FavouriteButton> {
     final favourite = ref.watch(
       favouritesProvider.select((d) => d.isFavourite(widget.item)),
     );
-    final tooltip = favourite ? 'In favourites' : 'Add to favourites';
+    final tooltip = favourite ? 'Favourite' : 'Add to favourites';
     return MenuAnchor(
       controller: _menu,
       onOpen: () {

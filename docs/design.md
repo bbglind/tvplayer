@@ -122,6 +122,27 @@ weights 400, 500, 600, 700.
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).
 
+## Naming
+
+Use these terms in the UI, tooltips and Settings. The UI language is
+English for now.
+
+| Term | Meaning |
+|------|---------|
+| My categories | The user's own favourite categories |
+| Categories | The provider's categories |
+| All channels / All movies / All series | Everything except hidden categories |
+| Favourite (star) | The item is in at least one of my categories |
+| Continue watching | Started movies and episodes |
+| Hidden | Hidden provider categories |
+
+- The heading above a list or grid names the selected category ("All
+  movies", one of my categories or a category).
+- "Continue watching" shows only started items in the selected category;
+  with none, the row and its heading are left out.
+- The favourites menu saves each checkbox at once; "Done", Esc or a click
+  outside closes it.
+
 ## Icons
 
 Material outlined (stroke) icons, size 20 in navigation, 18 in fields.

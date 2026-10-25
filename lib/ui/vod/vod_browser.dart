@@ -23,6 +23,8 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
     required this.onQuery,
     required this.onRefresh,
     required this.itemBuilder,
+    required this.categoryOf,
+    required this.itemRef,
     this.continueWatching = const [],
   });
 
@@ -40,9 +42,16 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
   /// Builds one grid item.
   final Widget Function(BuildContext context, T item) itemBuilder;
 
-  /// Cards for the "Continue watching" row; the row is hidden when empty
+  /// An item's provider category id.
+  final String? Function(T item) categoryOf;
+
+  /// An item's reference for my categories.
+  final ItemRef Function(T item) itemRef;
+
+  /// Started items with their cards for the "Continue watching" row. Only
+  /// those in the selected category show; the row is hidden when none do
   /// and while searching.
-  final List<Widget> continueWatching;
+  final List<(T, Widget)> continueWatching;
 
   @override
   ConsumerState<VodBrowser<T>> createState() => _VodBrowserState<T>();
@@ -95,6 +104,25 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     }
     return _filtered;
   }
+
+  /// Whether [item] belongs to the selected category: for "All", any item
+  /// outside the hidden categories.
+  bool _inSelection(T item, FavouritesData favourites) => switch (_selection) {
+    AllCategories() =>
+      !favourites.hiddenIds(widget.kind).contains(widget.categoryOf(item)),
+    ProviderCategory(:final id) => widget.categoryOf(item) == id,
+    MyCategory(:final id) =>
+      favourites.categoriesContaining(widget.itemRef(item)).contains(id),
+  };
+
+  /// The name of the selected category, for the heading above the grid.
+  String _selectionName(VodCatalog<T> catalog) => switch (_selection) {
+    AllCategories() => 'All ${widget.what}',
+    ProviderCategory(:final id) =>
+      catalog.categories.where((c) => c.id == id).firstOrNull?.name ?? '',
+    MyCategory(:final id) =>
+      ref.watch(favouritesProvider).category(id)?.name ?? '',
+  };
 
   /// Items of the selected one of my categories that the provider no
   /// longer lists, matching the search.
@@ -166,7 +194,14 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     final missing = _missing(catalog);
     final mine = _selection is MyCategory;
     final searching = widget.filter.query.trim().isNotEmpty;
-    final showContinue = !searching && widget.continueWatching.isNotEmpty;
+    final favourites = ref.watch(favouritesProvider);
+    final continueCards = searching
+        ? const <Widget>[]
+        : [
+            for (final (item, card) in widget.continueWatching)
+              if (_inSelection(item, favourites)) card,
+          ];
+    final showContinue = continueCards.isNotEmpty;
     return Column(
       children: [
         Padding(
@@ -218,13 +253,13 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 22),
                       children: [
-                        for (final card in widget.continueWatching)
+                        for (final card in continueCards)
                           SizedBox(width: 150, child: card),
                       ],
                     ),
                   ),
                 ),
-                _sectionTitle(context, 'All $what'),
+                _sectionTitle(context, _selectionName(catalog)),
               ],
               if (items.isEmpty && missing.isEmpty)
                 SliverFillRemaining(

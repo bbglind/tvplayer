@@ -36,12 +36,14 @@ class SeriesScreen extends ConsumerWidget {
       filter: filter,
       onCategory: filterNotifier.selectCategory,
       onQuery: filterNotifier.setQuery,
+      categoryOf: (item) => item.categoryId,
+      itemRef: seriesItemRef,
       onRefresh: ref.read(seriesCatalogProvider.notifier).refresh,
       continueWatching: [
         if (catalog != null)
           for (final (id, progress) in continueSeries(watch))
             if (catalog.byId(id) case final series?)
-              _continueCard(context, watch, series, progress),
+              (series, _continueCard(context, watch, series, progress)),
       ],
       itemBuilder: (context, series) {
         final progress = watch.series[series.seriesId];

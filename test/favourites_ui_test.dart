@@ -24,6 +24,7 @@ FavouritesData _data({
   List<String> movies = const [],
   List<(String, String, String)> members = const [],
   Set<String> hiddenLive = const {},
+  Set<String> hiddenMovies = const {},
 }) {
   var data = FavouritesData.empty;
   for (final (kind, names) in [
@@ -51,10 +52,17 @@ FavouritesData _data({
       now: _t0.add(Duration(minutes: i)),
     );
   }
-  return setCategoriesHidden(
+  data = setCategoriesHidden(
     data,
     ContentKind.live,
     hiddenLive,
+    hidden: true,
+    now: _t0,
+  );
+  return setCategoriesHidden(
+    data,
+    ContentKind.movie,
+    hiddenMovies,
     hidden: true,
     now: _t0,
   );
@@ -147,6 +155,45 @@ void main() {
       expect(store.data.categoriesContaining(item), {'live1'});
     });
 
+    testWidgets('Done, Esc and a click outside close the menu', (tester) async {
+      final store = MemoryFavouritesStore(_data(live: ['News']));
+      await _pumpLive(tester, store);
+      final item = const ItemRef(ContentKind.live, '2');
+
+      // Done only closes; the tick was saved already.
+      await tester.tap(_starOf('Channel 0002'));
+      await tester.pumpAndSettle();
+      await tester.tap(_box('News'));
+      await tester.pumpAndSettle();
+      expect(store.data.isFavourite(item), isTrue);
+      await tester.tap(find.byKey(const Key('favourite.menu.done')));
+      await tester.pumpAndSettle();
+      expect(_box('News'), findsNothing);
+      expect(store.data.isFavourite(item), isTrue);
+
+      await tester.tap(_starOf('Channel 0002'));
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(_box('News'), findsNothing);
+
+      await tester.tap(_starOf('Channel 0002'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('live.search')));
+      await tester.pumpAndSettle();
+      expect(_box('News'), findsNothing);
+
+      // The context menu's checkboxes have Done too.
+      await tester.tap(find.text('Channel 0003'), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.favourites')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('favourite.menu.done')));
+      await tester.pumpAndSettle();
+      expect(_box('News'), findsNothing);
+      expect(find.byKey(const Key('context.favourites')), findsNothing);
+    });
+
     testWidgets('right click and Shift+F10 open the context menu', (
       tester,
     ) async {
@@ -199,7 +246,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('live.categories.edit')));
       await tester.pumpAndSettle();
-      expect(find.text('PROVIDER CATEGORIES'), findsOneWidget);
+      // The column header and, while editing, the provider section.
+      expect(find.text('CATEGORIES'), findsNWidgets(2));
       await tester.tap(find.byKey(const Key('live.visibility.c3')));
       await tester.tap(find.byKey(const Key('live.visibility.c4')));
       await tester.pumpAndSettle();
@@ -347,8 +395,9 @@ void main() {
     Future<void> pump(
       WidgetTester tester,
       MemoryFavouritesStore store,
-      Widget child,
-    ) async {
+      Widget child, {
+      MemoryWatchStore? watch,
+    }) async {
       tester.view.physicalSize = const Size(1400, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -361,11 +410,71 @@ void main() {
             providerKeyProvider.overrideWithValue('test'),
           ],
           favourites: store,
+          watch: watch,
           child: Scaffold(body: child),
         ),
       );
       await tester.pumpAndSettle();
     }
+
+    testWidgets('the grid heading and continue watching follow the '
+        'selected category', (tester) async {
+      // Movie i is in provider category m(i % 5); m2 is hidden.
+      final store = MemoryFavouritesStore(
+        _data(
+          movies: ['Weekend'],
+          members: [('movie0', '3', 'Movie 00003')],
+          hiddenMovies: {'m2'},
+        ),
+      );
+      final watch = MemoryWatchStore(
+        WatchData.empty.withItems({
+          for (final (i, id) in [3, 6, 2].indexed)
+            movieKey(id): WatchProgress(
+              position: const Duration(minutes: 20),
+              duration: const Duration(minutes: 90),
+              watched: false,
+              updatedAt: _t0.add(Duration(minutes: i)),
+              seriesId: null,
+            ),
+        }),
+      );
+      await pump(tester, store, const MoviesScreen(), watch: watch);
+      final grid = find.byKey(const Key('movies.grid'));
+      final row = find.byKey(const Key('movies.continue'));
+      Finder heading(String text) =>
+          find.descendant(of: grid, matching: find.text(text));
+      List<String> continuing() => [
+        for (final id in [2, 3, 6])
+          if (find
+              .descendant(of: row, matching: find.text('Movie 0000$id'))
+              .evaluate()
+              .isNotEmpty)
+            'Movie 0000$id',
+      ];
+
+      // All movies: everything started outside hidden categories.
+      expect(heading('All movies'), findsOneWidget);
+      expect(continuing(), ['Movie 00003', 'Movie 00006']);
+
+      await tester.tap(find.text('Movie category 1'));
+      await tester.pumpAndSettle();
+      expect(heading('Movie category 1'), findsOneWidget);
+      expect(heading('All movies'), findsNothing);
+      expect(continuing(), ['Movie 00006']);
+
+      await tester.tap(find.byKey(const Key('movies.my.Weekend')));
+      await tester.pumpAndSettle();
+      expect(heading('Weekend'), findsOneWidget);
+      expect(continuing(), ['Movie 00003']);
+
+      // Nothing started here: no row and no heading.
+      await tester.tap(find.text('Movie category 4'));
+      await tester.pumpAndSettle();
+      expect(row, findsNothing);
+      expect(find.text('Continue watching'), findsNothing);
+      expect(heading('Movie category 4'), findsNothing);
+    });
 
     testWidgets('a poster star adds the movie; my category lists it', (
       tester,
@@ -422,7 +531,7 @@ void main() {
       await tester.tap(_box('Weekend'));
       await tester.pumpAndSettle();
       expect(store.data.itemsIn('movie0').single.name, 'Film');
-      expect(find.text('In favourites'), findsOneWidget);
+      expect(find.text('Favourite'), findsOneWidget);
     });
   });
 
@@ -465,7 +574,7 @@ void main() {
     ) async {
       final store = MemoryFavouritesStore(_data(live: ['A', 'B']));
       await pump(tester, store);
-      expect(find.text('2 categories of mine'), findsOneWidget);
+      expect(find.text('My categories: 2'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('settings.categories.live')));
       await tester.pumpAndSettle();

@@ -424,7 +424,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     );
     return IconButton(
       key: const Key('player.favourite'),
-      tooltip: favourite ? 'In favourites' : 'Add to favourites',
+      tooltip: favourite ? 'Favourite' : 'Add to favourites',
       style: IconButton.styleFrom(
         backgroundColor: AppColors.hover,
         shape: const StadiumBorder(),

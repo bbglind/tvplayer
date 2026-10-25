@@ -125,9 +125,7 @@ class CategoryList extends ConsumerWidget {
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
               if (editing) ...[
-                const SliverToBoxAdapter(
-                  child: _Overline('Provider categories'),
-                ),
+                const SliverToBoxAdapter(child: _Overline('Categories')),
                 SliverToBoxAdapter(
                   child: Wrap(
                     spacing: 4,
