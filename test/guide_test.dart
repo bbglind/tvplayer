@@ -14,6 +14,7 @@ import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/epg/guide_screen.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
+import 'package:tvplayer/ui/theme/app_colors.dart';
 import 'package:tvplayer/ui/theme/widgets.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -639,6 +640,57 @@ void main() {
       // 40 px of thumb is far more than 40 px of grid.
       expect(timeScroll(tester).pixels, greaterThan(x + 200));
       expect(rowScroll(tester).pixels, 0);
+    });
+
+    testWidgets('the scrollbar thumb is drawn in the accent colour on a '
+        'subtle track at large text sizes', (tester) async {
+      await pump(
+        tester,
+        Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: const GuideScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scrollbar = find.byKey(const Key('guide.scrollbar'));
+      final screen = tester.getRect(find.byType(GuideScreen));
+      expect(
+        tester.getRect(scrollbar).bottom,
+        lessThanOrEqualTo(screen.bottom),
+      );
+      ScrollbarPainter painter() =>
+          tester
+                  .widget<CustomPaint>(
+                    find
+                        .descendant(
+                          of: scrollbar,
+                          matching: find.byType(CustomPaint),
+                        )
+                        .first,
+                  )
+                  .foregroundPainter!
+              as ScrollbarPainter;
+      expect(painter().color, AppColors.accent);
+      expect(painter().trackColor, AppColors.surface);
+
+      // Hovering the thumb lightens it.
+      final body = tester.getRect(find.byKey(const Key('guide.body')));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      final p = timeScroll(tester);
+      final thumbLength = math.max(
+        18.0,
+        body.width * body.width / (p.maxScrollExtent + body.width),
+      );
+      final thumbLeft =
+          body.left + p.pixels / p.maxScrollExtent * (body.width - thumbLength);
+      await mouse.addPointer(location: body.bottomLeft - const Offset(0, 40));
+      await mouse.moveTo(Offset(thumbLeft + thumbLength / 2, body.bottom - 5));
+      await tester.pumpAndSettle();
+      expect(painter().color, AppColors.accentHover);
+      await mouse.removePointer();
     });
 
     testWidgets('the last row is not under the scrollbar', (tester) async {

@@ -481,12 +481,9 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                   const VerticalDivider(width: 1),
                   Expanded(
                     child: ScrollbarTheme(
-                      data: ScrollbarTheme.of(context).copyWith(
-                        trackColor: const WidgetStatePropertyAll(
-                          AppColors.surface,
-                        ),
-                        thickness: const WidgetStatePropertyAll(10),
-                      ),
+                      data: ScrollbarTheme.of(
+                        context,
+                      ).copyWith(thickness: const WidgetStatePropertyAll(10)),
                       child: Scrollbar(
                         key: const Key('guide.scrollbar'),
                         controller: _bodyH,

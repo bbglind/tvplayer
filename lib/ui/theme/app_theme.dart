@@ -504,14 +504,17 @@ abstract final class AppTheme {
           surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
         ),
       ),
+      // Accent thumb so scrollbars stand out on the dark surfaces; the
+      // track (only drawn where a scrollbar asks for it) stays subtle.
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
           (s) =>
               s.contains(WidgetState.hovered) || s.contains(WidgetState.dragged)
-              ? AppColors.textDisabled
-              : AppColors.hover,
+              ? AppColors.accentHover
+              : AppColors.accent,
         ),
-        trackColor: const WidgetStatePropertyAll(Colors.transparent),
+        trackColor: const WidgetStatePropertyAll(AppColors.surface),
+        trackBorderColor: const WidgetStatePropertyAll(Colors.transparent),
         thickness: const WidgetStatePropertyAll(6),
         radius: const Radius.circular(AppRadius.pill),
       ),

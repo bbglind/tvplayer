@@ -86,6 +86,8 @@ weights 400, 500, 600, 700.
 - **Secondary button**: `hover` background, `textPrimary` text, 500.
 - **Chip** (category filter): height 40, pill. Selected: accent bg,
   `onAccent` text, 600. Unselected: `surface` bg, `textSecondary` text.
+- **Scrollbar**: thin pill, `accent` thumb (`accentHover` while hovered or
+  dragged); where a track is shown it is `surface`, with no border.
 - **Search field**: pill, `surface` bg, height 44, search icon in
   `textMuted`, placeholder in `textMuted`.
 - **Channel row**: `card` bg, radius 12, padding ~10/14: channel number
