@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -114,11 +113,12 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
               if (!forced)
                 Positioned(
-                  left: width - _ResizeHandle.width / 2,
+                  left: width - ResizeHandle.width / 2,
                   top: 0,
                   bottom: 0,
-                  width: _ResizeHandle.width,
-                  child: _ResizeHandle(
+                  width: ResizeHandle.width,
+                  child: ResizeHandle(
+                    key: const Key('sidebar.resize'),
                     onStart: () => setState(() => _dragWidth = width),
                     onUpdate: (dx) =>
                         setState(() => _dragWidth = (_dragWidth ?? width) + dx),
@@ -128,37 +128,6 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-/// The draggable right edge of the sidebar.
-class _ResizeHandle extends StatelessWidget {
-  const _ResizeHandle({
-    required this.onStart,
-    required this.onUpdate,
-    required this.onEnd,
-  });
-
-  static const width = 8.0;
-
-  final VoidCallback onStart;
-  final ValueChanged<double> onUpdate;
-  final VoidCallback onEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      key: const Key('sidebar.resize'),
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        dragStartBehavior: DragStartBehavior.down,
-        onHorizontalDragStart: (_) => onStart(),
-        onHorizontalDragUpdate: (d) => onUpdate(d.delta.dx),
-        onHorizontalDragEnd: (_) => onEnd(),
-        onHorizontalDragCancel: onEnd,
       ),
     );
   }

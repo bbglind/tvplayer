@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/app_settings.dart';
 import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -10,18 +11,17 @@ import '../theme/widgets.dart';
 /// A section's category [list] beside its [content]. A "Categories" header
 /// above the list hides it; while hidden, [content] takes the full width
 /// and a [ShowCategoriesButton] in it brings the list back. The state is
-/// remembered per [section] (`live`, `movies`, `series`).
+/// remembered per [section] (`live`, `movies`, `series`). The list's right
+/// edge can be dragged to resize it; the width is shared by all sections.
 class CategoryLayout extends ConsumerStatefulWidget {
   const CategoryLayout({
     super.key,
     required this.section,
-    required this.width,
     required this.list,
     required this.content,
   });
 
   final String section;
-  final double width;
   final Widget list;
   final Widget content;
 
@@ -32,6 +32,9 @@ class CategoryLayout extends ConsumerStatefulWidget {
 class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
   final _header = FocusNode(debugLabel: 'categories.hide');
   final _show = FocusNode(debugLabel: 'categories.show');
+
+  /// The width the user is dragging the list to; null when not dragging.
+  double? _dragWidth;
 
   @override
   void dispose() {
@@ -61,15 +64,26 @@ class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
     }
   }
 
+  void _endDrag() {
+    final width = _dragWidth;
+    if (width == null) return;
+    setState(() => _dragWidth = null);
+    ref
+        .read(appSettingsProvider.notifier)
+        .remember((s) => s.copyWith(categoryListWidth: _clamp(width)));
+  }
+
+  static double _clamp(double width) => width.clamp(
+    AppSettings.minCategoryListWidth,
+    AppSettings.maxCategoryListWidth,
+  );
+
   @override
   Widget build(BuildContext context) {
-    final hidden =
-        ref
-            .watch(appSettingsProvider)
-            .value
-            ?.hiddenCategoryLists
-            .contains(widget.section) ??
-        false;
+    final settings =
+        ref.watch(appSettingsProvider).value ?? const AppSettings();
+    final hidden = settings.hiddenCategoryLists.contains(widget.section);
+    final width = _clamp(_dragWidth ?? settings.categoryListWidth);
     final content = _CategoryLayoutScope(
       hidden: hidden,
       onShow: () => _setHidden(false),
@@ -77,10 +91,10 @@ class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
       child: widget.content,
     );
     if (hidden) return content;
-    return Row(
+    final row = Row(
       children: [
         SizedBox(
-          width: widget.width,
+          width: width,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -98,6 +112,24 @@ class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
         ),
         const VerticalDivider(width: 1),
         Expanded(child: content),
+      ],
+    );
+    return Stack(
+      children: [
+        row,
+        Positioned(
+          left: width + 0.5 - ResizeHandle.width / 2,
+          top: 0,
+          bottom: 0,
+          width: ResizeHandle.width,
+          child: ResizeHandle(
+            key: Key('${widget.section}.categories.resize'),
+            onStart: () => setState(() => _dragWidth = width),
+            onUpdate: (dx) =>
+                setState(() => _dragWidth = (_dragWidth ?? width) + dx),
+            onEnd: _endDrag,
+          ),
+        ),
       ],
     );
   }

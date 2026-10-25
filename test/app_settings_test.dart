@@ -37,11 +37,15 @@ void main() {
       sidebarCollapsed: true,
       sidebarWidth: 300,
       hiddenCategoryLists: {'live', 'series'},
+      categoryListWidth: 320,
+      guideChannelWidth: 250,
     );
     final back = AppSettings.fromJson(settings.toJson());
     expect(back.sidebarCollapsed, isTrue);
     expect(back.sidebarWidth, 300);
     expect(back.hiddenCategoryLists, {'live', 'series'});
+    expect(back.categoryListWidth, 320);
+    expect(back.guideChannelWidth, 250);
   });
 
   test('layout settings: defaults, clamped width, bad values ignored', () {
@@ -49,6 +53,16 @@ void main() {
     expect(defaults.sidebarCollapsed, isFalse);
     expect(defaults.sidebarWidth, AppSettings.defaultSidebarWidth);
     expect(defaults.hiddenCategoryLists, isEmpty);
+    expect(defaults.categoryListWidth, AppSettings.defaultCategoryListWidth);
+    expect(defaults.guideChannelWidth, AppSettings.defaultGuideChannelWidth);
+    expect(
+      AppSettings.fromJson({'categoryListWidth': 5000}).categoryListWidth,
+      AppSettings.maxCategoryListWidth,
+    );
+    expect(
+      AppSettings.fromJson({'guideChannelWidth': 10}).guideChannelWidth,
+      AppSettings.minGuideChannelWidth,
+    );
 
     expect(
       AppSettings.fromJson({'sidebarWidth': 5000}).sidebarWidth,
@@ -61,10 +75,14 @@ void main() {
     final bad = AppSettings.fromJson({
       'sidebarCollapsed': 'yes',
       'sidebarWidth': 'wide',
+      'categoryListWidth': double.nan,
+      'guideChannelWidth': 'wide',
       'hiddenCategoryLists': ['live', 3, null],
     });
     expect(bad.sidebarCollapsed, isFalse);
     expect(bad.sidebarWidth, AppSettings.defaultSidebarWidth);
     expect(bad.hiddenCategoryLists, {'live'});
+    expect(bad.categoryListWidth, AppSettings.defaultCategoryListWidth);
+    expect(bad.guideChannelWidth, AppSettings.defaultGuideChannelWidth);
   });
 }

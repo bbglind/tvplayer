@@ -16,6 +16,8 @@ final class AppSettings {
     this.sidebarCollapsed = false,
     this.sidebarWidth = defaultSidebarWidth,
     this.hiddenCategoryLists = const {},
+    this.categoryListWidth = defaultCategoryListWidth,
+    this.guideChannelWidth = defaultGuideChannelWidth,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -55,6 +57,20 @@ final class AppSettings {
   /// Sections whose category list is hidden: `live`, `movies`, `series`.
   final Set<String> hiddenCategoryLists;
 
+  /// Width of the category list, shared by Live TV, Movies and Series.
+  final double categoryListWidth;
+
+  static const defaultCategoryListWidth = 260.0;
+  static const minCategoryListWidth = 200.0;
+  static const maxCategoryListWidth = 420.0;
+
+  /// Width of the channel column in the TV guide.
+  final double guideChannelWidth;
+
+  static const defaultGuideChannelWidth = 200.0;
+  static const minGuideChannelWidth = 140.0;
+  static const maxGuideChannelWidth = 400.0;
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -71,6 +87,8 @@ final class AppSettings {
     bool? sidebarCollapsed,
     double? sidebarWidth,
     Set<String>? hiddenCategoryLists,
+    double? categoryListWidth,
+    double? guideChannelWidth,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -81,6 +99,8 @@ final class AppSettings {
     sidebarCollapsed: sidebarCollapsed ?? this.sidebarCollapsed,
     sidebarWidth: sidebarWidth ?? this.sidebarWidth,
     hiddenCategoryLists: hiddenCategoryLists ?? this.hiddenCategoryLists,
+    categoryListWidth: categoryListWidth ?? this.categoryListWidth,
+    guideChannelWidth: guideChannelWidth ?? this.guideChannelWidth,
   );
 
   Map<String, Object?> toJson() => {
@@ -93,6 +113,8 @@ final class AppSettings {
     'sidebarCollapsed': sidebarCollapsed,
     'sidebarWidth': sidebarWidth,
     'hiddenCategoryLists': hiddenCategoryLists.toList(),
+    'categoryListWidth': categoryListWidth,
+    'guideChannelWidth': guideChannelWidth,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -100,7 +122,6 @@ final class AppSettings {
     if (json is! Map) return const AppSettings();
     final zone = json['guideTimeZone'];
     final shift = json['guideShiftHours'];
-    final width = json['sidebarWidth'];
     final hidden = json['hiddenCategoryLists'];
     return AppSettings(
       guideTimeZone: zone is String && zone.isNotEmpty ? zone : null,
@@ -112,14 +133,33 @@ final class AppSettings {
       audioLanguages: _languages(json['audioLanguages']) ?? const [],
       subtitlesOn: json['subtitlesOn'] != false,
       sidebarCollapsed: json['sidebarCollapsed'] == true,
-      sidebarWidth: width is num && width.isFinite
-          ? width.toDouble().clamp(minSidebarWidth, maxSidebarWidth)
-          : defaultSidebarWidth,
+      sidebarWidth: _width(
+        json['sidebarWidth'],
+        minSidebarWidth,
+        maxSidebarWidth,
+        defaultSidebarWidth,
+      ),
       hiddenCategoryLists: hidden is List
           ? hidden.whereType<String>().toSet()
           : const {},
+      categoryListWidth: _width(
+        json['categoryListWidth'],
+        minCategoryListWidth,
+        maxCategoryListWidth,
+        defaultCategoryListWidth,
+      ),
+      guideChannelWidth: _width(
+        json['guideChannelWidth'],
+        minGuideChannelWidth,
+        maxGuideChannelWidth,
+        defaultGuideChannelWidth,
+      ),
     );
   }
+
+  /// A width from JSON, clamped to [min]..[max]; [fallback] when invalid.
+  static double _width(Object? json, double min, double max, double fallback) =>
+      json is num && json.isFinite ? json.toDouble().clamp(min, max) : fallback;
 
   /// Known language codes from a JSON list, without duplicates; null when
   /// [json] isn't a list.

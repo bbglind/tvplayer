@@ -102,7 +102,6 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
     }
     return CategoryLayout(
       section: what,
-      width: 260,
       list: _CategoryList(
         key: Key('$what.categories'),
         what: what,

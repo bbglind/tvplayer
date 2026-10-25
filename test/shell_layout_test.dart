@@ -1,9 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'helpers.dart';
 
@@ -11,6 +13,7 @@ Future<FakeSettingsStorage> _pump(
   WidgetTester tester, {
   AppSettings saved = const AppSettings(),
   double width = 1400,
+  LiveCatalog? catalog,
 }) async {
   tester.view.physicalSize = Size(width, 900);
   tester.view.devicePixelRatio = 1;
@@ -20,7 +23,7 @@ Future<FakeSettingsStorage> _pump(
     testApp(
       overrides: [
         liveSourceProvider.overrideWithValue(
-          FakeLiveSource(syntheticCatalog(count: 20, categories: 2)),
+          FakeLiveSource(catalog ?? syntheticCatalog(count: 20, categories: 2)),
         ),
       ],
       settings: settings,
@@ -185,6 +188,92 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('live.categories')), findsOneWidget);
       expect(_focusIn(tester, hide), isTrue);
+    });
+
+    testWidgets('dragging its edge resizes it, within limits, remembered', (
+      tester,
+    ) async {
+      final settings = await _pump(tester);
+      final list = find.byKey(const Key('live.categories'));
+      final resize = find.byKey(const Key('live.categories.resize'));
+      expect(tester.getSize(list).width, AppSettings.defaultCategoryListWidth);
+
+      await tester.drag(resize, const Offset(80, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(list).width, 340);
+      expect(settings.saved.categoryListWidth, 340);
+
+      await tester.drag(resize, const Offset(1000, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(list).width, AppSettings.maxCategoryListWidth);
+
+      await tester.drag(resize, const Offset(-1000, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(list).width, AppSettings.minCategoryListWidth);
+      expect(
+        settings.saved.categoryListWidth,
+        AppSettings.minCategoryListWidth,
+      );
+
+      final region = tester.widget<MouseRegion>(
+        find.descendant(of: resize, matching: find.byType(MouseRegion)),
+      );
+      expect(region.cursor, SystemMouseCursors.resizeColumn);
+    });
+
+    testWidgets('starts at the saved width', (tester) async {
+      await _pump(tester, saved: const AppSettings(categoryListWidth: 300));
+      expect(
+        tester.getSize(find.byKey(const Key('live.categories'))).width,
+        300,
+      );
+    });
+
+    testWidgets('a cut-off name shows in full in a tooltip, on hover and on '
+        'keyboard focus', (tester) async {
+      const long = 'Nature and Science';
+      await _pump(
+        tester,
+        catalog: LiveCatalog(
+          categories: const [
+            Category(id: 'a', name: long),
+            Category(id: 'b', name: 'Short'),
+          ],
+          channels: const [
+            LiveStream(id: '1', name: 'One', categoryIds: ['a', 'b']),
+          ],
+        ),
+      );
+      // Only the cut-off name gets a tooltip.
+      expect(find.byTooltip(long), findsOneWidget);
+      expect(find.byTooltip('Short'), findsNothing);
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.text(long)));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text(long), findsNWidgets(2), reason: 'label + tooltip');
+      await mouse.moveTo(Offset.zero);
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      expect(find.text(long), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab); // Keyboard mode.
+      Focus.of(tester.element(find.text(long))).requestFocus();
+      await tester.pumpAndSettle();
+      expect(find.text(long), findsNWidgets(2));
+
+      Focus.of(tester.element(find.text('Short'))).requestFocus();
+      await tester.pumpAndSettle();
+      expect(find.text(long), findsOneWidget);
+      expect(find.text('Short'), findsOneWidget, reason: 'fits: no tooltip');
+
+      // Wider than the name: no tooltip.
+      await tester.drag(
+        find.byKey(const Key('live.categories.resize')),
+        const Offset(1000, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip(long), findsNothing);
     });
   });
 }

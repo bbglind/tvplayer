@@ -2,9 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../../data/app_settings.dart';
 import '../../data/errors.dart';
 import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
@@ -123,11 +125,13 @@ class _Toolbar extends ConsumerWidget {
             ),
           const SizedBox(width: 8),
           if (guide != null)
-            Text(
-              'Updated ${formatGuideDate(time, guide.fetchedAt)} '
-              '${time.formatLocalHm(guide.fetchedAt)} · ${time.zoneName}'
-              '${time.shiftHours == 0 ? '' : ' (${formatShift(time.shiftHours)})'}',
-              style: Theme.of(context).textTheme.bodySmall,
+            Flexible(
+              child: TruncatedText(
+                'Updated ${formatGuideDate(time, guide.fetchedAt)} '
+                '${time.formatLocalHm(guide.fetchedAt)} · ${time.zoneName}'
+                '${time.shiftHours == 0 ? '' : ' (${formatShift(time.shiftHours)})'}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
           IconButton(
             tooltip: 'Refresh TV guide',
@@ -203,16 +207,42 @@ class _Message extends StatelessWidget {
 /// The guide grid. The channel column stays put when scrolling sideways and
 /// the time row stays put when scrolling up and down: each is its own
 /// scroll view, kept in step with the programme area.
+///
+/// Moving through time: drag, the scrollbar under the programmes, a
+/// sideways touchpad swipe or Shift + mouse wheel, anywhere on the grid.
+/// The channel column's right edge can be dragged to resize it.
 class GuideGrid extends ConsumerStatefulWidget {
   const GuideGrid({super.key, required this.channels, required this.guide});
 
   final List<LiveStream> channels;
   final EpgGuide guide;
 
-  static const rowHeight = 56.0;
-  static const headerHeight = 40.0;
-  static const channelWidth = 200.0;
   static const pixelsPerMinute = 4.0;
+
+  /// Room under the last row for the horizontal scrollbar.
+  static const scrollbarSpace = 16.0;
+
+  static double _line(BuildContext context, TextStyle? style) =>
+      MediaQuery.textScalerOf(context).scale(style?.fontSize ?? 14) *
+      (style?.height ?? 1.3);
+
+  /// Height of a row. Grows with the text scale, so a programme's title
+  /// and time, and a two-line channel name, always fit.
+  static double rowHeight(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final program =
+        _line(context, text.titleSmall) +
+        _line(context, text.bodySmall) +
+        _ProgramCell.margin.vertical +
+        _ProgramCell.padding.vertical;
+    final channel = 2 * _line(context, text.bodyMedium) + 4;
+    return math.max(56.0, math.max(program, channel)).ceilToDouble();
+  }
+
+  /// Height of the time row; grows with the text scale like [rowHeight].
+  static double headerHeight(BuildContext context) => math
+      .max(40.0, _line(context, Theme.of(context).textTheme.titleSmall) + 14)
+      .ceilToDouble();
 
   /// How far back the grid starts, before the current hour.
   static const past = Duration(hours: 2);
@@ -236,6 +266,10 @@ class GuideGridState extends ConsumerState<GuideGrid> {
   final _bodyV = ScrollController();
   final _channelsV = ScrollController();
   int _step = 0;
+
+  /// The width the user is dragging the channel column to; null when not
+  /// dragging.
+  double? _dragWidth;
 
   static const _px = GuideGrid.pixelsPerMinute;
 
@@ -271,6 +305,67 @@ class GuideGridState extends ConsumerState<GuideGrid> {
     final step = _stepOf(_bodyH.offset);
     if (step != _step) setState(() => _step = step);
   }
+
+  /// Moves through time by [dx] pixels, within the grid.
+  void _scrollTimeBy(double dx) {
+    if (!_bodyH.hasClients || dx == 0) return;
+    final p = _bodyH.position;
+    final target = (p.pixels + dx).clamp(p.minScrollExtent, p.maxScrollExtent);
+    if (target != p.pixels) _bodyH.jumpTo(target);
+  }
+
+  /// Shift + wheel and sideways wheel/touchpad scrolls move through time.
+  /// Rows handle these themselves, ahead of the scroll views (which would
+  /// flip a Shift scroll that the platform already turned sideways back to
+  /// vertical); everything else is left to the scroll views.
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final d = event.scrollDelta;
+    final double dx;
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      dx = d.dx != 0 ? d.dx : d.dy;
+    } else if (d.dx.abs() > d.dy.abs()) {
+      dx = d.dx;
+    } else {
+      return;
+    }
+    GestureBinding.instance.pointerSignalResolver.register(
+      event,
+      (_) => _scrollTimeBy(dx),
+    );
+  }
+
+  /// Takes scroll signals for [child] before the scroll views around it.
+  Widget _signals(Widget child) => Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerSignal: _onPointerSignal,
+    child: child,
+  );
+
+  /// A sideways touchpad swipe over [child] (the channel column or the time
+  /// row) moves through time, as it does over the programmes.
+  Widget _swipeTime(Widget child) => GestureDetector(
+    supportedDevices: const {
+      PointerDeviceKind.trackpad,
+      PointerDeviceKind.touch,
+    },
+    onHorizontalDragUpdate: (d) => _scrollTimeBy(-d.delta.dx),
+    child: child,
+  );
+
+  void _endDrag() {
+    final width = _dragWidth;
+    if (width == null) return;
+    setState(() => _dragWidth = null);
+    ref
+        .read(appSettingsProvider.notifier)
+        .remember((s) => s.copyWith(guideChannelWidth: _clampWidth(width)));
+  }
+
+  static double _clampWidth(double width) => width.clamp(
+    AppSettings.minGuideChannelWidth,
+    AppSettings.maxGuideChannelWidth,
+  );
 
   /// Scrolls so the current time is near the left edge.
   void scrollToNow() {
@@ -308,34 +403,40 @@ class GuideGridState extends ConsumerState<GuideGrid> {
     }
     if (span > GuideGrid.maxSpan) span = GuideGrid.maxSpan;
     final width = span.inMinutes * _px;
+    final channelWidth = _clampWidth(
+      _dragWidth ??
+          ref.watch(appSettingsProvider).value?.guideChannelWidth ??
+          AppSettings.defaultGuideChannelWidth,
+    );
+    final rowHeight = GuideGrid.rowHeight(context);
+    final headerHeight = GuideGrid.headerHeight(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final visibleMinutes =
-            (constraints.maxWidth - GuideGrid.channelWidth) / _px;
+        final visibleMinutes = (constraints.maxWidth - channelWidth) / _px;
         final from = start.add(Duration(minutes: (_step - 1) * _stepMinutes));
         final to = from.add(
           Duration(minutes: visibleMinutes.ceil() + 3 * _stepMinutes),
         );
         final window = (from: from, to: to);
-        return ScrollConfiguration(
-          // Let the mouse drag the grid too, not only touch and trackpads.
-          behavior: ScrollConfiguration.of(context)
-              .copyWith(dragDevices: PointerDeviceKind.values.toSet()),
-          child: Column(
-            children: [
-              SizedBox(
-                height: GuideGrid.headerHeight,
-                child: Row(
-                  children: [
-                    _Corner(
-                      controller: _bodyH,
-                      time: time,
-                      start: start,
-                      onNow: scrollToNow,
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
+        final behavior = ScrollConfiguration.of(context)
+            .copyWith(dragDevices: PointerDeviceKind.values.toSet());
+        final grid = Column(
+          children: [
+            SizedBox(
+              height: headerHeight,
+              child: Row(
+                children: [
+                  _Corner(
+                    controller: _bodyH,
+                    time: time,
+                    start: start,
+                    width: channelWidth + 1,
+                    onNow: scrollToNow,
+                  ),
+                  Expanded(
+                    child: _swipeTime(
+                      SingleChildScrollView(
                         key: const Key('guide.header'),
                         controller: _headerH,
                         scrollDirection: Axis.horizontal,
@@ -344,84 +445,139 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                           time: time,
                           start: start,
                           width: width,
+                          height: headerHeight,
                           window: window,
                           nowX: _x(start, now),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: GuideGrid.channelWidth,
-                      child: ListView.builder(
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: channelWidth,
+                    child: _swipeTime(
+                      ListView.builder(
                         key: const Key('guide.channels'),
                         controller: _channelsV,
-                        itemExtent: GuideGrid.rowHeight,
+                        padding: const EdgeInsets.only(
+                          bottom: GuideGrid.scrollbarSpace,
+                        ),
+                        itemExtent: rowHeight,
                         itemCount: widget.channels.length,
-                        itemBuilder: (context, i) =>
-                            widget.channels[i].isSeparator
-                            ? SeparatorHeader(channel: widget.channels[i])
-                            : _ChannelCell(channel: widget.channels[i]),
+                        itemBuilder: (context, i) => _signals(
+                          widget.channels[i].isSeparator
+                              ? SeparatorHeader(channel: widget.channels[i])
+                              : _ChannelCell(channel: widget.channels[i]),
+                        ),
                       ),
                     ),
-                    const VerticalDivider(width: 1),
-                    Expanded(
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: ScrollbarTheme(
+                      data: ScrollbarTheme.of(context).copyWith(
+                        trackColor: const WidgetStatePropertyAll(
+                          AppColors.surface,
+                        ),
+                        thickness: const WidgetStatePropertyAll(10),
+                      ),
                       child: Scrollbar(
+                        key: const Key('guide.scrollbar'),
                         controller: _bodyH,
-                        child: SingleChildScrollView(
-                          key: const Key('guide.body'),
-                          controller: _bodyH,
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: width,
-                            child: Stack(
-                              children: [
-                                ListView.builder(
-                                  key: const Key('guide.rows'),
-                                  controller: _bodyV,
-                                  itemExtent: GuideGrid.rowHeight,
-                                  itemCount: widget.channels.length,
-                                  itemBuilder: (context, i) =>
+                        thumbVisibility: true,
+                        trackVisibility: true,
+                        interactive: true,
+                        child: ScrollConfiguration(
+                          // The scrollbar above replaces the default ones.
+                          behavior: behavior.copyWith(scrollbars: false),
+                          child: SingleChildScrollView(
+                            key: const Key('guide.body'),
+                            controller: _bodyH,
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: width,
+                              child: Stack(
+                                children: [
+                                  ListView.builder(
+                                    key: const Key('guide.rows'),
+                                    controller: _bodyV,
+                                    padding: const EdgeInsets.only(
+                                      bottom: GuideGrid.scrollbarSpace,
+                                    ),
+                                    itemExtent: rowHeight,
+                                    itemCount: widget.channels.length,
+                                    itemBuilder: (context, i) => _signals(
                                       widget.channels[i].isSeparator
-                                      ? const ColoredBox(
-                                          color: AppColors.surface,
-                                        )
-                                      : _GuideRow(
-                                          channel: widget.channels[i],
-                                          guide: widget.guide,
-                                          time: time,
-                                          start: start,
-                                          window: window,
-                                          now: now,
-                                          width: width,
-                                          scroll: _bodyH,
-                                        ),
-                                ),
-                                Positioned(
-                                  key: const Key('guide.nowLine'),
-                                  left: _x(start, now) - 1,
-                                  top: 0,
-                                  bottom: 0,
-                                  width: 2,
-                                  child: const IgnorePointer(
-                                    child: ColoredBox(color: AppColors.accent),
+                                          ? const ColoredBox(
+                                              color: AppColors.surface,
+                                            )
+                                          : _GuideRow(
+                                              channel: widget.channels[i],
+                                              guide: widget.guide,
+                                              time: time,
+                                              start: start,
+                                              window: window,
+                                              now: now,
+                                              width: width,
+                                              scroll: _bodyH,
+                                            ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  Positioned(
+                                    key: const Key('guide.nowLine'),
+                                    left: _x(start, now) - 1,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: 2,
+                                    child: const IgnorePointer(
+                                      child: ColoredBox(
+                                        color: AppColors.accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
+          ],
+        );
+        return ScrollConfiguration(
+          // Let the mouse drag the grid too, not only touch and trackpads.
+          behavior: behavior,
+          child: Listener(
+            onPointerSignal: _onPointerSignal,
+            child: Stack(
+              children: [
+                grid,
+                Positioned(
+                  left: channelWidth + 0.5 - ResizeHandle.width / 2,
+                  top: 0,
+                  bottom: 0,
+                  width: ResizeHandle.width,
+                  child: ResizeHandle(
+                    key: const Key('guide.channels.resize'),
+                    onStart: () => setState(() => _dragWidth = channelWidth),
+                    onUpdate: (dx) => setState(
+                      () => _dragWidth = (_dragWidth ?? channelWidth) + dx,
+                    ),
+                    onEnd: _endDrag,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -437,18 +593,20 @@ class _Corner extends StatelessWidget {
     required this.controller,
     required this.time,
     required this.start,
+    required this.width,
     required this.onNow,
   });
 
   final ScrollController controller;
   final GuideTime time;
   final DateTime start;
+  final double width;
   final VoidCallback onNow;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: GuideGrid.channelWidth + 1,
+      width: width,
       child: Row(
         children: [
           const SizedBox(width: 12),
@@ -467,6 +625,8 @@ class _Corner extends StatelessWidget {
                 return Text(
                   formatGuideDate(time, left),
                   key: const Key('guide.date'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall,
                 );
               },
@@ -485,6 +645,7 @@ class _TimeHeader extends StatelessWidget {
     required this.time,
     required this.start,
     required this.width,
+    required this.height,
     required this.window,
     required this.nowX,
   });
@@ -492,6 +653,7 @@ class _TimeHeader extends StatelessWidget {
   final GuideTime time;
   final DateTime start;
   final double width;
+  final double height;
   final _Window window;
   final double nowX;
 
@@ -540,7 +702,7 @@ class _TimeHeader extends StatelessWidget {
     }
     return SizedBox(
       width: width,
-      height: GuideGrid.headerHeight,
+      height: height,
       child: Stack(
         children: [
           ...labels,
@@ -584,10 +746,9 @@ class _ChannelCell extends ConsumerWidget {
                     child: Text('$number', style: theme.textTheme.bodySmall),
                   ),
                 Expanded(
-                  child: Text(
-                    channel.name,
+                  child: TruncatedText(
+                    keepLastWordAttached(channel.name),
                     maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -747,13 +908,17 @@ class _ProgramCell extends StatelessWidget {
   /// Text keeps at least this much of the block when pinned.
   static const _minTextWidth = 60.0;
 
+  /// Space around the block, and inside it around the text.
+  static const margin = EdgeInsets.all(2);
+  static const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+
   static const _radius = 8.0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.all(2),
+      padding: margin,
       child: FocusRing(
         radius: _radius,
         inset: true,
@@ -784,10 +949,7 @@ class _ProgramCell extends StatelessWidget {
                   );
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 4,
-                  ),
+                  padding: padding,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -820,3 +982,16 @@ class _ProgramCell extends StatelessWidget {
     );
   }
 }
+
+/// [name] with a trailing mark like `◉` (catch-up) kept on the same line
+/// as the word before it, so it never wraps onto a line of its own. A mark
+/// is a last word of at most 4 characters without letters or digits.
+@visibleForTesting
+String keepLastWordAttached(String name) {
+  final match = RegExp(r'^(.*\S)\s+(\S{1,4})$').firstMatch(name.trimRight());
+  if (match == null || _letterOrDigit.hasMatch(match[2]!)) return name;
+  // A no-break space instead of the last space.
+  return '${match[1]}\u00A0${match[2]}';
+}
+
+final _letterOrDigit = RegExp(r'[\p{L}\p{N}]', unicode: true);

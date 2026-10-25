@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
@@ -506,6 +510,315 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Kanal 1'), findsOneWidget);
       expect(find.text('Kanal 2'), findsNothing);
+    });
+
+    ScrollPosition timeScroll(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byKey(const Key('guide.body')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+
+    ScrollPosition rowScroll(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byKey(const Key('guide.rows')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+
+    Future<void> wheel(
+      WidgetTester tester,
+      Offset at,
+      Offset delta, {
+      bool shift = false,
+    }) async {
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(at));
+      if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendEventToBinding(mouse.scroll(delta));
+      if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Shift + wheel moves through time, also when the platform '
+        'already sent it sideways', (tester) async {
+      source = FakeLiveSource(_catalog(fillers: 40), hasGuide: true);
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      final body = tester.getCenter(_program('2', _utc(24, 22)));
+      final channels = tester.getCenter(find.text('Kanal 2'));
+
+      for (final at in [body, channels]) {
+        for (final delta in [const Offset(0, 80), const Offset(80, 0)]) {
+          final x = timeScroll(tester).pixels;
+          await wheel(tester, at, delta, shift: true);
+          expect(timeScroll(tester).pixels, x + 80, reason: '$at $delta');
+          expect(rowScroll(tester).pixels, 0, reason: '$at $delta');
+        }
+      }
+
+      // Without Shift the wheel still scrolls the channels.
+      final x = timeScroll(tester).pixels;
+      await wheel(tester, body, const Offset(0, 80));
+      expect(rowScroll(tester).pixels, 80);
+      expect(timeScroll(tester).pixels, x);
+    });
+
+    testWidgets('a sideways touchpad scroll moves through time anywhere on '
+        'the grid', (tester) async {
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      final header = tester.getCenter(
+        find.descendant(
+          of: find.byKey(const Key('guide.header')),
+          matching: find.text('03:00'),
+        ),
+      );
+      for (final at in [
+        tester.getCenter(_program('2', _utc(24, 22))),
+        tester.getCenter(find.text('Kanal 2')),
+        header,
+      ]) {
+        // As scroll signals (some touchpads, horizontal wheels) ...
+        var x = timeScroll(tester).pixels;
+        await wheel(tester, at, const Offset(60, 5));
+        expect(timeScroll(tester).pixels, x + 60, reason: 'signal at $at');
+
+        // ... and as pan gestures.
+        x = timeScroll(tester).pixels;
+        final pad = TestPointer(2, PointerDeviceKind.trackpad);
+        await tester.sendEventToBinding(pad.panZoomStart(at));
+        for (var i = 1; i <= 10; i++) {
+          await tester.sendEventToBinding(
+            pad.panZoomUpdate(at, pan: Offset(-10.0 * i, 0)),
+          );
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        await tester.sendEventToBinding(pad.panZoomEnd());
+        await tester.pumpAndSettle();
+        expect(
+          timeScroll(tester).pixels,
+          greaterThan(x + 50),
+          reason: 'pan at $at',
+        );
+      }
+    });
+
+    testWidgets('the scrollbar under the programmes can be dragged', (
+      tester,
+    ) async {
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      final body = tester.getRect(find.byKey(const Key('guide.body')));
+      final p = timeScroll(tester);
+      final thumbLength = math.max(
+        18.0,
+        body.width * body.width / (p.maxScrollExtent + body.width),
+      );
+      final thumbLeft =
+          body.left + p.pixels / p.maxScrollExtent * (body.width - thumbLength);
+      final thumb = Offset(thumbLeft + thumbLength / 2, body.bottom - 5);
+      final x = p.pixels;
+
+      final mouse = await tester.startGesture(
+        thumb,
+        kind: PointerDeviceKind.mouse,
+      );
+      await mouse.moveBy(const Offset(20, 0));
+      await mouse.moveBy(const Offset(20, 0));
+      await mouse.up();
+      await tester.pumpAndSettle();
+      // 40 px of thumb is far more than 40 px of grid.
+      expect(timeScroll(tester).pixels, greaterThan(x + 200));
+      expect(rowScroll(tester).pixels, 0);
+    });
+
+    testWidgets('the last row is not under the scrollbar', (tester) async {
+      source = FakeLiveSource(_catalog(fillers: 40), hasGuide: true);
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      final rows = find.byKey(const Key('guide.rows'));
+      await tester.drag(find.text('Filler 3'), const Offset(0, -5000));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.text('Filler 39')).bottom,
+        lessThan(tester.getRect(rows).bottom - GuideGrid.scrollbarSpace + 1),
+      );
+    });
+
+    testWidgets('dragging the channel column edge resizes it, remembered', (
+      tester,
+    ) async {
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      final channels = find.byKey(const Key('guide.channels'));
+      final resize = find.byKey(const Key('guide.channels.resize'));
+      final header = find.descendant(
+        of: find.byKey(const Key('guide.header')),
+        matching: find.text('03:00'),
+      );
+      expect(
+        tester.getSize(channels).width,
+        AppSettings.defaultGuideChannelWidth,
+      );
+      final headerX = tester.getTopLeft(header).dx;
+      final cellX = tester.getTopLeft(_program('1', _utc(25, 1, 30))).dx;
+
+      await tester.drag(resize, const Offset(60, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(channels).width, 260);
+      expect(settings.saved.guideChannelWidth, 260);
+      // The time row and the programmes move along together.
+      expect(tester.getTopLeft(header).dx, headerX + 60);
+      expect(tester.getTopLeft(_program('1', _utc(25, 1, 30))).dx, cellX + 60);
+
+      await tester.drag(resize, const Offset(-1000, 0));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(channels).width, AppSettings.minGuideChannelWidth);
+    });
+
+    testWidgets('a cut-off channel name shows in full in a tooltip', (
+      tester,
+    ) async {
+      const long = 'SE: A Channel With A Really Long Name ◉';
+      source = FakeLiveSource(
+        LiveCatalog(
+          categories: const [Category(id: 'c', name: 'Sweden')],
+          channels: const [
+            LiveStream(id: '1', name: long, categoryIds: ['c']),
+            LiveStream(id: '2', name: 'Kanal 2', categoryIds: ['c']),
+          ],
+        ),
+        hasGuide: true,
+      );
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('SE: A Channel With A Really Long Name ◉'),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Kanal 2'), findsNothing);
+    });
+
+    testWidgets('rows grow with the text size, so nothing is clipped', (
+      tester,
+    ) async {
+      source = FakeLiveSource(
+        LiveCatalog(
+          categories: const [Category(id: 'c', name: 'Sweden')],
+          channels: const [
+            LiveStream(id: '1', name: 'SE: Kanal 1 HD ◉', categoryIds: ['c']),
+            LiveStream(
+              id: '2',
+              name: 'Kanal 2',
+              categoryIds: ['c'],
+              epgChannelId: 'kanal2.example',
+            ),
+          ],
+        ),
+        hasGuide: true,
+      );
+      await pump(
+        tester,
+        Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: const GuideScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_program('1', _utc(25, 0, 30)), findsOneWidget);
+
+      var checked = 0;
+      for (final key in ['guide.rows', 'guide.channels', 'guide.header']) {
+        for (final element
+            in find
+                .descendant(
+                  of: find.byKey(Key(key)),
+                  matching: find.byType(RichText),
+                )
+                .evaluate()) {
+          final paragraph = element.renderObject! as RenderParagraph;
+          expect(
+            paragraph.size.height,
+            greaterThanOrEqualTo(paragraph.textSize.height - 0.01),
+            reason: '"${paragraph.text.toPlainText()}" in $key is clipped',
+          );
+          checked++;
+        }
+      }
+      expect(checked, greaterThan(10));
+      // The two-line channel name fits too.
+      final name = find.text('SE: Kanal 1 HD ◉');
+      expect(
+        tester.getSize(name).height,
+        greaterThan(tester.getSize(find.text('Kanal 2')).height),
+      );
+    });
+
+    testWidgets('arrow keys move between programmes and scroll the grid', (
+      tester,
+    ) async {
+      await pump(tester, const GuideScreen());
+      await tester.pumpAndSettle();
+      bool focused(Finder cell) {
+        final node = FocusManager.instance.primaryFocus;
+        return node?.context != null &&
+            find
+                .descendant(
+                  of: cell,
+                  matching: find.byElementPredicate((e) => e == node!.context),
+                )
+                .evaluate()
+                .isNotEmpty;
+      }
+
+      final across = _program('1', _utc(25, 0, 30));
+      final title = find.descendant(
+        of: across,
+        matching: find.text('Across The Switch'),
+      );
+      Focus.of(tester.element(title)).requestFocus();
+      await tester.pumpAndSettle();
+      expect(focused(across), isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(focused(_program('1', _utc(25, 1, 30))), isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(focused(_program('2', _utc(24, 22))), isTrue);
+
+      // Left of the view: the grid follows the focus.
+      final x = timeScroll(tester).pixels;
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 2; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pumpAndSettle();
+      }
+      expect(focused(_program('1', _utc(24, 23, 30))), isTrue);
+      expect(timeScroll(tester).pixels, lessThan(x));
+    });
+
+    test('a trailing mark stays with the word before it', () {
+      expect(keepLastWordAttached('SE: Kanal 1 HD ◉'), 'SE: Kanal 1 HD ◉');
+      expect(keepLastWordAttached('Kanal 2 ◉ '), 'Kanal 2 ◉');
+      // Words are left alone.
+      expect(keepLastWordAttached('Kanal 2'), 'Kanal 2');
+      expect(keepLastWordAttached('SE: Kanal 1 HD'), 'SE: Kanal 1 HD');
+      expect(keepLastWordAttached('◉'), '◉');
     });
   });
 

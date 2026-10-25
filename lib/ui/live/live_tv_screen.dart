@@ -31,7 +31,6 @@ class LiveTvScreen extends ConsumerWidget {
       ),
       data: (catalog) => CategoryLayout(
         section: 'live',
-        width: 280,
         list: _CategoryList(catalog: catalog),
         content: const _ChannelPane(),
       ),

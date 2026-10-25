@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
@@ -232,10 +233,8 @@ class CategoryPill extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
+                      child: TruncatedText(
                         label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: text.labelLarge?.copyWith(
                           color: fg,
                           fontWeight: selected
@@ -360,6 +359,121 @@ class ProgressStrip extends StatelessWidget {
       color: AppColors.accent,
       backgroundColor: AppColors.hover,
       borderRadius: BorderRadius.circular(height),
+    );
+  }
+}
+
+/// A draggable edge for resizing a column: a resize cursor and a strip
+/// [width] wide that reports horizontal drags. Place it centred on the
+/// column's edge.
+class ResizeHandle extends StatelessWidget {
+  const ResizeHandle({
+    super.key,
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+  });
+
+  static const width = 8.0;
+
+  final VoidCallback onStart;
+  final ValueChanged<double> onUpdate;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragStart: (_) => onStart(),
+        onHorizontalDragUpdate: (d) => onUpdate(d.delta.dx),
+        onHorizontalDragEnd: (_) => onEnd(),
+        onHorizontalDragCancel: onEnd,
+      ),
+    );
+  }
+}
+
+/// [Text] with an ellipsis that shows its full [text] in a tooltip when it
+/// doesn't fit: on hover, and while the focusable widget around it (a
+/// row's [InkWell]) has keyboard focus.
+class TruncatedText extends StatefulWidget {
+  const TruncatedText(this.text, {super.key, this.style, this.maxLines = 1});
+
+  final String text;
+  final TextStyle? style;
+  final int maxLines;
+
+  @override
+  State<TruncatedText> createState() => _TruncatedTextState();
+}
+
+class _TruncatedTextState extends State<TruncatedText> {
+  final _tooltip = GlobalKey<TooltipState>();
+  FocusNode? _focus;
+  bool _hadFocus = false;
+  bool _truncated = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final focus = Focus.maybeOf(context);
+    if (focus != _focus) {
+      _focus?.removeListener(_onFocus);
+      _focus = focus?..addListener(_onFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus?.removeListener(_onFocus);
+    super.dispose();
+  }
+
+  void _onFocus() {
+    final focused = _focus?.hasPrimaryFocus ?? false;
+    if (focused == _hadFocus) return;
+    _hadFocus = focused;
+    if (!_truncated) return;
+    if (focused &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional) {
+      _tooltip.currentState?.ensureTooltipVisible();
+    } else if (!focused) {
+      Tooltip.dismissAllToolTips();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(
+      widget.text,
+      maxLines: widget.maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: widget.style,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(
+            text: widget.text,
+            style: DefaultTextStyle.of(context).style.merge(widget.style),
+          ),
+          maxLines: widget.maxLines,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        _truncated = painter.didExceedMaxLines;
+        painter.dispose();
+        if (!_truncated) return text;
+        return Tooltip(
+          key: _tooltip,
+          message: widget.text,
+          waitDuration: const Duration(milliseconds: 500),
+          child: text,
+        );
+      },
     );
   }
 }
