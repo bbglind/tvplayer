@@ -156,9 +156,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       expect(player.seeks, isEmpty);
+      // Live TV can't pause.
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      expect(player.pauseToggles, 1);
+      expect(player.pauseToggles, 0);
       expect(player.volumeChanges, [5]);
     });
 
@@ -301,10 +302,13 @@ void main() {
       expect(progress.watched, isFalse);
     });
 
-    testWidgets('the end of an episode marks it watched and offers the next', (
-      tester,
-    ) async {
-      await open(tester, EpisodePlayback(_info, _info.episodes[1]));
+    testWidgets('the end of an episode marks it watched and offers the next '
+        'when Play next is off', (tester) async {
+      await open(
+        tester,
+        EpisodePlayback(_info, _info.episodes[1]),
+        settings: const AppSettings().copyWith(playNextSeconds: () => null),
+      );
       emit(position: const Duration(minutes: 39, seconds: 50));
       await tester.pump();
       emit(

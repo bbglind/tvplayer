@@ -15,6 +15,7 @@ void main() {
     expect(config.arguments, [
       '--hwdec=vaapi',
       '--force-window=immediate',
+      '--volume-max=100',
       '--title=News HD',
       '--input-ipc-server=/run/user/1000/tvplayer-mpv-x/mpv.sock',
       '--idle=once',
@@ -30,9 +31,18 @@ void main() {
         '--wid=12345',
         '--input-cursor=no',
         '--input-vo-keyboard=no',
+        '--cursor-autohide=no',
       ]),
     );
     expect(config.arguments.where((a) => a.startsWith('--wid')), isEmpty);
+  });
+
+  test('starts at the saved volume, never above 100', () {
+    const c = MpvLaunchConfig(title: 't', ipcPath: '/s', volume: 40);
+    expect(c.arguments, contains('--volume=40'));
+    const loud = MpvLaunchConfig(title: 't', ipcPath: '/s', volume: 130);
+    expect(loud.arguments, contains('--volume=100'));
+    expect(config.arguments.where((a) => a.startsWith('--volume=')), isEmpty);
   });
 
   test('escapes property expansion in the title', () {

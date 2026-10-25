@@ -7,6 +7,7 @@ import 'package:tvplayer/player/mpv/external_mpv_player.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/epg/guide_screen.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
+import 'package:tvplayer/ui/player/player_controls.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
 import 'package:tvplayer/ui/vod/movie_details_screen.dart';
 import 'package:tvplayer/ui/vod/movies_screen.dart';
@@ -686,8 +687,8 @@ void main() {
     );
     expect(
       tester
-          .widget<IconButton>(find.byKey(const Key('player.favourite')))
-          .isSelected,
+          .widget<PlayerPillButton>(find.byKey(const Key('player.favourite')))
+          .selected,
       isTrue,
     );
 

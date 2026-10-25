@@ -135,4 +135,34 @@ void main() {
       HomeLayout.defaults,
     );
   });
+
+  test('player settings: defaults, round-trip, off, bad values', () {
+    const defaults = AppSettings();
+    expect(defaults.playerVolume, 100);
+    expect(defaults.showRemainingTime, isFalse);
+    expect(defaults.playNextSeconds, 30);
+
+    final changed = defaults.copyWith(
+      playerVolume: 45,
+      showRemainingTime: true,
+      playNextSeconds: () => 90,
+    );
+    final back = AppSettings.fromJson(changed.toJson());
+    expect(back.playerVolume, 45);
+    expect(back.showRemainingTime, isTrue);
+    expect(back.playNextSeconds, 90);
+
+    final off = defaults.copyWith(playNextSeconds: () => null);
+    expect(AppSettings.fromJson(off.toJson()).playNextSeconds, isNull);
+
+    final bad = AppSettings.fromJson({
+      'playerVolume': 250,
+      'showRemainingTime': 'yes',
+      'playNextSeconds': 17,
+    });
+    expect(bad.playerVolume, 100);
+    expect(bad.showRemainingTime, isFalse);
+    expect(bad.playNextSeconds, 30);
+    expect(AppSettings.fromJson({'playerVolume': -3}).playerVolume, 0);
+  });
 }

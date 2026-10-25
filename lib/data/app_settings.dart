@@ -26,6 +26,9 @@ final class AppSettings {
     this.movieSort = VodSort.recent,
     this.seriesSort = VodSort.recent,
     this.homeLayout = HomeLayout.defaults,
+    this.playerVolume = defaultPlayerVolume,
+    this.showRemainingTime = false,
+    this.playNextSeconds = defaultPlayNextSeconds,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -91,6 +94,20 @@ final class AppSettings {
   /// Order and visibility of the start page rows.
   final HomeLayout homeLayout;
 
+  /// Player volume in percent, 0–[maxPlayerVolume], kept across restarts.
+  final int playerVolume;
+
+  static const defaultPlayerVolume = 100;
+  static const maxPlayerVolume = 100;
+
+  /// Whether the player's end time shows the time left (`-12:34`) rather
+  /// than the duration.
+  final bool showRemainingTime;
+
+  /// Seconds before the end of an episode at which the next one is
+  /// offered with a countdown (one of [playNextChoices]); null for off.
+  final int? playNextSeconds;
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -113,6 +130,9 @@ final class AppSettings {
     VodSort? movieSort,
     VodSort? seriesSort,
     HomeLayout? homeLayout,
+    int? playerVolume,
+    bool? showRemainingTime,
+    int? Function()? playNextSeconds,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -130,6 +150,11 @@ final class AppSettings {
     movieSort: movieSort ?? this.movieSort,
     seriesSort: seriesSort ?? this.seriesSort,
     homeLayout: homeLayout ?? this.homeLayout,
+    playerVolume: playerVolume ?? this.playerVolume,
+    showRemainingTime: showRemainingTime ?? this.showRemainingTime,
+    playNextSeconds: playNextSeconds == null
+        ? this.playNextSeconds
+        : playNextSeconds(),
   );
 
   Map<String, Object?> toJson() => {
@@ -148,6 +173,10 @@ final class AppSettings {
     'movieSort': movieSort.name,
     'seriesSort': seriesSort.name,
     'homeLayout': homeLayout.toJson(),
+    'playerVolume': playerVolume,
+    'showRemainingTime': showRemainingTime,
+    // 0 for off, so a missing value still means the default.
+    'playNextSeconds': playNextSeconds ?? 0,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -156,6 +185,8 @@ final class AppSettings {
     final zone = json['guideTimeZone'];
     final shift = json['guideShiftHours'];
     final hidden = json['hiddenCategoryLists'];
+    final volume = json['playerVolume'];
+    final playNext = json['playNextSeconds'];
     return AppSettings(
       guideTimeZone: zone is String && zone.isNotEmpty ? zone : null,
       guideShiftHours: shift is int && shift.abs() <= maxShiftHours ? shift : 0,
@@ -191,6 +222,15 @@ final class AppSettings {
       movieSort: VodSort.byName(_string(json['movieSort'])) ?? VodSort.recent,
       seriesSort: VodSort.byName(_string(json['seriesSort'])) ?? VodSort.recent,
       homeLayout: HomeLayout.fromJson(json['homeLayout']),
+      playerVolume: volume is num && volume.isFinite
+          ? volume.round().clamp(0, maxPlayerVolume)
+          : defaultPlayerVolume,
+      showRemainingTime: json['showRemainingTime'] == true,
+      playNextSeconds: switch (playNext) {
+        0 => null,
+        final int s when playNextChoices.contains(s) => s,
+        _ => defaultPlayNextSeconds,
+      },
     );
   }
 

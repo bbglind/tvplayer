@@ -26,6 +26,7 @@ class ExternalPlaybackState {
     this.audioId,
     this.subtitleId,
     this.volume,
+    this.muted = false,
     this.fileLoaded = false,
     this.endedAtEof = false,
   });
@@ -62,6 +63,9 @@ class ExternalPlaybackState {
   /// mpv `volume` in percent; null until known.
   final double? volume;
 
+  /// mpv `mute`.
+  final bool muted;
+
   /// Whether mpv has opened the media, so [tracks] is filled in.
   final bool fileLoaded;
 
@@ -91,6 +95,7 @@ class ExternalPlaybackState {
     int? Function()? audioId,
     int? Function()? subtitleId,
     double? volume,
+    bool? muted,
     bool? fileLoaded,
     bool? endedAtEof,
   }) => ExternalPlaybackState(
@@ -106,6 +111,7 @@ class ExternalPlaybackState {
     audioId: audioId == null ? this.audioId : audioId(),
     subtitleId: subtitleId == null ? this.subtitleId : subtitleId(),
     volume: volume ?? this.volume,
+    muted: muted ?? this.muted,
     fileLoaded: fileLoaded ?? this.fileLoaded,
     endedAtEof: endedAtEof ?? this.endedAtEof,
   );
@@ -143,6 +149,9 @@ class ExternalMpvPlayer extends ChangeNotifier {
 
   ExternalPlaybackState _state = const ExternalPlaybackState();
   _MpvRun? _run;
+
+  /// The latest image of each shown overlay, sent again to a new mpv.
+  final _overlays = <int, _Overlay>{};
   bool _disposed = false;
 
   ExternalPlaybackState get state => _state;
@@ -156,9 +165,15 @@ class ExternalMpvPlayer extends ChangeNotifier {
 
   /// Closes any running mpv, then plays [url] in a new one titled [title],
   /// embedded into X11 window [wid] if given (see [MpvLaunchConfig.wid]),
-  /// from [start] if given. Returns the new session id; progress is
-  /// reported through [state].
-  int open(Uri url, {required String title, int? wid, Duration? start}) {
+  /// from [start] if given, at [volume] percent if given. Returns the new
+  /// session id; progress is reported through [state].
+  int open(
+    Uri url, {
+    required String title,
+    int? wid,
+    Duration? start,
+    int? volume,
+  }) {
     final session = _state.session + 1;
     final previous = _run;
     final run = _run = _MpvRun(_quitTimeout);
@@ -166,7 +181,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
       session: session,
       status: ExternalPlayerStatus.starting,
     );
-    unawaited(_play(run, previous, url, title, wid, start));
+    unawaited(_play(run, previous, url, title, wid, start, volume));
     return session;
   }
 
@@ -177,6 +192,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
     String title,
     int? wid,
     Duration? start,
+    int? volume,
   ) async {
     await previous?.close();
     final redactor = UrlRedactor(url);
@@ -186,7 +202,13 @@ class ExternalMpvPlayer extends ChangeNotifier {
       if (run.closed) return await run.close();
       final ipcPath = '${dir.path}/mpv.sock';
       final process = run.process = await launchMpv(
-        MpvLaunchConfig(title: title, ipcPath: ipcPath, hwdec: hwdec, wid: wid),
+        MpvLaunchConfig(
+          title: title,
+          ipcPath: ipcPath,
+          hwdec: hwdec,
+          wid: wid,
+          volume: volume,
+        ),
         start: _start,
       );
       unawaited(process.exitCode.then((_) => _onExit(run)));
@@ -202,12 +224,16 @@ class ExternalMpvPlayer extends ChangeNotifier {
       await ipc.observeProperty(5, 'aid');
       await ipc.observeProperty(6, 'sid');
       await ipc.observeProperty(7, 'volume');
+      await ipc.observeProperty(8, 'mute');
       if (start != null && start > Duration.zero) {
         // Applies to the next file loaded.
         await ipc.command(['set_property', 'start', _secondsText(start)]);
       }
       await ipc.command(['loadfile', url.toString()]);
       run.statsTimer = Timer.periodic(_statsInterval, (_) => _pollDrops(run));
+      for (final id in _overlays.keys.toList()) {
+        unawaited(_sendOverlay(run, id));
+      }
       if (_isCurrent(run) && _state.status == ExternalPlayerStatus.starting) {
         state = _state.copyWith(status: ExternalPlayerStatus.playing);
       }
@@ -239,6 +265,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
           'aid' => _state.copyWith(audioId: () => _trackId(data)),
           'sid' => _state.copyWith(subtitleId: () => _trackId(data)),
           'volume' when data is num => _state.copyWith(volume: data.toDouble()),
+          'mute' => _state.copyWith(muted: data == true),
           _ => _state,
         };
       case 'file-loaded':
@@ -335,6 +362,85 @@ class ExternalMpvPlayer extends ChangeNotifier {
   Future<void> changeVolume(int percent) =>
       _command(['add', 'volume', percent]);
 
+  /// Sets the volume to [percent], 0–[MpvLaunchConfig.maxVolume].
+  Future<void> setVolume(double percent) => _command([
+    'set_property',
+    'volume',
+    percent.clamp(0, MpvLaunchConfig.maxVolume.toDouble()),
+  ]);
+
+  /// Mutes or unmutes the current mpv.
+  Future<void> toggleMute() => _command(['cycle', 'mute']);
+
+  /// Shows [bgra] (premultiplied BGRA, [width] × [height]) over the video
+  /// as overlay [id], at [x], [y] in physical pixels of the video area.
+  /// Replaces the previous image of [id]; kept across sessions until
+  /// [hideOverlay].
+  void showOverlay(
+    int id, {
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+    required Uint8List bgra,
+  }) {
+    _overlays[id] = _Overlay(x, y, width, height, bgra);
+    if (_run case final run?) unawaited(_sendOverlay(run, id));
+  }
+
+  /// Removes overlay [id].
+  void hideOverlay(int id) {
+    if (_overlays.remove(id) == null) return;
+    unawaited(_command(['overlay-remove', id]));
+  }
+
+  /// Sends the latest image of overlay [id] to [run]'s mpv, one at a time.
+  ///
+  /// mpv maps the file and reads it whenever it draws, so a new image is
+  /// written to a temporary file and renamed over the old one: a file mpv
+  /// still maps is never truncated (that would crash it).
+  Future<void> _sendOverlay(_MpvRun run, int id) async {
+    if (!run.overlaysSending.add(id)) {
+      run.overlaysPending.add(id);
+      return;
+    }
+    try {
+      do {
+        run.overlaysPending.remove(id);
+        final overlay = _overlays[id];
+        final dir = run.socketDir;
+        final ipc = run.ipc;
+        if (overlay == null || dir == null || ipc == null) return;
+        final path = '${dir.path}/osd-$id.bgra';
+        final tmp = File('$path.tmp');
+        await tmp.writeAsBytes(overlay.bgra);
+        await tmp.rename(path);
+        await ipc.command([
+          'overlay-add',
+          id,
+          overlay.x,
+          overlay.y,
+          path,
+          0,
+          'bgra',
+          overlay.width,
+          overlay.height,
+          overlay.width * 4,
+        ]);
+        // Hidden meanwhile: don't leave the image up.
+        if (!_overlays.containsKey(id)) {
+          await ipc.command(['overlay-remove', id]);
+        }
+      } while (run.overlaysPending.contains(id));
+    } on MpvIpcException {
+      // mpv is gone; a new one gets the overlay after it starts.
+    } on FileSystemException {
+      // The socket directory is gone with its mpv.
+    } finally {
+      run.overlaysSending.remove(id);
+    }
+  }
+
   /// Selects audio track [id].
   Future<void> setAudioTrack(int id) => _command(['set_property', 'aid', id]);
 
@@ -400,6 +506,17 @@ class ExternalMpvPlayer extends ChangeNotifier {
   }
 }
 
+/// An overlay image, see [ExternalMpvPlayer.showOverlay].
+class _Overlay {
+  const _Overlay(this.x, this.y, this.width, this.height, this.bgra);
+
+  final int x;
+  final int y;
+  final int width;
+  final int height;
+  final Uint8List bgra;
+}
+
 /// The process, socket and socket directory of one session.
 class _MpvRun {
   _MpvRun(this._quitTimeout);
@@ -415,6 +532,10 @@ class _MpvRun {
   bool exited = false;
   Timer? statsTimer;
   bool polling = false;
+
+  /// Overlay ids being sent, and those with a newer image waiting.
+  final overlaysSending = <int>{};
+  final overlaysPending = <int>{};
 
   /// Asks mpv to quit, then escalates to SIGTERM and SIGKILL, and removes
   /// the socket directory. Safe to call repeatedly.

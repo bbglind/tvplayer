@@ -301,12 +301,18 @@ final categoryChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
         favourites.hiddenIds(ContentKind.live),
       ),
       ProviderCategory(:final id) => c.channelsIn(id),
-      MyCategory(:final id) => [
-        for (final m in favourites.itemsIn(id)) ?c.byStableId(m.item.id),
-      ],
+      MyCategory(:final id) => myCategoryChannels(c, favourites, id),
     },
   );
 });
+
+/// The channels of my category [id] that [catalog] still lists, in the
+/// order they were added.
+List<LiveStream> myCategoryChannels(
+  LiveCatalog catalog,
+  FavouritesData favourites,
+  String id,
+) => [for (final m in favourites.itemsIn(id)) ?catalog.byStableId(m.item.id)];
 
 /// Channel search text. Resets when the provider changes.
 final channelQueryProvider = NotifierProvider<ChannelQuery, String>(

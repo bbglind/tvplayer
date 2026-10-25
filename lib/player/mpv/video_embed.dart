@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../video_pointer.dart';
 
 /// Embedding mpv is not possible; [reason] says why (never contains a URL).
 class VideoEmbedException implements Exception {
@@ -16,7 +19,9 @@ class VideoEmbedException implements Exception {
 /// mpv draws into via `--wid`.
 ///
 /// Flutter can't draw over it, so it should only cover a black placeholder.
-class VideoEmbed {
+/// It gets the pointer events over the video (mpv leaves them alone) and
+/// reports them as [pointerEvents].
+class VideoEmbed implements VideoPointerInput {
   VideoEmbed({this._channel = const MethodChannel(channelName)}) {
     _channel.setMethodCallHandler(_onCall);
   }
@@ -24,11 +29,12 @@ class VideoEmbed {
   static const channelName = 'tvplayer/video_embed';
 
   final MethodChannel _channel;
-  final _doubleClicks = StreamController<void>.broadcast();
+  final _pointer = StreamController<VideoPointerEvent>.broadcast();
   final _fullscreen = StreamController<bool>.broadcast();
 
-  /// Double-clicks on the video area.
-  Stream<void> get doubleClicks => _doubleClicks.stream;
+  /// Clicks, movement and scrolling on the video area.
+  @override
+  Stream<VideoPointerEvent> get pointerEvents => _pointer.stream;
 
   /// The app window entered (true) or left (false) fullscreen, including
   /// changes made by the window manager.
@@ -61,6 +67,10 @@ class VideoEmbed {
 
   Future<void> hide() => _invoke('hide');
 
+  /// Shows the normal mouse cursor over the video area, or none.
+  Future<void> setCursorVisible(bool visible) =>
+      _invoke('setCursorVisible', visible);
+
   /// Puts the whole app window in or out of fullscreen.
   Future<void> setFullscreen(bool fullscreen) =>
       _invoke('setFullscreen', fullscreen);
@@ -77,8 +87,11 @@ class VideoEmbed {
 
   Future<Object?> _onCall(MethodCall call) async {
     switch (call.method) {
-      case 'doubleClick':
-        _doubleClicks.add(null);
+      case 'pointer' || 'doubleClick' || 'scroll':
+        if (pointerEventFromNative(call.method, call.arguments)
+            case final event?) {
+          _pointer.add(event);
+        }
       case 'fullscreenChanged':
         _fullscreen.add(call.arguments == true);
     }
@@ -87,7 +100,40 @@ class VideoEmbed {
 
   void dispose() {
     _channel.setMethodCallHandler(null);
-    _doubleClicks.close();
+    _pointer.close();
     _fullscreen.close();
   }
+}
+
+/// A [VideoPointerEvent] from a `video_embed.cc` message, or null when it
+/// is malformed.
+@visibleForTesting
+VideoPointerEvent? pointerEventFromNative(String method, Object? args) {
+  if (args is! Map) return null;
+  final x = args['x'];
+  final y = args['y'];
+  if (x is! num || y is! num) return null;
+  final position = Offset(x.toDouble(), y.toDouble());
+  final button = args['button'];
+  final b = button is int ? button : VideoMouseButton.primary;
+  switch (method) {
+    case 'doubleClick':
+      return VideoDoubleClick(position);
+    case 'scroll':
+      final dy = args['dy'];
+      return dy is num ? VideoScroll(position, dy.toDouble()) : null;
+  }
+  return switch (args['kind']) {
+    'down' => VideoPointerDown(
+      position,
+      button: b,
+      doubleClickTime: switch (args['doubleClickMs']) {
+        final int ms when ms > 0 => Duration(milliseconds: ms),
+        _ => VideoPointerDown.defaultDoubleClickTime,
+      },
+    ),
+    'up' => VideoPointerUp(position, button: b),
+    'move' => VideoPointerMove(position),
+    _ => null,
+  };
 }

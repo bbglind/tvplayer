@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/player/mpv/external_mpv_player.dart';
@@ -62,6 +63,7 @@ void main() {
       ['observe_property', 5, 'aid'],
       ['observe_property', 6, 'sid'],
       ['observe_property', 7, 'volume'],
+      ['observe_property', 8, 'mute'],
       ['loadfile', _url.toString()],
     ]);
 
@@ -96,7 +98,7 @@ void main() {
     expect(mpv.arguments, contains('--wid=4242'));
     await player.togglePause();
     await player.seek(const Duration(seconds: 90, milliseconds: 500));
-    expect(mpv.commands.skip(8), [
+    expect(mpv.commands.skip(9), [
       ['cycle', 'pause'],
       ['seek', 90.5, 'absolute'],
     ]);
@@ -134,8 +136,15 @@ void main() {
       'name': 'volume',
       'data': 85.0,
     });
+    mpv.send({
+      'event': 'property-change',
+      'id': 8,
+      'name': 'mute',
+      'data': true,
+    });
     mpv.send({'event': 'file-loaded'});
     var s = await waitFor((s) => s.fileLoaded && s.volume != null);
+    expect(s.muted, isTrue);
     expect(s.audioTracks.single.language?.code, 'sv');
     expect(s.subtitleTracks.map((t) => t.id), [1, 2]);
     expect(s.audioId, 1);
@@ -166,6 +175,9 @@ void main() {
     await player.setSubtitleTrack(3);
     await player.setSubtitleTrack(null);
     await player.changeVolume(-5);
+    await player.setVolume(42.5);
+    await player.setVolume(130);
+    await player.toggleMute();
     await player.seekBy(const Duration(seconds: -10));
     expect(await player.addSubtitleFile('/tmp/subs.srt'), isTrue);
     expect(
@@ -181,10 +193,55 @@ void main() {
       ['set_property', 'sid', 3],
       ['set_property', 'sid', 'no'],
       ['add', 'volume', -5],
+      ['set_property', 'volume', 42.5],
+      ['set_property', 'volume', 100.0],
+      ['cycle', 'mute'],
       ['seek', -10.0, 'relative'],
       ['sub-add', '/tmp/subs.srt', 'select'],
       ['sub-add', '/tmp/subs.sv.srt', 'select', 'Svenska', 'sv'],
     ]);
+  });
+
+  test('starts at the given volume', () async {
+    player.open(_url, title: 'News', volume: 35);
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    expect(started.single.arguments, contains('--volume=35'));
+  });
+
+  test('overlays: written to a file in the socket directory, kept for the '
+      'next mpv, removed on hide', () async {
+    final bgra = Uint8List.fromList(List.filled(2 * 3 * 4, 7));
+    // Before mpv runs: kept, sent once it has started.
+    player.showOverlay(1, x: 10, y: 20, width: 2, height: 3, bgra: bgra);
+    player.open(_url, title: 'News');
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    final mpv = started.single;
+    Future<List<Object?>> overlayAdd(FakeMpv m) async {
+      for (var i = 0; i < 100; i++) {
+        final add = m.commands.where((c) => c.first == 'overlay-add');
+        if (add.isNotEmpty) return add.last;
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      fail('no overlay-add');
+    }
+
+    final add = await overlayAdd(mpv);
+    final path = add[4]! as String;
+    expect(add, [
+      'overlay-add', 1, 10, 20, path, 0, 'bgra', 2, 3, 8, //
+    ]);
+    final dir = mpv.ipcPath.substring(0, mpv.ipcPath.lastIndexOf('/'));
+    expect(path, startsWith(dir));
+    expect(File(path).readAsBytesSync(), bgra);
+
+    // A new mpv gets the overlay again.
+    player.open(_url, title: 'Other');
+    await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+    await overlayAdd(started.last);
+
+    player.hideOverlay(1);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(started.last.commands.last, ['overlay-remove', 1]);
   });
 
   test('adding a subtitle file without mpv running fails quietly', () async {

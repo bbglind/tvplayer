@@ -35,6 +35,7 @@ export 'src/vod/vod_catalog.dart';
 export 'src/vod/vod_query.dart';
 export 'src/vod/vod_source.dart';
 export 'src/watch/watch_data.dart';
+export 'src/watch/play_next.dart';
 export 'src/watch/watch_logic.dart';
 export 'src/xmltv/xmltv_parser.dart' show XmltvChannel, XmltvParser;
 export 'src/xtream/xtream_client.dart';

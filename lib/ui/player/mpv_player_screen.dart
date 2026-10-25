@@ -8,18 +8,26 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/app_settings.dart';
 import '../../format.dart';
+import '../../player/controls_visibility.dart';
 import '../../player/mpv/external_mpv_player.dart';
+import '../../player/mpv/osd_mirror.dart';
 import '../../player/mpv/video_embed.dart';
 import '../../player/playback_request.dart';
+import '../../player/pointer_forwarder.dart';
+import '../../player/video_gestures.dart';
+import '../../player/video_pointer.dart';
 import '../../state/providers.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
 import '../favourites/favourite_menu.dart';
 import '../favourites/favourite_panel.dart';
 import '../theme/app_colors.dart';
+import 'next_episode_card.dart';
 import 'open_channel.dart';
+import 'player_controls.dart';
 import 'player_shortcuts.dart';
 import 'track_panel.dart';
+import 'zap_panel.dart';
 
 enum _Mode {
   /// Asking the native side for an X11 window.
@@ -32,10 +40,30 @@ enum _Mode {
   external,
 }
 
+/// The side panel shown beside the video (or over it in fullscreen).
+enum _Panel { none, tracks, favourites, zap }
+
+/// mpv overlay ids of the parts shown over the video in fullscreen.
+abstract final class _Overlay {
+  static const bottom = 1;
+  static const panel = 2;
+}
+
 /// Plays a live channel, movie or episode with mpv: embedded in the app
 /// window on X11, in a separate mpv window otherwise. Leaving the screen
 /// closes mpv; mpv exiting leaves the screen, except at the end of an
-/// episode that has a next one, which is then offered.
+/// episode that has a next one, which then starts or is offered.
+///
+/// Windowed, the controls and panels sit below and beside the video. In
+/// fullscreen the video fills the screen and they are shown over it by
+/// mpv ([OsdMirror]), appearing on mouse movement or a key and hiding
+/// again after a few seconds.
+///
+/// Mouse on the video: a click pauses (live TV: shows the controls), a
+/// double click toggles fullscreen, the wheel changes the volume.
+///
+/// Zapping and the next episode play in this same screen, so fullscreen
+/// stays and Back returns to where playback started.
 ///
 /// Movies and episodes save their position as they play. Audio and
 /// subtitles are picked from the settings (or a choice remembered for the
@@ -53,10 +81,20 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// How often the position is saved while playing.
   static const _saveInterval = Duration(seconds: 10);
 
+  /// How long the volume must stay put before it is saved.
+  static const _volumeSaveDelay = Duration(seconds: 1);
+
   late final ExternalMpvPlayer _player = ref.read(externalMpvProvider);
   late final VideoEmbed? _embed = ref.read(embedMpvProvider)
       ? ref.read(videoEmbedProvider)
       : null;
+
+  /// Read in [initState]: settings are also saved from [dispose], where
+  /// [ref] can't be used.
+  late final AppSettingsNotifier _settings;
+
+  /// What plays now; zapping and the next episode change it.
+  late PlaybackRequest _request = widget.request;
 
   /// For movies and episodes. Read up front: positions are also saved from
   /// [dispose], where [ref] can't be used.
@@ -65,16 +103,20 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   final _subscriptions = <StreamSubscription<Object?>>[];
   Uri? _url;
   int? _session;
-  bool _fullscreen = false;
-  double? _seekDragValue;
-  bool _showTracks = false;
 
-  /// Whether the favourites panel is open (live channels only). A panel
-  /// rather than a menu: nothing can be drawn over the embedded video.
-  bool _showFavourites = false;
+  /// The native video area mpv draws into; reused for every session.
+  int? _wid;
+  bool _fullscreen = false;
+  _Panel _panel = _Panel.none;
 
   /// The episode played to its end and the next one is offered.
   bool _ended = false;
+
+  /// Seconds until the next episode starts, while its card shows.
+  int? _countdown;
+
+  /// The countdown was cancelled; it comes back after seeking out of it.
+  bool _nextCancelled = false;
 
   /// Last known position and duration, kept when mpv stops reporting them.
   Duration? _position;
@@ -88,25 +130,56 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// The user chose a track; no more automatic choices.
   bool _manualTracks = false;
 
-  PlaybackRequest get _request => widget.request;
+  double? _savedVolume;
+  Timer? _volumeSave;
+
+  final _controls = ControlsVisibility();
+  late final _gestures = VideoGestures(
+    onClick: _onVideoClick,
+    onDoubleClick: () => _setFullscreen(!_fullscreen),
+    onWheelSteps: (steps) =>
+        unawaited(_player.changeVolume(-steps * PlayerShortcuts.volumeStep)),
+  );
+  PointerForwarder? _forwarder;
+
+  final _shortcutsFocus = FocusNode(debugLabel: 'player');
+  final _barFocus = FocusNode(
+    debugLabel: 'player.controls',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+  final _playNowFocus = FocusNode(debugLabel: 'player.playNow');
+
+  /// The parts of the fullscreen overlay that take the pointer.
+  final _barKey = GlobalKey(debugLabel: 'player.bar');
+  final _cardKey = GlobalKey(debugLabel: 'player.card');
+  final _panelKey = GlobalKey(debugLabel: 'player.panel');
 
   @override
   void initState() {
     super.initState();
-    if (_request.watchKey != null) _watch = ref.read(watchProvider.notifier);
+    _settings = ref.read(appSettingsProvider.notifier);
     _url = playbackUrl(ref, _request);
     if (_url == null) return;
+    if (_request.watchKey != null) _watch = ref.read(watchProvider.notifier);
     _player.addListener(_onChange);
+    _controls.addListener(_onControlsChange);
+    _barFocus.addListener(_onBarFocus);
     if (_embed case final embed?) {
       _subscriptions.addAll([
-        embed.doubleClicks.listen((_) => _setFullscreen(!_fullscreen)),
+        embed.pointerEvents.listen(_onPointer),
         embed.fullscreenChanges.listen((v) {
-          if (mounted) setState(() => _fullscreen = v);
+          if (!mounted) return;
+          setState(() => _fullscreen = v);
+          _fullscreenChanged();
         }),
       ]);
     }
     unawaited(_start(_url!));
   }
+
+  AppSettings get _appSettings =>
+      ref.read(appSettingsProvider).value ?? const AppSettings();
 
   Future<void> _start(Uri url) async {
     int? wid;
@@ -121,7 +194,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       }
     }
     if (!mounted) return;
+    _savedVolume = _appSettings.playerVolume.toDouble();
     setState(() {
+      _wid = wid;
       _mode = wid == null ? _Mode.external : _Mode.embedded;
       _lastSave = DateTime.now();
       _session = _player.open(
@@ -129,6 +204,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         title: _request.title,
         wid: wid,
         start: _request.start,
+        volume: _appSettings.playerVolume,
       );
     });
     if (wid == null) unawaited(_embed?.hide());
@@ -141,6 +217,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       !_ended &&
       !(_isMine && _player.state.status == ExternalPlayerStatus.failed);
 
+  bool get _playing => _isMine && !_ended;
+
   Episode? get _nextEpisode => switch (_request) {
     EpisodePlayback(:final info, :final episode) => episodeAfter(info, episode),
     _ => null,
@@ -151,14 +229,23 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final state = _player.state;
     _trackPosition(state);
     _pickTracks(state);
+    _rememberVolume(state);
+    _updateCountdown(state);
     switch (state.status) {
       case ExternalPlayerStatus.exited
           when ModalRoute.of(context)?.isCurrent ?? false:
         _saveProgress();
         if (state.endedAtEof && _nextEpisode != null) {
+          if (_appSettings.playNextSeconds != null && !_nextCancelled) {
+            scheduleMicrotask(_playNext);
+            return;
+          }
           _setFullscreen(false);
           unawaited(_embed?.hide());
-          setState(() => _ended = true);
+          setState(() {
+            _ended = true;
+            _countdown = null;
+          });
         } else {
           Navigator.of(context).pop();
         }
@@ -207,6 +294,61 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     later ? scheduleMicrotask(save) : save();
   }
 
+  /// Saves the volume once it has stayed put for a moment, whatever
+  /// changed it (slider, wheel, keys).
+  void _rememberVolume(ExternalPlaybackState state) {
+    final volume = state.volume;
+    if (volume == null || volume == _savedVolume) return;
+    _volumeSave?.cancel();
+    _volumeSave = Timer(_volumeSaveDelay, () => _saveVolume(volume));
+  }
+
+  void _saveVolume(double volume) {
+    _volumeSave = null;
+    _savedVolume = volume;
+    _settings.remember((s) => s.copyWith(playerVolume: volume.round()));
+  }
+
+  /// Shows, counts down or hides the next-episode card, and starts the
+  /// next episode at 0.
+  void _updateCountdown(ExternalPlaybackState state) {
+    final lead = _appSettings.playNextSeconds;
+    final position = state.position;
+    final countdown = lead == null || position == null || _nextEpisode == null
+        ? null
+        : playNextCountdown(
+            position: position,
+            duration: state.duration,
+            leadSeconds: lead,
+          );
+    // Seeking back out of the countdown brings it back after a cancel.
+    if (countdown == null) _nextCancelled = false;
+    final shown = _nextCancelled ? null : countdown;
+    if (shown == _countdown) return;
+    final appeared = _countdown == null;
+    setState(() => _countdown = shown);
+    if (shown == 0) {
+      scheduleMicrotask(_playNext);
+    } else if (appeared && shown != null) {
+      _controls.activity();
+      // Focus "Play now" unless the user is busy in a panel or control.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final focus = FocusManager.instance.primaryFocus;
+        if (mounted && (focus == null || focus == _shortcutsFocus)) {
+          _playNowFocus.requestFocus();
+        }
+      });
+    }
+  }
+
+  void _cancelNext() {
+    setState(() {
+      _nextCancelled = true;
+      _countdown = null;
+    });
+    _shortcutsFocus.requestFocus();
+  }
+
   /// Chooses audio and subtitles once the tracks are known.
   void _pickTracks(ExternalPlaybackState state) {
     if (!state.fileLoaded || state.tracks.isEmpty || _manualTracks) return;
@@ -216,10 +358,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     ].join(',');
     if (signature == _pickedFor) return;
     _pickedFor = signature;
-    final settings = ref.read(appSettingsProvider).value ?? const AppSettings();
     final pick = pickTracks(
       state.tracks,
-      settings.trackPreferences,
+      _appSettings.trackPreferences,
       memory: switch (_request) {
         EpisodePlayback(:final info) =>
           ref.read(watchProvider).seriesTracks[info.series.seriesId]?.memory,
@@ -268,24 +409,163 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     }
   }
 
+  /// Plays the next episode here, marking this one watched.
   void _playNext() {
+    if (!mounted) return;
     final next = _nextEpisode;
     if (next == null) return;
     final info = (_request as EpisodePlayback).info;
+    if ((_request.watchKey, _duration ?? _position) case (
+      final key?,
+      final end?,
+    )) {
+      _watch?.recordProgress(key, position: end, duration: end, info: info);
+    }
     final start = resumePosition(ref.read(watchProvider).episode(next.id));
-    Navigator.of(context).pushReplacement(
-      playbackRoute(ref, EpisodePlayback(info, next, start: start)),
-    );
+    _switchTo(EpisodePlayback(info, next, start: start), save: false);
+  }
+
+  /// Switches to [channel] without leaving the player.
+  void _zapTo(LiveStream channel) {
+    setState(() => _panel = _Panel.none);
+    _shortcutsFocus.requestFocus();
+    if (_request case LivePlayback(channel: final c) when c.id == channel.id) {
+      return;
+    }
+    ref.read(watchProvider.notifier).recordChannel(channel);
+    _switchTo(LivePlayback(channel));
+  }
+
+  /// Plays [request] in a new mpv session in the same video area.
+  void _switchTo(PlaybackRequest request, {bool save = true}) {
+    final url = playbackUrl(ref, request);
+    if (url == null) return;
+    if (save && _playing) _saveProgress();
+    setState(() {
+      _request = request;
+      _url = url;
+      _watch = request.watchKey == null
+          ? null
+          : ref.read(watchProvider.notifier);
+      _ended = false;
+      _countdown = null;
+      _nextCancelled = false;
+      _position = null;
+      _duration = null;
+      _pickedFor = null;
+      _manualTracks = false;
+      _lastSave = DateTime.now();
+      if (_panel == _Panel.zap) _panel = _Panel.none;
+      _session = _player.open(
+        url,
+        title: request.title,
+        wid: _wid,
+        start: request.start,
+        volume: _player.state.volume?.round() ?? _appSettings.playerVolume,
+      );
+    });
+  }
+
+  void _onVideoClick() {
+    // Live TV can't pause; a click only brings the controls.
+    if (_request.fixedLength && _playing) {
+      unawaited(_player.togglePause());
+    }
+    _controls.activity();
+  }
+
+  /// Pointer input on the video area (mpv's window). In fullscreen,
+  /// input over the controls, panel or card goes to them.
+  void _onPointer(VideoPointerEvent event) {
+    if (!mounted || !_showVideo) return;
+    if (event is! VideoPointerUp) _controls.activity();
+    if (_fullscreen) {
+      final forwarder = _forwarder ??= PointerForwarder(
+        viewId: View.of(context).viewId,
+      );
+      final onOverlay = _overlayAt(event.position);
+      switch (event) {
+        case VideoPointerMove():
+          forwarder.move(event.position);
+          return;
+        case VideoPointerDown() when onOverlay || forwarder.pressed:
+          forwarder.down(event.position, event.button);
+          return;
+        case VideoPointerUp() when forwarder.pressed:
+          forwarder.up(event.position);
+          return;
+        case VideoDoubleClick() when onOverlay:
+          return;
+        case VideoScroll() when onOverlay:
+          forwarder.scroll(event.position, event.dy);
+          return;
+        default:
+      }
+    }
+    _gestures.handle(event);
+  }
+
+  /// Whether [position] is on a part of the fullscreen overlay.
+  bool _overlayAt(Offset position) {
+    for (final key in [_barKey, _cardKey, _panelKey]) {
+      final box = key.currentContext?.findRenderObject();
+      if (box is RenderBox && box.attached && box.hasSize) {
+        final rect = box.localToGlobal(Offset.zero) & box.size;
+        if (rect.contains(position)) return true;
+      }
+    }
+    return false;
+  }
+
+  void _onControlsChange() {
+    if (!mounted) return;
+    if (!_controls.visible && _barFocus.hasFocus) {
+      _shortcutsFocus.requestFocus();
+    }
+    setState(() {});
+    _updateCursor();
+  }
+
+  /// Keyboard focus in the controls keeps them up.
+  void _onBarFocus() => _controls.hold(
+    _barFocus,
+    _barFocus.hasFocus &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional,
+  );
+
+  void _updateCursor() =>
+      unawaited(_embed?.setCursorVisible(!_fullscreen || _controls.visible));
+
+  void _setPanel(_Panel panel) {
+    setState(() => _panel = _panel == panel ? _Panel.none : panel);
+    _controls.hold(#panel, _panel != _Panel.none);
+    if (_panel == _Panel.none) _shortcutsFocus.requestFocus();
   }
 
   void _setFullscreen(bool value) {
     if (value == _fullscreen || _mode != _Mode.embedded) return;
     setState(() => _fullscreen = value);
     unawaited(_embed?.setFullscreen(value));
+    _fullscreenChanged();
+  }
+
+  void _fullscreenChanged() {
+    _controls.autoHide = _fullscreen;
+    if (!_fullscreen) _forwarder?.remove();
+    _updateCursor();
   }
 
   void _onVideoRect(Rect rect) {
     if (mounted && _showVideo) unawaited(_embed?.setRect(rect));
+  }
+
+  /// Esc: cancels the countdown, else closes the panel, else leaves
+  /// fullscreen.
+  VoidCallback? get _onEscape {
+    if (_countdown != null) return _cancelNext;
+    if (_panel != _Panel.none) return () => _setPanel(_Panel.none);
+    if (_fullscreen) return () => _setFullscreen(false);
+    return null;
   }
 
   @override
@@ -294,10 +574,31 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     for (final s in _subscriptions) {
       s.cancel();
     }
-    // When the next episode replaced this screen, the video area is
+    _gestures.dispose();
+    _controls.dispose();
+    _forwarder?.remove();
+    if (_volumeSave != null) {
+      _volumeSave!.cancel();
+      final volume = _player.state.volume;
+      if (volume != null) {
+        final settings = _settings;
+        scheduleMicrotask(() {
+          try {
+            settings.remember((s) => s.copyWith(playerVolume: volume.round()));
+          } on StateError {
+            // The app is closing; the volume from before stays.
+          }
+        });
+      }
+    }
+    _shortcutsFocus.dispose();
+    _barFocus.dispose();
+    _playNowFocus.dispose();
+    // When something else took over the player, the video area is
     // already its.
     if (_embed case final embed? when _session == null || _isMine) {
       unawaited(embed.hide());
+      unawaited(embed.setCursorVisible(true));
       if (_fullscreen) unawaited(embed.setFullscreen(false));
     }
     if (_session case final session?) {
@@ -326,16 +627,21 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         },
       );
     }
-    final playing = _isMine && !_ended;
+    final playing = _playing;
+    final live = _request is LivePlayback;
     return PlayerShortcuts(
-      onTogglePause: playing ? _player.togglePause : null,
+      focusNode: _shortcutsFocus,
+      onTogglePause: playing && !live ? _player.togglePause : null,
       onSeek: playing && _request.fixedLength ? _player.seekBy : null,
       onVolume: playing ? _player.changeVolume : null,
+      onToggleMute: playing ? _player.toggleMute : null,
       onToggleFullscreen: _mode == _Mode.embedded && _showVideo
           ? () => _setFullscreen(!_fullscreen)
           : null,
-      onExitFullscreen: _fullscreen ? () => _setFullscreen(false) : null,
+      onEscape: _onEscape,
       onCycleSubtitles: playing ? _cycleSubtitles : null,
+      onZap: live && _showVideo ? () => _setPanel(_Panel.zap) : null,
+      onActivity: _controls.activity,
       child: Scaffold(
         backgroundColor: _showVideo ? AppColors.scrim : null,
         appBar: _fullscreen ? null : AppBar(title: Text(_request.title)),
@@ -350,7 +656,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     bool showStats,
   ) {
     // The native area covers the placeholder; Flutter can't draw over it,
-    // so controls go below and the track panel beside it.
+    // so windowed the controls go below and the panels beside it.
     final video = _RectReporter(
       onRect: _onVideoRect,
       child: const ColoredBox(
@@ -359,25 +665,30 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         child: SizedBox.expand(),
       ),
     );
-    if (_fullscreen) return video;
+    if (_fullscreen) return _buildFullscreen(context, state, showStats, video);
+    final panel = _buildPanel(state);
+    final card = _buildNextCard();
     return Column(
       children: [
         Expanded(
           child: Row(
             children: [
               Expanded(child: video),
-              if (_showTracks)
-                SizedBox(width: 300, child: _buildTrackPanel(state))
-              else if (_showFavourites)
-                if (_request case LivePlayback(:final channel))
-                  SizedBox(
-                    width: 300,
-                    child: FavouritePanel(
-                      item: liveItemRef(channel),
-                      name: channel.name,
-                      onClose: () => setState(() => _showFavourites = false),
-                    ),
+              if (panel != null || card != null)
+                SizedBox(
+                  width: _panelWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (panel != null)
+                        Expanded(child: panel)
+                      else
+                        const Spacer(),
+                      if (card != null)
+                        Padding(padding: const EdgeInsets.all(8), child: card),
+                    ],
                   ),
+                ),
             ],
           ),
         ),
@@ -388,56 +699,160 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     );
   }
 
-  Widget _buildTrackPanel(ExternalPlaybackState state) => TrackPanel(
-    tracks: state.tracks,
-    audioId: state.audioId,
-    subtitleId: state.subtitleId,
-    onSubtitle: _selectSubtitle,
-    onAudio: _selectAudio,
-    onClose: () => setState(() => _showTracks = false),
-  );
+  /// The video fills the screen; the controls (with now/next on live TV),
+  /// the panel and the next-episode card are laid out over it and shown
+  /// by mpv.
+  Widget _buildFullscreen(
+    BuildContext context,
+    ExternalPlaybackState state,
+    bool showStats,
+    Widget video,
+  ) {
+    final panel = _buildPanel(state);
+    final card = _buildNextCard();
+    final controls = _controls.visible;
+    final right = panel == null ? 0.0 : _panelWidth;
+    return Stack(
+      children: [
+        Positioned.fill(child: video),
+        if (controls || card != null)
+          Positioned(
+            left: 0,
+            right: right,
+            bottom: 0,
+            child: OsdMirror(
+              id: _Overlay.bottom,
+              player: _player,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (card != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: KeyedSubtree(key: _cardKey, child: card),
+                    ),
+                  if (controls)
+                    Material(
+                      key: _barKey,
+                      color: AppColors.scrim.withValues(alpha: 0.85),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_request case LivePlayback(:final channel))
+                            NowNextBar(
+                              channel: channel,
+                              color: Colors.transparent,
+                            ),
+                          _buildControls(context, state, showStats),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        if (panel != null)
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: _panelWidth,
+            child: OsdMirror(
+              id: _Overlay.panel,
+              player: _player,
+              child: KeyedSubtree(key: _panelKey, child: panel),
+            ),
+          ),
+      ],
+    );
+  }
 
-  Widget _buildTracksButton(bool enabled) => IconButton(
-    tooltip: 'Subtitles and audio (s: next subtitles)',
-    // A secondary pill, as for the other player choices.
-    style: IconButton.styleFrom(
-      backgroundColor: AppColors.hover,
-      disabledBackgroundColor: AppColors.surface,
-      shape: const StadiumBorder(),
+  double get _panelWidth => switch (_panel) {
+    _Panel.zap => ZapPanel.width,
+    _Panel.none when _countdown != null => NextEpisodeCard.width + 16,
+    _ => 300,
+  };
+
+  Widget? _buildPanel(ExternalPlaybackState state) => switch (_panel) {
+    _Panel.none => null,
+    _Panel.tracks => PlayerPanelScope(
+      child: TrackPanel(
+        tracks: state.tracks,
+        audioId: state.audioId,
+        subtitleId: state.subtitleId,
+        onSubtitle: _selectSubtitle,
+        onAudio: _selectAudio,
+        onClose: () => _setPanel(_Panel.none),
+      ),
     ),
-    isSelected: _showTracks,
-    icon: const Icon(Icons.subtitles_outlined),
-    selectedIcon: const Icon(Icons.subtitles),
-    onPressed: enabled
-        ? () => setState(() {
-            _showTracks = !_showTracks;
-            _showFavourites = false;
-          })
-        : null,
+    _Panel.favourites => switch (_request) {
+      LivePlayback(:final channel) => PlayerPanelScope(
+        child: FavouritePanel(
+          item: liveItemRef(channel),
+          name: channel.name,
+          onClose: () => _setPanel(_Panel.none),
+        ),
+      ),
+      _ => null,
+    },
+    _Panel.zap => switch (_request) {
+      LivePlayback(:final channel) => ZapPanel(
+        current: channel,
+        onSelect: _zapTo,
+        onClose: () => _setPanel(_Panel.none),
+      ),
+      _ => null,
+    },
+  };
+
+  Widget? _buildNextCard() {
+    final seconds = _countdown;
+    final next = _nextEpisode;
+    if (seconds == null || next == null) return null;
+    return NextEpisodeCard(
+      next: next,
+      seconds: seconds,
+      playNowFocus: _playNowFocus,
+      onPlayNow: _playNext,
+      onCancel: _cancelNext,
+    );
+  }
+
+  Widget _buildTracksButton(bool enabled) => PlayerPillButton(
+    tooltip: 'Subtitles and audio (s: next subtitles)',
+    selected: _panel == _Panel.tracks,
+    icon: Icons.subtitles_outlined,
+    selectedIcon: Icons.subtitles,
+    onPressed: enabled ? () => _setPanel(_Panel.tracks) : null,
   );
 
   /// The star of the live channel; opens the favourites panel.
-  Widget _buildFavouriteButton() {
-    final channel = (_request as LivePlayback).channel;
+  Widget _buildFavouriteButton(LiveStream channel) {
     final favourite = ref.watch(
       favouritesProvider.select((d) => d.isFavourite(liveItemRef(channel))),
     );
-    return IconButton(
+    return PlayerPillButton(
       key: const Key('player.favourite'),
       tooltip: favourite ? 'Favourite' : 'Add to favourites',
-      style: IconButton.styleFrom(
-        backgroundColor: AppColors.hover,
-        shape: const StadiumBorder(),
-      ),
-      isSelected: favourite,
-      icon: const Icon(Icons.star_border),
-      selectedIcon: const Icon(Icons.star),
-      onPressed: () => setState(() {
-        _showFavourites = !_showFavourites;
-        _showTracks = false;
-      }),
+      selected: favourite,
+      icon: Icons.star_border,
+      selectedIcon: Icons.star,
+      onPressed: () => _setPanel(_Panel.favourites),
     );
   }
+
+  /// The actions at the start of the bar: play/pause for movies and
+  /// episodes. Live TV can't pause; its slot is kept for a record button.
+  List<Widget> _leadingActions(ExternalPlaybackState state, bool starting) => [
+    if (_request.fixedLength)
+      IconButton(
+        tooltip: state.paused ? 'Resume' : 'Pause',
+        icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
+        onPressed: starting ? null : _player.togglePause,
+      ),
+  ];
 
   Widget _buildControls(
     BuildContext context,
@@ -447,94 +862,90 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final starting =
         _mode == _Mode.embedding ||
         state.status == ExternalPlayerStatus.starting;
-    return Material(
-      color: AppColors.scrim,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: state.paused ? 'Resume' : 'Pause',
-              icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
-              onPressed: starting ? null : _player.togglePause,
-            ),
-            Expanded(
-              child: starting
-                  ? const LinearProgressIndicator(minHeight: 4)
-                  : _request.fixedLength
-                  ? _buildSeekBar(context, state)
-                  : const SizedBox.shrink(),
-            ),
-            if (showStats) ...[const SizedBox(width: 16), _DropReadout(state)],
-            if (state.volume case final volume?) ...[
+    final live = switch (_request) {
+      LivePlayback(:final channel) => channel,
+      _ => null,
+    };
+    final showRemaining = ref.watch(
+      appSettingsProvider.select((s) => s.value?.showRemainingTime ?? false),
+    );
+    return Focus(
+      focusNode: _barFocus,
+      child: Material(
+        color: _fullscreen ? Colors.transparent : AppColors.scrim,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              ..._leadingActions(state, starting),
+              const SizedBox(width: 4),
+              Expanded(
+                child: starting
+                    ? const LinearProgressIndicator(minHeight: 4)
+                    : _request.fixedLength
+                    ? PlayerSeekBar(
+                        position: state.position ?? Duration.zero,
+                        duration: state.duration,
+                        showRemaining: showRemaining,
+                        onToggleRemaining: () => _settings.remember(
+                          (s) => s.copyWith(
+                            showRemainingTime: !s.showRemainingTime,
+                          ),
+                        ),
+                        onSeek: (p) => unawaited(_player.seek(p)),
+                        onDragging: (v) => _controls.hold(#seek, v),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              if (showStats) ...[
+                const SizedBox(width: 16),
+                _DropReadout(state),
+              ],
+              if (state.volume case final volume?) ...[
+                const SizedBox(width: 8),
+                VolumeControl(
+                  volume: volume,
+                  muted: state.muted,
+                  onChanged: (v) => unawaited(_player.setVolume(v)),
+                  onToggleMute: () => unawaited(_player.toggleMute()),
+                  onDragging: (v) => _controls.hold(#volume, v),
+                ),
+              ],
               const SizedBox(width: 8),
-              Icon(
-                volume == 0 ? Icons.volume_off : Icons.volume_up,
-                size: 18,
-                color: AppColors.textSecondary,
+              if (live != null) ...[
+                PlayerPillButton(
+                  key: const Key('player.zap'),
+                  tooltip: 'Channels (c)',
+                  selected: _panel == _Panel.zap,
+                  icon: Icons.list_alt,
+                  onPressed: starting ? null : () => _setPanel(_Panel.zap),
+                ),
+                const SizedBox(width: 4),
+                _buildFavouriteButton(live),
+                const SizedBox(width: 4),
+              ],
+              _buildTracksButton(!starting),
+              IconButton(
+                tooltip: _fullscreen
+                    ? 'Leave fullscreen (f, Esc or double-click)'
+                    : 'Fullscreen (f or double-click, Esc to leave)',
+                icon: Icon(
+                  _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                ),
+                onPressed: starting ? null : () => _setFullscreen(!_fullscreen),
               ),
-              Text(
-                ' ${volume.round()}%',
-                key: const Key('mpv.volume'),
-                style: Theme.of(context).textTheme.bodySmall,
+              IconButton(
+                tooltip: 'Stop',
+                icon: const Icon(Icons.stop),
+                onPressed: () => Navigator.of(context).pop(),
               ),
-            ],
-            const SizedBox(width: 8),
-            if (_request is LivePlayback) ...[
-              _buildFavouriteButton(),
+              const SizedBox(width: 12),
+              const PlayerClock(),
               const SizedBox(width: 4),
             ],
-            _buildTracksButton(!starting),
-            IconButton(
-              tooltip: 'Fullscreen (f or double-click, Esc to leave)',
-              icon: const Icon(Icons.fullscreen),
-              onPressed: starting ? null : () => _setFullscreen(true),
-            ),
-            IconButton(
-              tooltip: 'Stop',
-              icon: const Icon(Icons.stop),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSeekBar(BuildContext context, ExternalPlaybackState state) {
-    final position = state.position ?? Duration.zero;
-    final duration = state.duration;
-    if (duration == null || duration <= Duration.zero) {
-      return Text(
-        formatDuration(position),
-        key: const Key('mpv.position'),
-        style: Theme.of(context).textTheme.bodySmall,
-      );
-    }
-    final max = duration.inMilliseconds.toDouble();
-    final value = (_seekDragValue ?? position.inMilliseconds.toDouble()).clamp(
-      0.0,
-      max,
-    );
-    return Row(
-      children: [
-        Text(
-          formatDuration(Duration(milliseconds: value.round())),
-          key: const Key('mpv.position'),
-        ),
-        Expanded(
-          child: Slider(
-            value: value,
-            max: max,
-            onChanged: (v) => setState(() => _seekDragValue = v),
-            onChangeEnd: (v) async {
-              await _player.seek(Duration(milliseconds: v.round()));
-              if (mounted) setState(() => _seekDragValue = null);
-            },
           ),
         ),
-        Text(formatDuration(duration)),
-      ],
+      ),
     );
   }
 
@@ -610,8 +1021,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               if (playing) ...[
                 const SizedBox(height: 8),
                 _buildTracksButton(true),
-                if (_showTracks)
-                  SizedBox(height: 260, child: _buildTrackPanel(state)),
+                if (_panel == _Panel.tracks)
+                  SizedBox(height: 260, child: _buildPanel(state)),
               ],
               const SizedBox(height: 16),
               failed
@@ -632,7 +1043,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     );
   }
 
-  /// End of an episode: offer the next one.
+  /// End of an episode without automatic play: offer the next one.
   Widget _buildEnded(BuildContext context) {
     final theme = Theme.of(context);
     final next = _nextEpisode!;

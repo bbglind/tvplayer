@@ -74,16 +74,15 @@ void main() {
 
       play();
       await tester.pump();
-      // Live: no seek bar and, by default, no statistics.
-      expect(find.byType(Slider), findsNothing);
+      // Live: no seek bar, no pause and, by default, no statistics.
+      expect(find.byKey(const Key('player.seek')), findsNothing);
       expect(find.byKey(const Key('mpv.position')), findsNothing);
       expect(find.byKey(const Key('mpv.drops')), findsNothing);
-      expect(find.byTooltip('Pause'), findsOneWidget);
+      expect(find.byTooltip('Pause'), findsNothing);
       expect(find.byTooltip(RegExp('^Fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('player.clock')), findsOneWidget);
       // The guide's programme progress stays under the video.
       expect(find.byType(NowNextBar), findsOneWidget);
-      await tester.tap(find.byTooltip('Pause'));
-      expect(player.pauseToggles, 1);
 
       // Window resize moves the native area along.
       tester.view.physicalSize = const Size(1600, 1000);
@@ -153,6 +152,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(embed.fullscreenCalls, [true]);
       expect(find.byType(AppBar), findsNothing);
+      // The controls show over the video for a while, then hide.
+      expect(find.byTooltip('Stop'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
       expect(find.byTooltip('Stop'), findsNothing);
       final screen =
           Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio;
@@ -166,6 +168,7 @@ void main() {
       embed.doubleClick();
       await tester.pumpAndSettle();
       expect(embed.fullscreenCalls, [true, false, true]);
+      expect(player.pauseToggles, 0);
 
       // The window manager leaving fullscreen brings the controls back.
       embed.windowManagerFullscreen(false);

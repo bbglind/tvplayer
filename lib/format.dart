@@ -73,3 +73,10 @@ String greetingFor(int hour) => switch (hour) {
   >= 12 && < 18 => 'Good afternoon',
   _ => 'Good evening',
 };
+
+/// The time left of a movie or episode for the player's end time:
+/// `-12:34`.
+String formatRemaining(Duration position, Duration duration) {
+  final left = duration - position;
+  return '-${formatDuration(left.isNegative ? Duration.zero : left)}';
+}

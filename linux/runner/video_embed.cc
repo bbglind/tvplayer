@@ -14,7 +14,12 @@ struct _VideoEmbed {
   GtkWidget* area;
   FlMethodChannel* channel;
   GdkRectangle rect;
+  // Time of the last reported pointer motion, to limit the rate.
+  guint32 last_motion;
 };
+
+// At most one motion report per this many milliseconds (about 60/s).
+static const guint32 kMotionIntervalMs = 16;
 
 static const char kChannel[] = "tvplayer/video_embed";
 
@@ -33,16 +38,100 @@ static gboolean draw_cb(GtkWidget* widget, cairo_t* cr, gpointer) {
   return TRUE;
 }
 
-// mpv runs with --input-cursor=no, so clicks on its window propagate here.
+// A map with the pointer position in logical pixels of the app view.
+static FlValue* position_args(VideoEmbed* self, double x, double y) {
+  FlValue* args = fl_value_new_map();
+  fl_value_set_string_take(args, "x", fl_value_new_float(self->rect.x + x));
+  fl_value_set_string_take(args, "y", fl_value_new_float(self->rect.y + y));
+  return args;
+}
+
+static void send(VideoEmbed* self, const char* method, FlValue* args) {
+  fl_method_channel_invoke_method(self->channel, method, args, nullptr,
+                                  nullptr, nullptr);
+}
+
+static void send_pointer(VideoEmbed* self, const char* kind, double x,
+                         double y, guint button) {
+  g_autoptr(FlValue) args = position_args(self, x, y);
+  fl_value_set_string_take(args, "kind", fl_value_new_string(kind));
+  fl_value_set_string_take(args, "button", fl_value_new_int(button));
+  if (strcmp(kind, "down") == 0) {
+    gint double_click_ms = 400;
+    g_object_get(gtk_settings_get_default(), "gtk-double-click-time",
+                 &double_click_ms, nullptr);
+    fl_value_set_string_take(args, "doubleClickMs",
+                             fl_value_new_int(double_click_ms));
+  }
+  send(self, "pointer", args);
+}
+
+// mpv runs with --input-cursor=no, so pointer events on its window
+// propagate here; they are passed on to Dart.
 static gboolean button_press_cb(GtkWidget* widget, GdkEventButton* event,
                                 VideoEmbed* self) {
   // Keep keyboard input (Esc) going to Flutter.
   gtk_widget_grab_focus(GTK_WIDGET(self->view));
-  if (event->type == GDK_2BUTTON_PRESS && event->button == 1) {
-    fl_method_channel_invoke_method(self->channel, "doubleClick", nullptr,
-                                    nullptr, nullptr, nullptr);
+  if (event->type == GDK_BUTTON_PRESS) {
+    send_pointer(self, "down", event->x, event->y, event->button);
+  } else if (event->type == GDK_2BUTTON_PRESS && event->button == 1) {
+    g_autoptr(FlValue) args = position_args(self, event->x, event->y);
+    send(self, "doubleClick", args);
   }
   return TRUE;
+}
+
+static gboolean button_release_cb(GtkWidget* widget, GdkEventButton* event,
+                                  VideoEmbed* self) {
+  send_pointer(self, "up", event->x, event->y, event->button);
+  return TRUE;
+}
+
+static gboolean motion_cb(GtkWidget* widget, GdkEventMotion* event,
+                          VideoEmbed* self) {
+  if (event->time - self->last_motion < kMotionIntervalMs) return TRUE;
+  self->last_motion = event->time;
+  send_pointer(self, "move", event->x, event->y, 0);
+  return TRUE;
+}
+
+// Wheel notches as +1 (down) / -1 (up); touchpads send fractions.
+static gboolean scroll_cb(GtkWidget* widget, GdkEventScroll* event,
+                          VideoEmbed* self) {
+  double dy = 0;
+  switch (event->direction) {
+    case GDK_SCROLL_UP:
+      dy = -1;
+      break;
+    case GDK_SCROLL_DOWN:
+      dy = 1;
+      break;
+    case GDK_SCROLL_SMOOTH:
+      dy = event->delta_y;
+      break;
+    default:
+      return TRUE;
+  }
+  if (dy == 0) return TRUE;
+  g_autoptr(FlValue) args = position_args(self, event->x, event->y);
+  fl_value_set_string_take(args, "dy", fl_value_new_float(dy));
+  send(self, "scroll", args);
+  return TRUE;
+}
+
+// Shows the normal cursor over the video, or none. mpv runs with
+// --cursor-autohide=no, so its window shows this one.
+static void set_cursor_visible(VideoEmbed* self, gboolean visible) {
+  if (self->area == nullptr) return;
+  GdkWindow* window = gtk_widget_get_window(self->area);
+  if (window == nullptr) return;
+  if (visible) {
+    gdk_window_set_cursor(window, nullptr);
+  } else {
+    g_autoptr(GdkCursor) blank = gdk_cursor_new_for_display(
+        gdk_window_get_display(window), GDK_BLANK_CURSOR);
+    gdk_window_set_cursor(window, blank);
+  }
 }
 
 static gboolean window_state_cb(GtkWidget* widget, GdkEventWindowState* event,
@@ -89,10 +178,18 @@ static FlMethodResponse* create(VideoEmbed* self) {
   }
   if (self->area == nullptr) {
     self->area = gtk_drawing_area_new();
-    gtk_widget_add_events(self->area, GDK_BUTTON_PRESS_MASK);
+    gtk_widget_add_events(
+        self->area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+                        GDK_POINTER_MOTION_MASK | GDK_SCROLL_MASK |
+                        GDK_SMOOTH_SCROLL_MASK);
     g_signal_connect(self->area, "draw", G_CALLBACK(draw_cb), nullptr);
     g_signal_connect(self->area, "button-press-event",
                      G_CALLBACK(button_press_cb), self);
+    g_signal_connect(self->area, "button-release-event",
+                     G_CALLBACK(button_release_cb), self);
+    g_signal_connect(self->area, "motion-notify-event", G_CALLBACK(motion_cb),
+                     self);
+    g_signal_connect(self->area, "scroll-event", G_CALLBACK(scroll_cb), self);
     gtk_overlay_add_overlay(GTK_OVERLAY(self->overlay), self->area);
     gtk_widget_realize(self->area);
   }
@@ -139,6 +236,10 @@ static void method_call_cb(FlMethodChannel* channel, FlMethodCall* call,
   } else if (strcmp(method, "hide") == 0) {
     self->rect = {0, 0, 0, 0};
     update_visibility(self);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "setCursorVisible") == 0 &&
+             fl_value_get_type(args) == FL_VALUE_TYPE_BOOL) {
+    set_cursor_visible(self, fl_value_get_bool(args));
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else if (strcmp(method, "setFullscreen") == 0 &&
              fl_value_get_type(args) == FL_VALUE_TYPE_BOOL) {

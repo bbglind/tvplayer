@@ -118,6 +118,34 @@ weights 400, 500, 600, 700.
   time; channel column stays fixed.
 - **Player overlay**: `scrim` background, controls in `textPrimary`, accent
   progress fill, secondary pills for Subtitles / Audio.
+- **Player controls bar**, left to right: the primary action (play/pause for
+  movies and episodes; on live TV, which can't pause, the slot is kept for
+  Record), the seek bar with position and end time (or nothing on live TV),
+  mute button + volume slider (0–100 %, about 120 wide), the Channels and
+  favourite pills (live TV), the Subtitles pill, fullscreen, stop, and the
+  clock (HH:MM, `textSecondary`). The end time switches between the
+  duration and the time left ("-12:34") on double click or Enter.
+- **Player layout**: windowed, the video keeps its area; the controls bar
+  and now/next (live TV: titles plus the short descriptions, two lines for
+  now, one for next where it fits) sit below it and panels beside it. The
+  video area is never resized for transient UI. In fullscreen the video
+  fills the screen and the controls, panels and the next-episode card are
+  drawn over it by mpv (the same widgets, mirrored as images): the bar is
+  `scrim` at 85 % across the bottom, a panel takes the right edge. They
+  show on mouse movement or a key and hide after 3 s (with the cursor),
+  but stay while a panel is open, a control has keyboard focus or a slider
+  is dragged.
+- **Mouse on the video**: click = play/pause (live TV: show the controls),
+  double click = fullscreen (the click doesn't also fire), wheel = volume.
+- **Channels panel** (zap, `c`): side panel 360 wide, my Live TV
+  categories as toolbar chips, then compact channel rows (logo, name, the
+  programme on now with progress); the current channel is the selected row
+  and has focus. A click or Enter switches channel in the player and closes
+  the panel. Without my Live TV categories it shows a hint about the star.
+- **Next episode card**: `surface` panel 360 wide, "Next episode in N s"
+  (card title), the episode code and title (`textSecondary`), primary
+  button "Play now" (focused) and secondary "Cancel" (also Esc). Windowed it
+  sits beside the video, in fullscreen at the bottom right over it.
 - **Favourite star**: filled accent star when the item is in at least one of
   my categories; otherwise an outline star that shows only on hover or
   focus. At the right end of channel rows; at the top left of posters, on a
@@ -160,6 +188,8 @@ English for now.
 | Recently viewed channels | The last live channels played (up to 20) |
 | Recently added series / movies | Newest series (by last update) / movies (by date added) |
 | Edit home | The mode that moves and hides Home rows |
+| Channels | The player's zap panel of my Live TV categories |
+| Play next episode | The setting and countdown that start the next episode |
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).
@@ -197,6 +227,16 @@ English for now.
   shows a hint about the star.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".
+- Player tooltips name their keys: "Channels (c)", "Mute (m)",
+  "Subtitles and audio (s: next subtitles)", "Fullscreen (f or
+  double-click, Esc to leave)". Keys: Space pause, ←/→ seek 10 s, ↑/↓
+  volume, f fullscreen, Esc (cancel the countdown, close a panel, leave
+  fullscreen), s subtitles, m mute, c channels.
+- "Play next episode" (Settings › Player): Off, 15, 20, 30 (default), 45,
+  60, 90 or 120 s before the end. The card reads "Next episode in 12 s";
+  after a season finale it is the next season's first episode, after the
+  last episode there is none. "Cancel" plays to the end, which shows
+  "Episode finished" with "Play next episode".
 
 ## Icons
 

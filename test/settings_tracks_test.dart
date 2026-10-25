@@ -45,4 +45,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(settings.saved.subtitlesOn, isFalse);
   });
+
+  testWidgets('Play next episode: 30 s by default, other times or off', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final settings = FakeSettingsStorage();
+    await tester.pumpWidget(
+      testApp(
+        overrides: [],
+        settings: settings,
+        child: const Scaffold(body: SettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final dropdown = find.byKey(const Key('settings.playNext'));
+    await tester.ensureVisible(dropdown);
+    expect(
+      find.descendant(of: dropdown, matching: find.text('30 s')),
+      findsOneWidget,
+    );
+
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('90 s').last);
+    await tester.pumpAndSettle();
+    expect(settings.saved.playNextSeconds, 90);
+
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Off').last);
+    await tester.pumpAndSettle();
+    expect(settings.saved.playNextSeconds, isNull);
+  });
 }

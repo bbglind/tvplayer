@@ -17,6 +17,7 @@ class MpvLaunchConfig {
     required this.ipcPath,
     this.hwdec = 'vaapi',
     this.wid,
+    this.volume,
     this.executable = 'mpv',
   });
 
@@ -30,7 +31,14 @@ class MpvLaunchConfig {
   /// X11 window id to embed the video into (`--wid`). Null opens mpv in its
   /// own window. Only meaningful on X11.
   final int? wid;
+
+  /// Start volume in percent; null for mpv's default.
+  final int? volume;
   final String executable;
+
+  /// Highest volume in percent: no boost, so the slider's end is full
+  /// volume.
+  static const maxVolume = 100;
 
   List<String> get arguments => [
     '--hwdec=$hwdec',
@@ -41,7 +49,12 @@ class MpvLaunchConfig {
       // area (double-click for fullscreen) and Esc reaches Flutter.
       '--input-cursor=no',
       '--input-vo-keyboard=no',
+      // mpv sees no mouse movement, so it would hide the cursor for good;
+      // the app shows and hides it on the video area instead.
+      '--cursor-autohide=no',
     ],
+    '--volume-max=$maxVolume',
+    if (volume case final v?) '--volume=${v.clamp(0, maxVolume)}',
     '--title=${escapePropertyExpansion(title)}',
     '--input-ipc-server=$ipcPath',
     // Wait for the URL over IPC, then quit when playback ends.

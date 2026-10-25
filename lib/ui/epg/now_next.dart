@@ -66,11 +66,24 @@ class NowNextLine extends ConsumerWidget {
   }
 }
 
-/// Now (with progress) and next programme, for under the video.
+/// Now (with progress) and next programme with their short descriptions,
+/// for under the video: two lines for now, one for next where there is
+/// room (a player at least [nextDescriptionMinHeight] high).
 class NowNextBar extends ConsumerWidget {
-  const NowNextBar({super.key, required this.channel});
+  const NowNextBar({
+    super.key,
+    required this.channel,
+    this.color = AppColors.surface,
+  });
 
   final LiveStream channel;
+  final Color color;
+
+  static const nextDescriptionMinHeight = 600.0;
+
+  /// Width of the label and time columns; descriptions line up after them.
+  static const _labelWidth = 60.0;
+  static const _timeWidth = 104.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -80,15 +93,34 @@ class NowNextBar extends ConsumerWidget {
     final clock = time.unadjust(ref.watch(clockProvider));
     final (:now, :next) = nowNext;
     final theme = Theme.of(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    final timeWidth = scaler.scale(_timeWidth);
+    final roomy = MediaQuery.sizeOf(context).height >= nextDescriptionMinHeight;
+
+    Widget description(EpgProgram p, int lines) {
+      final text = p.description?.trim() ?? '';
+      if (text.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: EdgeInsets.only(left: _labelWidth + timeWidth, top: 2),
+        child: Text(
+          text,
+          maxLines: lines,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
 
     Widget row(String label, EpgProgram p) => Row(
       children: [
         SizedBox(
-          width: 60,
+          width: _labelWidth,
           child: Text(label.toUpperCase(), style: theme.textTheme.labelMedium),
         ),
         SizedBox(
-          width: 104,
+          width: timeWidth,
           child: Text(
             time.formatRange(p.start, p.stop),
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -109,19 +141,24 @@ class NowNextBar extends ConsumerWidget {
 
     return Material(
       key: const Key('player.nowNext'),
-      color: AppColors.surface,
+      color: color,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (now != null) ...[
               row('Now', now),
+              description(now, 2),
               const SizedBox(height: 4),
               ProgressStrip(airedFraction(now, clock), height: 4),
               const SizedBox(height: 4),
             ],
-            if (next != null) row('Next', next),
+            if (next != null) ...[
+              row('Next', next),
+              if (roomy) description(next, 1),
+            ],
           ],
         ),
       ),

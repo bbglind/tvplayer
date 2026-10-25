@@ -290,6 +290,35 @@ class SettingsScreen extends ConsumerWidget {
         SettingsSection(
           title: 'Player',
           children: [
+            ListTile(
+              leading: const Icon(Icons.skip_next_outlined),
+              title: const Text('Play next episode'),
+              subtitle: const Text(
+                'Counts down this long before the end of an episode, then '
+                'plays the next one.',
+              ),
+              trailing: DropdownButton<int>(
+                key: const Key('settings.playNext'),
+                // 0 stands for off.
+                value: settings.playNextSeconds ?? 0,
+                underline: const SizedBox.shrink(),
+                dropdownColor: AppColors.card,
+                borderRadius: BorderRadius.circular(AppRadius.small),
+                focusColor: AppColors.hover,
+                items: [
+                  const DropdownMenuItem(value: 0, child: Text('Off')),
+                  for (final s in playNextChoices)
+                    DropdownMenuItem(value: s, child: Text('$s s')),
+                ],
+                onChanged: (s) => _saveSettings(
+                  context,
+                  ref,
+                  settings.copyWith(
+                    playNextSeconds: () => s == null || s == 0 ? null : s,
+                  ),
+                ),
+              ),
+            ),
             SwitchListTile(
               key: const Key('settings.playbackStats'),
               title: const Text('Show playback statistics'),
