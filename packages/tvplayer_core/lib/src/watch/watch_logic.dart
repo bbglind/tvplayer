@@ -258,13 +258,76 @@ List<(int, WatchProgress)> continueMovies(WatchData data) {
 }
 
 /// Series to show under "Continue watching": those with an episode to
-/// continue with, most recent first, as (series id, progress).
+/// continue with and not removed since their last episode change, most
+/// recent first, as (series id, progress).
 List<(int, SeriesProgress)> continueSeries(WatchData data) {
   final result = [
     for (final MapEntry(:key, :value) in data.series.entries)
-      if (value.nextEpisodeId != null) (key, value),
+      if (value.nextEpisodeId != null && !_removed(data, key, value))
+        (key, value),
   ]..sort((a, b) => b.$2.updatedAt.compareTo(a.$2.updatedAt));
   return result;
+}
+
+bool _removed(WatchData data, int seriesId, SeriesProgress progress) {
+  final removal = data.continueRemovals[seriesId];
+  return removal != null &&
+      removal.removed &&
+      !progress.updatedAt.isAfter(removal.updatedAt);
+}
+
+/// [data] with movie [streamId] removed from "Continue watching": its
+/// resume position is cleared at [now].
+WatchData removeContinueMovie(WatchData data, int streamId, DateTime now) {
+  final key = movieKey(streamId);
+  final previous = data.items[key];
+  if (previous == null) return data;
+  return data.withItems({
+    key: WatchProgress(
+      position: Duration.zero,
+      duration: previous.duration,
+      updatedAt: now,
+    ),
+  });
+}
+
+/// [data] with movie [streamId]'s [previous] progress back, changed at
+/// [now] (undoes [removeContinueMovie]).
+WatchData restoreContinueMovie(
+  WatchData data,
+  int streamId,
+  WatchProgress previous,
+  DateTime now,
+) => data.withItems({
+  movieKey(streamId): WatchProgress(
+    position: previous.position,
+    duration: previous.duration,
+    watched: previous.watched,
+    seriesId: previous.seriesId,
+    updatedAt: now,
+  ),
+});
+
+/// [data] with series [seriesId] removed from "Continue watching" at
+/// [now], until one of its episodes changes again. Its episodes keep their
+/// progress and watched marks.
+WatchData removeContinueSeries(WatchData data, int seriesId, DateTime now) =>
+    data.copyWith(
+      continueRemovals: {
+        ...data.continueRemovals,
+        seriesId: ContinueRemoval(now),
+      },
+    );
+
+/// [data] with the removal of series [seriesId] undone at [now].
+WatchData restoreContinueSeries(WatchData data, int seriesId, DateTime now) {
+  if (data.continueRemovals[seriesId]?.removed != true) return data;
+  return data.copyWith(
+    continueRemovals: {
+      ...data.continueRemovals,
+      seriesId: ContinueRemoval(now, removed: false),
+    },
+  );
 }
 
 /// How many channels "Recently viewed channels" remembers.
@@ -274,10 +337,7 @@ const maxChannelHistory = 20;
 /// [maxChannelHistory] channels (and as many removals) are kept.
 WatchData recordChannel(WatchData data, String stableId, DateTime now) =>
     data.copyWith(
-      channels: _trimChannels({
-        ...data.channels,
-        stableId: ChannelVisit(now),
-      }),
+      channels: _trimChannels({...data.channels, stableId: ChannelVisit(now)}),
     );
 
 /// [data] with channel [stableId] removed from the history at [now].

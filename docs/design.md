@@ -136,7 +136,7 @@ weights 400, 500, 600, 700.
   and More info, page dots; rotates every 8 s unless hovered or focused,
   Left/Right page), recently viewed channel cards, my-category tiles
   (icon, type overline, name, count), Continue watching thumbnails and
-  Recently added posters with "See all". Rows still loading show `card`
+  Recently added posters, the last two with "See all". Rows still loading show `card`
   placeholders; empty rows are left out.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
@@ -154,6 +154,7 @@ English for now.
 | All channels / All movies / All series | Everything except hidden categories |
 | Favourite (star) | The item is in at least one of my categories |
 | Continue watching | Started movies and episodes |
+| Remove from Continue watching | Takes a started item out of Continue watching |
 | Hidden | Hidden provider categories |
 | Featured | The banner at the top of Home |
 | Recently viewed channels | The last live channels played (up to 20) |
@@ -168,6 +169,12 @@ English for now.
   category. Under one of my categories it shows all of them except those
   in hidden categories, with the ones in the selected category first. With
   none, the row and its heading are left out.
+- "Remove from Continue watching" (context menu of its cards on Home, the
+  Continue watching page and in Movies/Series) clears a movie's resume
+  position; a series leaves the list but its episodes keep their watched
+  marks, and it comes back when an episode is played or marked again.
+  No confirmation: a snack bar "Removed “<name>” from Continue watching"
+  offers "Undo" for 5 s.
 - The favourites menu saves each checkbox at once; "Done", Esc or a click
   outside closes it. The genre menu works the same way.
 - The search field of Live TV, Movies and Series searches the whole
@@ -178,11 +185,15 @@ English for now.
   range…". "Reset filters" clears year and genre.
 - Home: "Continue watching" mixes movies and episodes, most recently
   watched first, without hidden categories; Enter or a click resumes
-  playback, the context menu has "Open details". Its card says what is
-  left: "S2 · E4 · 18 min left", "1 h 02 min left". Recently viewed
+  playback, the context menu has "Open details", "Remove from Continue
+  watching" and "Add to favourites…". Its card says what is left: "S2 ·
+  E4 · 18 min left", "1 h 02 min left". Its "See all" opens the Continue
+  watching page (not in the sidebar; back arrow): the same 16:9 cards in a
+  grid, most recently watched first, with chips "All", "Movies",
+  "Series". Recently viewed
   channels say "Watched 1 h ago" and the programme on now; their context
-  menu has "Remove from recently viewed". "See all" opens Movies/Series
-  with "All" and "Recently added". With no categories of mine, the row
+  menu has "Remove from recently viewed". "See all" of Recently added
+  opens Movies/Series with "All" and "Recently added". With no categories of mine, the row
   shows a hint about the star.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".

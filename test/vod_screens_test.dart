@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
@@ -212,6 +213,24 @@ void main() {
       expect(row, findsNothing);
     });
 
+    testWidgets('the continue watching context menu removes a movie', (
+      tester,
+    ) async {
+      final watch = MemoryWatchStore(
+        WatchData.empty.withItems({movieKey(3): _progress(20, at: 1)}),
+      );
+      await _pump(tester, child: const MoviesScreen(), watch: watch);
+      await tester.tap(
+        find.byKey(const ValueKey('continue.3')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.removeContinue')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('movies.continue')), findsNothing);
+      expect(resumePosition(watch.data.movie(3)), isNull);
+    });
+
     testWidgets('details: provider metadata, resume and marking', (
       tester,
     ) async {
@@ -337,6 +356,28 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('the continue watching context menu removes a series and '
+        'keeps its badge', (tester) async {
+      final watch = MemoryWatchStore(played([(1, 1)]));
+      await _pump(tester, child: const SeriesScreen(), watch: watch);
+      await tester.tap(
+        find.byKey(const ValueKey('continue.0')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.removeContinue')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('series.continue')), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey(0)),
+          matching: find.byKey(const Key('poster.progress')),
+        ),
+        findsOneWidget,
+      );
+      expect(watch.data.continueRemovals[0]?.removed, isTrue);
     });
 
     testWidgets('fully watched series get a badge and leave continue '

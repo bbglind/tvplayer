@@ -6,6 +6,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
 import '../../state/providers.dart';
+import '../home/continue_actions.dart';
 import 'poster.dart';
 import 'series_details_screen.dart';
 import 'vod_browser.dart';
@@ -71,7 +72,7 @@ class SeriesScreen extends ConsumerWidget {
         if (catalog != null)
           for (final (id, progress) in continueSeries(watch))
             if (catalog.byId(id) case final series?)
-              (series, _continueCard(context, watch, series, progress)),
+              (series, _continueCard(context, ref, watch, series, progress)),
       ],
       itemBuilder: (context, series) => seriesPoster(context, watch, series),
     );
@@ -79,6 +80,7 @@ class SeriesScreen extends ConsumerWidget {
 
   Widget _continueCard(
     BuildContext context,
+    WidgetRef ref,
     WatchData watch,
     Series series,
     SeriesProgress progress,
@@ -97,6 +99,7 @@ class SeriesScreen extends ConsumerWidget {
       imageUrl: series.coverUrl,
       placeholder: Icons.tv,
       progress: isInProgress(episode) ? episode!.fraction : null,
+      actions: [removeFromContinueAction(context, ref, series: series)],
       onTap: () => _open(context, series),
     );
   }

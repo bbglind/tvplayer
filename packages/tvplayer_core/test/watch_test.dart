@@ -349,6 +349,7 @@ void main() {
   });
 
   _channelHistoryTests();
+  _continueRemovalTests();
 
   group('storage', () {
     WatchData sample() => _play(WatchData.empty, (1, 1), 10, _t0)
@@ -477,6 +478,111 @@ void _channelHistoryTests() {
         _at(3),
       );
       expect(WatchData.fromJson(data.toJson()).channels, data.channels);
+    });
+  });
+}
+
+void _continueRemovalTests() {
+  group('remove from continue watching', () {
+    final started = WatchProgress(
+      position: const Duration(minutes: 20),
+      duration: const Duration(minutes: 90),
+      updatedAt: _at(1),
+    );
+
+    test('removing a movie clears its resume position; undo restores it '
+        'as a newer change', () {
+      final data = WatchData.empty.withItems({movieKey(1): started});
+      final removed = removeContinueMovie(data, 1, _at(2));
+      expect(continueMovies(removed), isEmpty);
+      expect(resumePosition(removed.movie(1)), isNull);
+      expect(removed.movie(1)!.duration, started.duration);
+      expect(removed.movie(1)!.updatedAt, _at(2));
+      expect(continueMovies(data.merge(removed)), isEmpty);
+      expect(removeContinueMovie(WatchData.empty, 1, _at(2)).items, isEmpty);
+
+      final restored = restoreContinueMovie(removed, 1, started, _at(3));
+      expect(resumePosition(restored.movie(1)), started.position);
+      expect(restored.movie(1)!.updatedAt, _at(3));
+      expect(continueMovies(removed.merge(restored)), hasLength(1));
+    });
+
+    test('removing a series hides it but keeps its episodes', () {
+      var data = refreshSeries(
+        _play(
+          _watch(WatchData.empty, [(1, 1)], at: _at(1)),
+          (1, 2),
+          10,
+          _at(2),
+        ),
+        _info,
+      );
+      final summary = data.series[7];
+      data = removeContinueSeries(data, 7, _at(3));
+      expect(continueSeries(data), isEmpty);
+      expect(data.series[7], summary, reason: 'poster badge stays');
+      expect(data.episode(_find(1, 1).id)!.watched, isTrue);
+      expect(
+        data.episode(_find(1, 2).id)!.position,
+        const Duration(minutes: 10),
+      );
+      // A summary refresh (e.g. new episodes) doesn't bring it back.
+      expect(continueSeries(refreshSeries(data, _info)), isEmpty);
+    });
+
+    test('a removed series comes back when an episode is played again', () {
+      var data = refreshSeries(
+        _play(WatchData.empty, (1, 1), 10, _at(1)),
+        _info,
+      );
+      data = removeContinueSeries(data, 7, _at(2));
+      data = refreshSeries(_play(data, (1, 1), 12, _at(3)), _info);
+      expect([for (final (id, _) in continueSeries(data)) id], [7]);
+    });
+
+    test('undo brings a series back in its old place, also after a '
+        'merge', () {
+      var data =
+          refreshSeries(
+            _play(WatchData.empty, (1, 1), 10, _at(1)),
+            _info,
+          ).withSeries(
+            8,
+            SeriesProgress(
+              nextEpisodeId: '1',
+              watchedEpisodes: 0,
+              totalEpisodes: 3,
+              updatedAt: _at(0),
+            ),
+          );
+      final removed = removeContinueSeries(data, 7, _at(2));
+      expect([for (final (id, _) in continueSeries(removed)) id], [8]);
+      final restored = restoreContinueSeries(removed, 7, _at(3));
+      expect([for (final (id, _) in continueSeries(restored)) id], [7, 8]);
+      expect(restoreContinueSeries(data, 7, _at(3)), same(data));
+
+      // The newer choice wins, whichever copy it is in.
+      expect(continueSeries(data.merge(removed)), hasLength(1));
+      expect(continueSeries(removed.merge(data)), hasLength(1));
+      expect(continueSeries(removed.merge(restored)), hasLength(2));
+      expect(continueSeries(restored.merge(removed)), hasLength(2));
+      expect(continueAll(removed).map((e) => e.updatedAt), [_at(0)]);
+    });
+
+    test('JSON round trip', () {
+      final data = restoreContinueSeries(
+        removeContinueSeries(
+          removeContinueSeries(WatchData.empty, 7, _at(1)),
+          8,
+          _at(2),
+        ),
+        8,
+        _at(3),
+      );
+      final read = WatchData.fromJson(data.toJson());
+      expect(read.continueRemovals, data.continueRemovals);
+      expect(read.continueRemovals[7], ContinueRemoval(_at(1)));
+      expect(read.continueRemovals[8], ContinueRemoval(_at(3), removed: false));
     });
   });
 }

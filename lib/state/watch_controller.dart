@@ -120,6 +120,27 @@ class WatchController extends Notifier<WatchData> {
   void forgetChannel(String stableId) =>
       _update(core.forgetChannel(state, stableId, _now));
 
+  /// Removes movie [streamId] from "Continue watching" by clearing its
+  /// resume position. Returns its progress before, for [restoreMovie].
+  WatchProgress? removeMovieFromContinue(int streamId) {
+    final previous = state.movie(streamId);
+    _update(removeContinueMovie(state, streamId, _now));
+    return previous;
+  }
+
+  /// Puts back the [previous] progress of movie [streamId] (Undo).
+  void restoreMovie(int streamId, WatchProgress previous) =>
+      _update(restoreContinueMovie(state, streamId, previous, _now));
+
+  /// Removes series [seriesId] from "Continue watching" until one of its
+  /// episodes is played or marked again.
+  void removeSeriesFromContinue(int seriesId) =>
+      _update(removeContinueSeries(state, seriesId, _now));
+
+  /// Undoes [removeSeriesFromContinue].
+  void restoreSeries(int seriesId) =>
+      _update(restoreContinueSeries(state, seriesId, _now));
+
   /// Remembers a manual track choice for the rest of a series.
   void rememberTracks(int seriesId, TrackMemory memory) {
     if (state.seriesTracks[seriesId]?.memory == memory) return;

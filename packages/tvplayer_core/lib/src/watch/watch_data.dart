@@ -187,6 +187,25 @@ final class ChannelVisit {
   int get hashCode => Object.hash(updatedAt, forgotten);
 }
 
+/// A series taken out of "Continue watching" by hand. It stays out until
+/// one of its episodes changes after [updatedAt]. Not [removed] after an
+/// Undo; kept either way so the latest choice survives a merge.
+final class ContinueRemoval {
+  const ContinueRemoval(this.updatedAt, {this.removed = true});
+
+  final DateTime updatedAt;
+  final bool removed;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ContinueRemoval &&
+      other.updatedAt == updatedAt &&
+      other.removed == removed;
+
+  @override
+  int get hashCode => Object.hash(updatedAt, removed);
+}
+
 /// Everything remembered about watching, for one provider.
 ///
 /// Stored as a flat list of records, each with a key and a change time, so
@@ -198,6 +217,7 @@ final class WatchData {
     this.series = const {},
     this.seriesTracks = const {},
     this.channels = const {},
+    this.continueRemovals = const {},
   });
 
   /// Progress by [movieKey] / [episodeKey].
@@ -213,6 +233,10 @@ final class WatchData {
   /// ones.
   final Map<String, ChannelVisit> channels;
 
+  /// Series removed from "Continue watching" (and undone removals) by
+  /// series id.
+  final Map<int, ContinueRemoval> continueRemovals;
+
   static const empty = WatchData();
 
   WatchProgress? movie(int streamId) => items[movieKey(streamId)];
@@ -224,11 +248,13 @@ final class WatchData {
     Map<int, SeriesProgress>? series,
     Map<int, SeriesTracks>? seriesTracks,
     Map<String, ChannelVisit>? channels,
+    Map<int, ContinueRemoval>? continueRemovals,
   }) => WatchData(
     items: items ?? this.items,
     series: series ?? this.series,
     seriesTracks: seriesTracks ?? this.seriesTracks,
     channels: channels ?? this.channels,
+    continueRemovals: continueRemovals ?? this.continueRemovals,
   );
 
   /// This data with [progress] added, replacing records with the same key.
@@ -262,6 +288,11 @@ final class WatchData {
         (t) => t.updatedAt,
       ),
       channels: newest(channels, other.channels, (v) => v.updatedAt),
+      continueRemovals: newest(
+        continueRemovals,
+        other.continueRemovals,
+        (r) => r.updatedAt,
+      ),
     );
   }
 
@@ -288,6 +319,12 @@ final class WatchData {
             value.updatedAt,
             value.forgotten ? {'forgotten': true} : const <String, Object?>{},
           ),
+        for (final MapEntry(:key, :value) in continueRemovals.entries)
+          record(
+            'continue:$key',
+            value.updatedAt,
+            value.removed ? const <String, Object?>{} : {'undone': true},
+          ),
       ],
     };
   }
@@ -298,6 +335,7 @@ final class WatchData {
     final series = <int, SeriesProgress>{};
     final tracks = <int, SeriesTracks>{};
     final channels = <String, ChannelVisit>{};
+    final removals = <int, ContinueRemoval>{};
     for (final r in readList(readMap(json)?['records'])) {
       final record = readMap(r);
       final key = readString(record?['k']);
@@ -323,6 +361,11 @@ final class WatchData {
             time,
             forgotten: readBool(readMap(value)?['forgotten']),
           );
+        case 'continue' when int.tryParse(id) != null:
+          removals[int.parse(id)] = ContinueRemoval(
+            time,
+            removed: !readBool(readMap(value)?['undone']),
+          );
       }
     }
     return WatchData(
@@ -330,6 +373,7 @@ final class WatchData {
       series: series,
       seriesTracks: tracks,
       channels: channels,
+      continueRemovals: removals,
     );
   }
 }

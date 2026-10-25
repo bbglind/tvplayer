@@ -402,6 +402,129 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(SeriesDetailsScreen), findsOneWidget);
     });
+
+    Future<void> removeVia(WidgetTester tester, Finder card) async {
+      await tester.tap(card, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.removeContinue')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the context menu removes a movie; Undo brings it back', (
+      tester,
+    ) async {
+      final setup = await _pump(tester, setup: _Setup(watch: started()));
+      const alpha = ValueKey('home.continue.movie.1');
+      await removeVia(tester, find.byKey(alpha));
+      expect(find.byKey(alpha), findsNothing);
+      expect(
+        find.text('Removed “Alpha” from Continue watching'),
+        findsOneWidget,
+      );
+      expect(continueMovies(setup.watch.data).map((m) => m.$1), [3]);
+      expect(resumePosition(setup.watch.data.movie(1)), isNull);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(alpha), findsOneWidget);
+      expect(
+        resumePosition(setup.watch.data.movie(1)),
+        const Duration(minutes: 30),
+      );
+    });
+
+    testWidgets('removing a series keeps its watched episodes; Undo brings '
+        'it back', (tester) async {
+      final setup = await _pump(tester, setup: _Setup(watch: started()));
+      const delta = ValueKey('home.continue.series.10');
+      await removeVia(tester, find.byKey(delta));
+      expect(find.byKey(delta), findsNothing);
+      expect(continueSeries(setup.watch.data), isEmpty);
+      expect(setup.watch.data.episode('101')!.watched, isTrue);
+      expect(setup.watch.data.series[10], isNotNull);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(delta), findsOneWidget);
+      expect(continueSeries(setup.watch.data), hasLength(1));
+    });
+
+    testWidgets('See all opens every started item with type chips', (
+      tester,
+    ) async {
+      await _pump(tester, setup: _Setup(watch: started()));
+      await tester.tap(
+        find.byKey(const Key('home.row.continueWatching.seeAll')),
+      );
+      await tester.pumpAndSettle();
+      final grid = find.byKey(const Key('continue.grid'));
+      expect(grid, findsOneWidget);
+      Finder card(String key) =>
+          find.descendant(of: grid, matching: find.byKey(ValueKey(key)));
+      final delta = card('home.continue.series.10');
+      final alpha = card('home.continue.movie.1');
+      expect(delta, findsOneWidget);
+      expect(alpha, findsOneWidget);
+      expect(card('home.continue.movie.3'), findsNothing, reason: 'hidden');
+      expect(
+        tester.getTopLeft(delta).dx,
+        lessThan(tester.getTopLeft(alpha).dx),
+      );
+
+      await tester.tap(find.byKey(const Key('continue.filter.movies')));
+      await tester.pumpAndSettle();
+      expect(delta, findsNothing);
+      expect(alpha, findsOneWidget);
+      await tester.tap(find.byKey(const Key('continue.filter.series')));
+      await tester.pumpAndSettle();
+      expect(delta, findsOneWidget);
+      expect(alpha, findsNothing);
+
+      // Removing from the page; the filter shows the empty note.
+      await removeVia(tester, delta);
+      expect(find.byKey(const Key('continue.empty')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('continue.filter.all')));
+      await tester.pumpAndSettle();
+      expect(alpha, findsOneWidget);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(grid, findsNothing);
+      expect(
+        find.byKey(const ValueKey('home.continue.series.10')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('home.continue.movie.1')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the See all page fits at text scale 1.4', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+        tester,
+        size: const Size(1000, 700),
+        setup: _Setup(watch: started()),
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('home.row.continueWatching.seeAll')),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const Key('home.scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(const Key('home.row.continueWatching.seeAll')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('continue.grid')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('a category tile opens its section with it selected', (
@@ -543,6 +666,9 @@ void main() {
           )
           .first,
     );
+    // Fully on screen, so the tap hits it.
+    await tester.ensureVisible(find.byKey(const Key('home.featured.dot.1')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('home.featured.dot.1')));
     await tester.pumpAndSettle();
     expect(_featuredTitle(tester), 'Delta');

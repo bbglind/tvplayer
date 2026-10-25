@@ -4,6 +4,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
 import '../../state/providers.dart';
+import '../home/continue_actions.dart';
 import 'movie_details_screen.dart';
 import 'poster.dart';
 import 'vod_browser.dart';
@@ -73,6 +74,9 @@ class MoviesScreen extends ConsumerWidget {
                   subtitle: 'Resume at ${formatDuration(progress.position)}',
                   imageUrl: movie.posterUrl,
                   progress: progress.fraction,
+                  actions: [
+                    removeFromContinueAction(context, ref, movie: movie),
+                  ],
                   onTap: () => _open(context, movie),
                 ),
               ),

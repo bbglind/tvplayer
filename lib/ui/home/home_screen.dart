@@ -12,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../vod/movies_screen.dart';
 import '../vod/series_screen.dart';
+import 'continue_watching_screen.dart';
 import 'featured_banner.dart';
 import 'home_cards.dart';
 import 'home_row.dart';
@@ -200,6 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             itemBuilder: (context, i) =>
                 continueCard(context, ref, items.items[i]),
           ),
+          onSeeAll: () => openContinueWatching(context),
         );
       case HomeRowId.recentSeries:
         final items = ref.watch(recentSeriesProvider);
