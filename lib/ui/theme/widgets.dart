@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
@@ -5,6 +7,10 @@ import 'app_theme.dart';
 
 /// Draws the accent focus ring around (or inside) [child] while it or one
 /// of its descendants has keyboard focus, or always when [visible].
+///
+/// The ring shows only in keyboard mode (see `InputModeScope`): pointer
+/// input hides it until the next key press. It is snapped to device
+/// pixels, so the stroke and the gap to [child] are even on all sides.
 class FocusRing extends StatefulWidget {
   const FocusRing({
     super.key,
@@ -12,19 +18,29 @@ class FocusRing extends StatefulWidget {
     this.radius = AppRadius.card,
     this.inset = false,
     this.visible = false,
+    this.focused,
     this.color = AppColors.accent,
   });
 
   final Widget child;
+
+  /// Corner radius of [child]; the ring follows it.
   final double radius;
 
-  /// Inside the bounds (list rows, guide cells) instead of outside (cards,
-  /// posters).
+  /// Inside the bounds (list rows, guide cells, buttons) instead of outside
+  /// (cards, posters, chips).
   final bool inset;
 
   /// Shows the ring without focus, e.g. for the selected row.
   final bool visible;
+
+  /// The focus state, for widgets that track it themselves (buttons); when
+  /// null the ring listens for focus inside [child].
+  final bool? focused;
   final Color color;
+
+  /// Gap between an outside ring and [child].
+  static const gap = 2.0;
 
   @override
   State<FocusRing> createState() => _FocusRingState();
@@ -56,17 +72,20 @@ class _FocusRingState extends State<FocusRing> {
 
   @override
   Widget build(BuildContext context) {
-    final show = widget.visible || (_focused && _keyboard);
+    final focused = widget.focused ?? _focused;
+    final show = widget.visible || (focused && _keyboard);
+    final ring = CustomPaint(
+      foregroundPainter: show
+          ? _RingPainter(widget.color, widget.radius, inset: widget.inset)
+          : null,
+      child: widget.child,
+    );
+    if (widget.focused != null) return ring;
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
       onFocusChange: (focused) => setState(() => _focused = focused),
-      child: CustomPaint(
-        foregroundPainter: show
-            ? _RingPainter(widget.color, widget.radius, inset: widget.inset)
-            : null,
-        child: widget.child,
-      ),
+      child: ring,
     );
   }
 }
@@ -80,19 +99,30 @@ class _RingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const w = AppTheme.focusWidth;
-    // Outside rings keep a 1 px gap so they read against the content.
-    final delta = inset ? -w / 2 : w / 2 + 1;
-    final rect = (Offset.zero & size).inflate(delta);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        rect,
-        Radius.circular((radius + delta).clamp(0, double.infinity)),
-      ),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = w
-        ..color = color,
+    // Work in device pixels: snap the ring's outer edge to the pixel grid
+    // and use a whole number of pixels for the stroke, so neither the
+    // stroke nor the gap is blurred more on one side than the other.
+    final m = canvas.getTransform();
+    final scale = m[0] > 0 ? m[0] : 1.0;
+    double snap(double v, double offset) =>
+        ((offset + v * scale).roundToDouble() - offset) / scale;
+    final width =
+        math.max(1, (AppTheme.focusWidth * scale).roundToDouble()) / scale;
+    final bounds = Offset.zero & size;
+    final edge = inset ? bounds : bounds.inflate(FocusRing.gap + width);
+    final outer = Rect.fromLTRB(
+      snap(edge.left, m[12]),
+      snap(edge.top, m[13]),
+      snap(edge.right, m[12]),
+      snap(edge.bottom, m[13]),
+    );
+    final outerRadius = inset ? radius : radius + FocusRing.gap + width;
+    RRect rrect(Rect r, double radius) =>
+        RRect.fromRectAndRadius(r, Radius.circular(math.max(0, radius)));
+    canvas.drawDRRect(
+      rrect(outer, outerRadius),
+      rrect(outer.deflate(width), outerRadius - width),
+      Paint()..color = color,
     );
   }
 
@@ -100,6 +130,17 @@ class _RingPainter extends CustomPainter {
   bool shouldRepaint(_RingPainter old) =>
       old.color != color || old.radius != radius || old.inset != inset;
 }
+
+/// A [ButtonStyle.backgroundBuilder] that draws the focus ring inside a
+/// button, in [color], in keyboard mode only.
+ButtonLayerBuilder focusRingLayer(Color color) =>
+    (context, states, child) => FocusRing(
+      inset: true,
+      radius: AppRadius.small,
+      focused: states.contains(WidgetState.focused),
+      color: color,
+      child: child ?? const SizedBox.shrink(),
+    );
 
 /// A tappable rounded tile (row, card, cell) with hover, a selected state
 /// (hover background + ring) and the keyboard focus ring.

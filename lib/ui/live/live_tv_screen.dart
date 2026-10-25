@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -6,6 +8,7 @@ import '../../data/errors.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
 import '../player/open_channel.dart';
+import '../shell/category_layout.dart';
 import '../vod/poster.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -26,12 +29,11 @@ class LiveTvScreen extends ConsumerWidget {
         message: describeProviderError(error),
         onRetry: () => ref.invalidate(liveCatalogProvider),
       ),
-      data: (catalog) => Row(
-        children: [
-          SizedBox(width: 280, child: _CategoryList(catalog: catalog)),
-          const VerticalDivider(width: 1),
-          const Expanded(child: _ChannelPane()),
-        ],
+      data: (catalog) => CategoryLayout(
+        section: 'live',
+        width: 280,
+        list: _CategoryList(catalog: catalog),
+        content: const _ChannelPane(),
       ),
     );
   }
@@ -85,7 +87,7 @@ class _CategoryList extends ConsumerWidget {
     final categories = catalog.categories;
     return ListView.builder(
       key: const Key('live.categories'),
-      padding: const EdgeInsets.fromLTRB(16, 28, 12, 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 12, 16),
       itemCount: categories.length + 1,
       itemBuilder: (context, i) {
         final category = i == 0 ? null : categories[i - 1];
@@ -135,6 +137,7 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
           padding: const EdgeInsets.fromLTRB(28, 28, 28, 16),
           child: Row(
             children: [
+              const ShowCategoriesButton(section: 'live'),
               Expanded(
                 child: SearchField(
                   key: const Key('live.search'),
@@ -167,7 +170,7 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
               : ListView.builder(
                   key: const Key('live.channels'),
                   padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-                  itemExtent: 76,
+                  itemExtent: ChannelRow.extent(context),
                   itemCount: channels.length,
                   itemBuilder: (context, i) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -191,12 +194,31 @@ class ChannelRow extends ConsumerWidget {
 
   final LiveStream channel;
 
+  static const _padding = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+
+  /// Height of a row plus the gap below it. Grows with the text scale, so
+  /// the name, now/next line and progress bar always fit: a fixed height
+  /// pushed the bar under the row's bottom edge at large text sizes.
+  static double extent(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final scaler = MediaQuery.textScalerOf(context);
+    double line(TextStyle? style) =>
+        scaler.scale(style?.fontSize ?? 14) * (style?.height ?? 1.3);
+    final content =
+        line(text.titleMedium) +
+        line(text.bodySmall) +
+        NowNextLine.progressGap +
+        NowNextLine.progressHeight;
+    // At least the 44 px logo tile, plus padding and the 8 px gap.
+    return math.max(44.0, content).ceilToDouble() + _padding.vertical + 8;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final logo = channel.logoUrl;
     return AppTile(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: _padding,
       onTap: () => openChannel(context, ref, channel),
       child: Row(
         children: [

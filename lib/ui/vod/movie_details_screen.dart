@@ -34,9 +34,8 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final movie = widget.movie;
     return Scaffold(
-      appBar: AppBar(title: Text(movie.name)),
+      appBar: AppBar(),
       body: FutureBuilder(
         future: _details,
         builder: (context, snapshot) => _buildBody(

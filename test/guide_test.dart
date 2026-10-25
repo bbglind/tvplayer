@@ -10,6 +10,7 @@ import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/epg/guide_screen.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
+import 'package:tvplayer/ui/theme/widgets.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'fake_player.dart';
@@ -162,6 +163,37 @@ void main() {
       await pump(tester, const LiveTvScreen());
       await tester.pumpAndSettle();
       expect(find.text('Before The Switch · until 01:30'), findsOneWidget);
+    });
+
+    testWidgets('rows grow with the text size, so the progress bar stays '
+        'inside the row', (tester) async {
+      // Fixed-height rows pushed the bar under the row's clipped bottom
+      // edge at large desktop text sizes, leaving a 1 px sliver.
+      await pump(
+        tester,
+        Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: const LiveTvScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final row = find.ancestor(
+        of: find.text('Night Film · until 06:00'),
+        matching: find.byType(AppTile),
+      );
+      final bar = find.descendant(
+        of: row,
+        matching: find.byType(ProgressStrip),
+      );
+      expect(bar, findsOneWidget);
+      expect(
+        tester.getRect(bar).bottom,
+        lessThanOrEqualTo(tester.getRect(row).bottom - 10),
+      );
     });
   });
 

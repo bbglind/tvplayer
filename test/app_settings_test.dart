@@ -31,4 +31,40 @@ void main() {
     expect(settings.subtitleLanguages, ['sv', 'en']);
     expect(settings.audioLanguages, isEmpty);
   });
+
+  test('layout settings round-trip through JSON', () {
+    const settings = AppSettings(
+      sidebarCollapsed: true,
+      sidebarWidth: 300,
+      hiddenCategoryLists: {'live', 'series'},
+    );
+    final back = AppSettings.fromJson(settings.toJson());
+    expect(back.sidebarCollapsed, isTrue);
+    expect(back.sidebarWidth, 300);
+    expect(back.hiddenCategoryLists, {'live', 'series'});
+  });
+
+  test('layout settings: defaults, clamped width, bad values ignored', () {
+    final defaults = AppSettings.fromJson({});
+    expect(defaults.sidebarCollapsed, isFalse);
+    expect(defaults.sidebarWidth, AppSettings.defaultSidebarWidth);
+    expect(defaults.hiddenCategoryLists, isEmpty);
+
+    expect(
+      AppSettings.fromJson({'sidebarWidth': 5000}).sidebarWidth,
+      AppSettings.maxSidebarWidth,
+    );
+    expect(
+      AppSettings.fromJson({'sidebarWidth': 10}).sidebarWidth,
+      AppSettings.minSidebarWidth,
+    );
+    final bad = AppSettings.fromJson({
+      'sidebarCollapsed': 'yes',
+      'sidebarWidth': 'wide',
+      'hiddenCategoryLists': ['live', 3, null],
+    });
+    expect(bad.sidebarCollapsed, isFalse);
+    expect(bad.sidebarWidth, AppSettings.defaultSidebarWidth);
+    expect(bad.hiddenCategoryLists, {'live'});
+  });
 }

@@ -13,6 +13,9 @@ final class AppSettings {
     this.subtitleLanguages = TrackPreferences.defaultSubtitleLanguages,
     this.audioLanguages = const [],
     this.subtitlesOn = true,
+    this.sidebarCollapsed = false,
+    this.sidebarWidth = defaultSidebarWidth,
+    this.hiddenCategoryLists = const {},
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -38,6 +41,20 @@ final class AppSettings {
   /// Whether subtitles are shown by default.
   final bool subtitlesOn;
 
+  /// Whether the sidebar shows icons only, chosen by the user.
+  final bool sidebarCollapsed;
+
+  /// Width of the full sidebar, between [minSidebarWidth] and
+  /// [maxSidebarWidth].
+  final double sidebarWidth;
+
+  static const defaultSidebarWidth = 232.0;
+  static const minSidebarWidth = 200.0;
+  static const maxSidebarWidth = 360.0;
+
+  /// Sections whose category list is hidden: `live`, `movies`, `series`.
+  final Set<String> hiddenCategoryLists;
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -51,6 +68,9 @@ final class AppSettings {
     List<String>? subtitleLanguages,
     List<String>? audioLanguages,
     bool? subtitlesOn,
+    bool? sidebarCollapsed,
+    double? sidebarWidth,
+    Set<String>? hiddenCategoryLists,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -58,6 +78,9 @@ final class AppSettings {
     subtitleLanguages: subtitleLanguages ?? this.subtitleLanguages,
     audioLanguages: audioLanguages ?? this.audioLanguages,
     subtitlesOn: subtitlesOn ?? this.subtitlesOn,
+    sidebarCollapsed: sidebarCollapsed ?? this.sidebarCollapsed,
+    sidebarWidth: sidebarWidth ?? this.sidebarWidth,
+    hiddenCategoryLists: hiddenCategoryLists ?? this.hiddenCategoryLists,
   );
 
   Map<String, Object?> toJson() => {
@@ -67,6 +90,9 @@ final class AppSettings {
     'subtitleLanguages': subtitleLanguages,
     'audioLanguages': audioLanguages,
     'subtitlesOn': subtitlesOn,
+    'sidebarCollapsed': sidebarCollapsed,
+    'sidebarWidth': sidebarWidth,
+    'hiddenCategoryLists': hiddenCategoryLists.toList(),
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -74,6 +100,8 @@ final class AppSettings {
     if (json is! Map) return const AppSettings();
     final zone = json['guideTimeZone'];
     final shift = json['guideShiftHours'];
+    final width = json['sidebarWidth'];
+    final hidden = json['hiddenCategoryLists'];
     return AppSettings(
       guideTimeZone: zone is String && zone.isNotEmpty ? zone : null,
       guideShiftHours: shift is int && shift.abs() <= maxShiftHours ? shift : 0,
@@ -83,6 +111,13 @@ final class AppSettings {
           TrackPreferences.defaultSubtitleLanguages,
       audioLanguages: _languages(json['audioLanguages']) ?? const [],
       subtitlesOn: json['subtitlesOn'] != false,
+      sidebarCollapsed: json['sidebarCollapsed'] == true,
+      sidebarWidth: width is num && width.isFinite
+          ? width.toDouble().clamp(minSidebarWidth, maxSidebarWidth)
+          : defaultSidebarWidth,
+      hiddenCategoryLists: hidden is List
+          ? hidden.whereType<String>().toSet()
+          : const {},
     );
   }
 

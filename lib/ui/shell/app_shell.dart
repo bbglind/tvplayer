@@ -1,5 +1,9 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/app_settings.dart';
+import '../../state/providers.dart';
 import '../epg/guide_screen.dart';
 import '../live/live_tv_screen.dart';
 import '../settings/settings_screen.dart';
@@ -10,18 +14,25 @@ import '../vod/movies_screen.dart';
 import '../vod/series_screen.dart';
 
 /// Main layout: the sidebar plus the selected section.
-class AppShell extends StatefulWidget {
+///
+/// The sidebar can be collapsed to icons only and resized by dragging its
+/// right edge; both are remembered in [AppSettings].
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
   /// Below this window width the sidebar shows icons only.
   static const compactWidth = 900.0;
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
+
+  /// The width the user is dragging the sidebar to; null when not dragging.
+  /// Below [AppSettings.minSidebarWidth] it previews icons only.
+  double? _dragWidth;
 
   static const _sections = [
     (icon: Icons.live_tv_outlined, label: 'Live TV'),
@@ -31,30 +42,123 @@ class _AppShellState extends State<AppShell> {
   ];
   static const _settings = (icon: Icons.settings_outlined, label: 'Settings');
 
+  void _remember(AppSettings Function(AppSettings) apply) =>
+      ref.read(appSettingsProvider.notifier).remember(apply);
+
+  void _toggle(bool collapsed) =>
+      _remember((s) => s.copyWith(sidebarCollapsed: !collapsed));
+
+  void _endDrag() {
+    final width = _dragWidth;
+    if (width == null) return;
+    setState(() => _dragWidth = null);
+    _remember(
+      (s) => width < AppSettings.minSidebarWidth
+          // Dragged below the minimum: snap to icons only and keep the last
+          // full width for when it's expanded again.
+          ? s.copyWith(sidebarCollapsed: true)
+          : s.copyWith(
+              sidebarCollapsed: false,
+              sidebarWidth: width.clamp(
+                AppSettings.minSidebarWidth,
+                AppSettings.maxSidebarWidth,
+              ),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final settings =
+        ref.watch(appSettingsProvider).value ?? const AppSettings();
     return Scaffold(
       body: LayoutBuilder(
-        builder: (context, constraints) => Row(
-          children: [
-            Sidebar(
-              compact: constraints.maxWidth < AppShell.compactWidth,
-              selectedIndex: _index,
-              onSelect: (i) => setState(() => _index = i),
-              items: _sections,
-              bottomItem: _settings,
-            ),
-            Expanded(
-              child: switch (_index) {
-                0 => const LiveTvScreen(),
-                1 => const GuideScreen(),
-                2 => const MoviesScreen(),
-                3 => const SeriesScreen(),
-                _ => const SettingsScreen(),
-              },
-            ),
-          ],
-        ),
+        builder: (context, constraints) {
+          // Narrow windows always get icons only, without the controls.
+          final forced = constraints.maxWidth < AppShell.compactWidth;
+          final drag = _dragWidth;
+          final collapsed = drag != null
+              ? drag < AppSettings.minSidebarWidth
+              : settings.sidebarCollapsed;
+          final compact = forced || collapsed;
+          final width = compact
+              ? Sidebar.compactWidth
+              : (drag ?? settings.sidebarWidth).clamp(
+                  AppSettings.minSidebarWidth,
+                  AppSettings.maxSidebarWidth,
+                );
+          return Stack(
+            children: [
+              Row(
+                children: [
+                  Sidebar(
+                    compact: compact,
+                    width: width,
+                    collapsed: collapsed,
+                    onToggle: forced ? null : () => _toggle(collapsed),
+                    selectedIndex: _index,
+                    onSelect: (i) => setState(() => _index = i),
+                    items: _sections,
+                    bottomItem: _settings,
+                  ),
+                  Expanded(
+                    child: switch (_index) {
+                      0 => const LiveTvScreen(),
+                      1 => const GuideScreen(),
+                      2 => const MoviesScreen(),
+                      3 => const SeriesScreen(),
+                      _ => const SettingsScreen(),
+                    },
+                  ),
+                ],
+              ),
+              if (!forced)
+                Positioned(
+                  left: width - _ResizeHandle.width / 2,
+                  top: 0,
+                  bottom: 0,
+                  width: _ResizeHandle.width,
+                  child: _ResizeHandle(
+                    onStart: () => setState(() => _dragWidth = width),
+                    onUpdate: (dx) =>
+                        setState(() => _dragWidth = (_dragWidth ?? width) + dx),
+                    onEnd: _endDrag,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The draggable right edge of the sidebar.
+class _ResizeHandle extends StatelessWidget {
+  const _ResizeHandle({
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+  });
+
+  static const width = 8.0;
+
+  final VoidCallback onStart;
+  final ValueChanged<double> onUpdate;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      key: const Key('sidebar.resize'),
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragStart: (_) => onStart(),
+        onHorizontalDragUpdate: (d) => onUpdate(d.delta.dx),
+        onHorizontalDragEnd: (_) => onEnd(),
+        onHorizontalDragCancel: onEnd,
       ),
     );
   }
@@ -64,7 +168,8 @@ typedef SidebarItem = ({IconData icon, String label});
 
 /// The left navigation: app mark and name, [items] from the top and
 /// [bottomItem] at the bottom (its index is `items.length`). [compact]
-/// shows icons only, with the labels as tooltips.
+/// shows icons only, with the labels as tooltips. With [onToggle] it has a
+/// button to collapse ([collapsed] false) or expand it.
 class Sidebar extends StatelessWidget {
   const Sidebar({
     super.key,
@@ -73,13 +178,24 @@ class Sidebar extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelect,
     this.compact = false,
+    this.width = AppSettings.defaultSidebarWidth,
+    this.collapsed = false,
+    this.onToggle,
   });
+
+  /// Width when [compact].
+  static const compactWidth = 76.0;
 
   final List<SidebarItem> items;
   final SidebarItem bottomItem;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final bool compact;
+
+  /// Width when not [compact].
+  final double width;
+  final bool collapsed;
+  final VoidCallback? onToggle;
 
   Widget _item(int index, SidebarItem item) => Padding(
     padding: const EdgeInsets.only(bottom: 4),
@@ -93,11 +209,28 @@ class Sidebar extends StatelessWidget {
     ),
   );
 
+  Widget? _toggleButton() {
+    final onToggle = this.onToggle;
+    if (onToggle == null) return null;
+    return IconButton(
+      key: const Key('sidebar.toggle'),
+      tooltip: collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+      iconSize: 20,
+      color: AppColors.textSecondary,
+      icon: Icon(
+        collapsed
+            ? Icons.keyboard_double_arrow_right
+            : Icons.keyboard_double_arrow_left,
+      ),
+      onPressed: onToggle,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const Key('sidebar'),
-      width: compact ? 76 : 232,
+      width: compact ? compactWidth : width,
       color: AppColors.surface,
       padding: EdgeInsets.symmetric(
         vertical: 24,
@@ -107,7 +240,7 @@ class Sidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Brand(compact: compact),
+            _Brand(compact: compact, toggle: _toggleButton()),
             const SizedBox(height: 28),
             for (final (i, item) in items.indexed) _item(i, item),
             const Spacer(),
@@ -120,9 +253,13 @@ class Sidebar extends StatelessWidget {
 }
 
 class _Brand extends StatelessWidget {
-  const _Brand({required this.compact});
+  const _Brand({required this.compact, this.toggle});
 
   final bool compact;
+
+  /// The collapse/expand button: after the name, or under the mark when
+  /// [compact].
+  final Widget? toggle;
 
   @override
   Widget build(BuildContext context) {
@@ -140,10 +277,13 @@ class _Brand extends StatelessWidget {
       ),
     );
     if (compact) {
-      return Semantics(
+      final brand = Semantics(
         label: 'tvplayer',
         child: Center(child: mark),
       );
+      final toggle = this.toggle;
+      if (toggle == null) return brand;
+      return Column(children: [brand, const SizedBox(height: 12), toggle]);
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -151,7 +291,7 @@ class _Brand extends StatelessWidget {
         children: [
           mark,
           const SizedBox(width: 12),
-          const Flexible(
+          const Expanded(
             child: Text(
               'tvplayer',
               maxLines: 1,
@@ -164,6 +304,7 @@ class _Brand extends StatelessWidget {
               ),
             ),
           ),
+          ?toggle,
         ],
       ),
     );
@@ -190,6 +331,7 @@ class _SidebarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = selected ? AppColors.textPrimary : AppColors.textSecondary;
     final content = Stack(
+      alignment: AlignmentDirectional.centerStart,
       children: [
         if (selected)
           const Positioned(

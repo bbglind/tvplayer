@@ -244,6 +244,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('2020 · Drama · ★ 7.5 · 1 h 30 min'), findsOneWidget);
+      // The title shows once, as the heading; the top bar has only the back
+      // arrow.
+      expect(find.text('Movie 00000'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.byType(Text)),
+        findsNothing,
+      );
+      expect(find.byType(BackButton), findsOneWidget);
       expect(find.text('A synthetic plot.'), findsOneWidget);
       expect(find.textContaining('Actor One, Actor Two'), findsOneWidget);
       expect(find.text('Resume from 42:00'), findsOneWidget);
@@ -358,6 +366,11 @@ void main() {
       await _pump(tester, child: const SeriesScreen(), watch: watch);
       await tester.tap(find.byKey(const ValueKey(0)));
       await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: find.byType(Text)),
+        findsNothing,
+      );
 
       final chips = tester
           .widgetList<ChoiceChip>(find.byType(ChoiceChip))

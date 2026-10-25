@@ -14,6 +14,7 @@ import 'package:tvplayer/data/provider_storage.dart';
 import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/theme/app_theme.dart';
+import 'package:tvplayer/ui/theme/input_mode.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 /// In-memory [ProviderStorage]. Set [failure] to simulate an unavailable
@@ -350,7 +351,8 @@ const activeAccountJson = {
   'server_info': {'timezone': 'UTC'},
 };
 
-/// Wraps [child] in a ProviderScope (no automatic retries) and MaterialApp.
+/// Wraps [child] in a ProviderScope (no automatic retries) and MaterialApp
+/// with the app's [InputModeScope].
 ///
 /// Settings, the guide and catalogue caches, the watch history, posters and
 /// the device time zone (`Europe/Stockholm`) are always faked; pass
@@ -380,6 +382,10 @@ Widget testApp({
       ...overrides,
     ],
     retry: (_, _) => null,
-    child: MaterialApp(theme: AppTheme.dark(), home: child),
+    child: MaterialApp(
+      theme: AppTheme.dark(),
+      builder: (context, child) => InputModeScope(child: child!),
+      home: child,
+    ),
   );
 }

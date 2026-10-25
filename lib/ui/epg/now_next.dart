@@ -31,6 +31,10 @@ class NowNextLine extends ConsumerWidget {
 
   final LiveStream channel;
 
+  /// Space above the progress bar, and its height.
+  static const progressGap = 6.0;
+  static const progressHeight = 3.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final nowNext = watchNowNext(ref, channel);
@@ -55,8 +59,8 @@ class NowNextLine extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         text,
-        const SizedBox(height: 6),
-        ProgressStrip(airedFraction(now, clock)),
+        const SizedBox(height: progressGap),
+        ProgressStrip(airedFraction(now, clock), height: progressHeight),
       ],
     );
   }

@@ -62,7 +62,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.series.name)),
+      appBar: AppBar(),
       body: FutureBuilder(
         future: _info,
         builder: (context, snapshot) {
@@ -258,7 +258,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               // Room for the focus ring.
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(6),
               child: Row(
                 children: [
                   for (final tab in tabs)
@@ -297,18 +297,23 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
   Widget _seasonChip(SeriesInfo info, SeasonTab tab, WatchData watch) {
     final progress = seasonProgress(info, tab.number, watch);
     final selected = tab.number == _season;
-    return ChoiceChip(
-      key: Key('season.${tab.number}'),
-      selected: selected,
-      avatar: progress.complete
-          ? Icon(
-              Icons.check_circle,
-              key: const Key('season.complete'),
-              color: selected ? AppColors.onAccent : AppColors.success,
-            )
-          : null,
-      label: Text('${tab.name} · ${progress.label}'),
-      onSelected: (_) => setState(() => _season = tab.number),
+    return FocusRing(
+      radius: AppRadius.pill,
+      child: ChoiceChip(
+        key: Key('season.${tab.number}'),
+        // No padded tap target, so the ring hugs the chip.
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        selected: selected,
+        avatar: progress.complete
+            ? Icon(
+                Icons.check_circle,
+                key: const Key('season.complete'),
+                color: selected ? AppColors.onAccent : AppColors.success,
+              )
+            : null,
+        label: Text('${tab.name} · ${progress.label}'),
+        onSelected: (_) => setState(() => _season = tab.number),
+      ),
     );
   }
 }

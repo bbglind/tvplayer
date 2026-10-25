@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/vod_controller.dart';
+import '../shell/category_layout.dart';
 import '../theme/widgets.dart';
 
 /// Categories on the left; search, a "Continue watching" row and a lazily
@@ -99,21 +100,17 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
               onRetry: widget.onRefresh,
             );
     }
-    return Row(
-      children: [
-        SizedBox(
-          width: 260,
-          child: _CategoryList(
-            key: Key('$what.categories'),
-            what: what,
-            catalog: catalog,
-            selected: widget.filter.categoryId,
-            onSelect: widget.onCategory,
-          ),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(child: _buildMain(context, catalog)),
-      ],
+    return CategoryLayout(
+      section: what,
+      width: 260,
+      list: _CategoryList(
+        key: Key('$what.categories'),
+        what: what,
+        catalog: catalog,
+        selected: widget.filter.categoryId,
+        onSelect: widget.onCategory,
+      ),
+      content: _buildMain(context, catalog),
     );
   }
 
@@ -129,6 +126,7 @@ class _VodBrowserState<T extends Object> extends State<VodBrowser<T>> {
           padding: const EdgeInsets.fromLTRB(28, 28, 28, 16),
           child: Row(
             children: [
+              ShowCategoriesButton(section: what),
               Expanded(
                 child: SearchField(
                   key: Key('$what.search'),
@@ -234,7 +232,7 @@ class _CategoryList extends StatelessWidget {
   Widget build(BuildContext context) {
     final categories = catalog.categories;
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 28, 12, 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 12, 16),
       itemCount: categories.length + 1,
       itemBuilder: (context, i) {
         final category = i == 0 ? null : categories[i - 1];

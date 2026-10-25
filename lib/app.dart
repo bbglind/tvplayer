@@ -8,6 +8,7 @@ import 'state/providers.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
 import 'ui/theme/app_theme.dart';
+import 'ui/theme/input_mode.dart';
 
 class TvPlayerApp extends ConsumerStatefulWidget {
   const TvPlayerApp({super.key});
@@ -42,6 +43,7 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
     return MaterialApp(
       title: 'tvplayer',
       theme: AppTheme.dark(),
+      builder: (context, child) => InputModeScope(child: child!),
       home: const RootGate(),
     );
   }

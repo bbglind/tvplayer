@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'widgets.dart';
 
 /// Corner radii from docs/design.md.
 abstract final class AppRadius {
@@ -38,11 +39,6 @@ abstract final class AppTheme {
 
   /// Width of the keyboard focus ring.
   static const focusWidth = 2.5;
-
-  static const _focusSide = BorderSide(
-    color: AppColors.accent,
-    width: focusWidth,
-  );
 
   static const colorScheme = ColorScheme(
     brightness: Brightness.dark,
@@ -136,10 +132,6 @@ abstract final class AppTheme {
     return null;
   });
 
-  static final _focusRing = WidgetStateProperty.resolveWith<BorderSide?>(
-    (s) => s.contains(WidgetState.focused) ? _focusSide : BorderSide.none,
-  );
-
   static const _buttonShape = WidgetStatePropertyAll(
     RoundedRectangleBorder(
       borderRadius: BorderRadius.all(Radius.circular(AppRadius.small)),
@@ -174,11 +166,7 @@ abstract final class AppTheme {
     overlayColor: const WidgetStatePropertyAll(Colors.transparent),
     // The ring sits on the accent fill, so it is drawn in textPrimary to
     // stay visible.
-    side: WidgetStateProperty.resolveWith(
-      (s) => s.contains(WidgetState.focused)
-          ? const BorderSide(color: AppColors.textPrimary, width: focusWidth)
-          : BorderSide.none,
-    ),
+    backgroundBuilder: focusRingLayer(AppColors.textPrimary),
     textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
     shape: _buttonShape,
     padding: _buttonPadding,
@@ -204,7 +192,7 @@ abstract final class AppTheme {
           : AppColors.textPrimary,
     ),
     overlayColor: _neutralOverlay,
-    side: _focusRing,
+    backgroundBuilder: focusRingLayer(AppColors.accent),
     textStyle: WidgetStatePropertyAll(
       textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w500),
     ),
@@ -223,7 +211,7 @@ abstract final class AppTheme {
       return AppColors.accent;
     }),
     overlayColor: _neutralOverlay,
-    side: _focusRing,
+    backgroundBuilder: focusRingLayer(AppColors.accent),
     textStyle: WidgetStatePropertyAll(textTheme.labelLarge),
     shape: _buttonShape,
     padding: const WidgetStatePropertyAll(
@@ -239,7 +227,7 @@ abstract final class AppTheme {
       return AppColors.textPrimary;
     }),
     overlayColor: _neutralOverlay,
-    side: _focusRing,
+    backgroundBuilder: focusRingLayer(AppColors.accent),
     shape: _buttonShape,
   );
 
@@ -330,17 +318,9 @@ abstract final class AppTheme {
         ),
         checkmarkColor: AppColors.onAccent,
         showCheckmark: false,
-        // On the accent fill of a selected chip an accent ring wouldn't
-        // show, so that one is drawn in textPrimary.
-        side: WidgetStateBorderSide.resolveWith((s) {
-          if (!s.contains(WidgetState.focused)) return BorderSide.none;
-          return s.contains(WidgetState.selected)
-              ? const BorderSide(
-                  color: AppColors.textPrimary,
-                  width: focusWidth,
-                )
-              : _focusSide;
-        }),
+        // The focus ring comes from a FocusRing around the chip, which
+        // shows only in keyboard mode.
+        side: BorderSide.none,
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         labelPadding: const EdgeInsets.symmetric(horizontal: 4),

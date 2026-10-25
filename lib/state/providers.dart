@@ -257,6 +257,16 @@ class AppSettingsNotifier extends AsyncNotifier<AppSettings> {
     state = AsyncData(settings);
     await ref.read(settingsStorageProvider).save(settings);
   }
+
+  /// Applies [apply] to the loaded settings and saves them. Waits for the
+  /// saved settings first, so they are never replaced by defaults.
+  Future<void> change(AppSettings Function(AppSettings) apply) async =>
+      set(apply(await future));
+
+  /// [change] for layout preferences (sidebar, category lists): a failed
+  /// save is ignored, since the layout still applies for this session.
+  void remember(AppSettings Function(AppSettings) apply) =>
+      unawaited(change(apply).catchError((Object _) {}));
 }
 
 /// IANA name of the device's time zone. Overridden in tests.
