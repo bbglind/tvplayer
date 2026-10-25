@@ -45,3 +45,31 @@ String formatCount(int n) {
 /// [n] and the noun, singular for one: `1 movie`, `2,000 movies`.
 String formatCountOf(int n, String singular, String plural) =>
     '${formatCount(n)} ${n == 1 ? singular : plural}';
+
+/// What is left of a movie or episode: `1 h 02 min left`, `18 min left`.
+String formatTimeLeft(Duration left) {
+  final minutes = (left.inSeconds / 60).ceil().clamp(1, 1 << 31);
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  if (h == 0) return '$m min left';
+  return '$h h ${m.toString().padLeft(2, '0')} min left';
+}
+
+/// When something happened, relative to [now]: `just now`, `5 min ago`,
+/// `1 h ago`, `yesterday`, `3 days ago`.
+String formatAgo(DateTime time, DateTime now) {
+  final d = now.difference(time);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inHours < 1) return '${d.inMinutes} min ago';
+  if (d.inDays < 1) return '${d.inHours} h ago';
+  if (d.inDays == 1) return 'yesterday';
+  return '${d.inDays} days ago';
+}
+
+/// The start page greeting for the local hour [hour]: morning from 5,
+/// afternoon from 12, evening from 18.
+String greetingFor(int hour) => switch (hour) {
+  >= 5 && < 12 => 'Good morning',
+  >= 12 && < 18 => 'Good afternoon',
+  _ => 'Good evening',
+};

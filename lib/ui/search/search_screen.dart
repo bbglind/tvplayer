@@ -42,8 +42,14 @@ class SearchScreen extends ConsumerStatefulWidget {
 }
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
-  late final _search = TextEditingController(
-    text: ref.read(globalQueryProvider),
+  // With the cursor at the end, so typing started on Home continues.
+  late final _search = TextEditingController.fromValue(
+    TextEditingValue(
+      text: ref.read(globalQueryProvider),
+      selection: TextSelection.collapsed(
+        offset: ref.read(globalQueryProvider).length,
+      ),
+    ),
   );
   final _field = FocusNode(debugLabel: 'search.field');
   final _firstResult = FocusNode(debugLabel: 'search.first');

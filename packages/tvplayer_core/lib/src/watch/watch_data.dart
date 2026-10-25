@@ -168,6 +168,25 @@ final class SeriesTracks {
   final DateTime updatedAt;
 }
 
+/// When a live channel was last watched, for "Recently viewed channels".
+/// [forgotten] is a tombstone: removed from the history by hand, kept so
+/// the removal survives a merge.
+final class ChannelVisit {
+  const ChannelVisit(this.updatedAt, {this.forgotten = false});
+
+  final DateTime updatedAt;
+  final bool forgotten;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChannelVisit &&
+      other.updatedAt == updatedAt &&
+      other.forgotten == forgotten;
+
+  @override
+  int get hashCode => Object.hash(updatedAt, forgotten);
+}
+
 /// Everything remembered about watching, for one provider.
 ///
 /// Stored as a flat list of records, each with a key and a change time, so
@@ -178,6 +197,7 @@ final class WatchData {
     this.items = const {},
     this.series = const {},
     this.seriesTracks = const {},
+    this.channels = const {},
   });
 
   /// Progress by [movieKey] / [episodeKey].
@@ -189,6 +209,10 @@ final class WatchData {
   /// Remembered track choices by series id.
   final Map<int, SeriesTracks> seriesTracks;
 
+  /// Watched live channels by `LiveStream.stableId`, including forgotten
+  /// ones.
+  final Map<String, ChannelVisit> channels;
+
   static const empty = WatchData();
 
   WatchProgress? movie(int streamId) => items[movieKey(streamId)];
@@ -199,10 +223,12 @@ final class WatchData {
     Map<String, WatchProgress>? items,
     Map<int, SeriesProgress>? series,
     Map<int, SeriesTracks>? seriesTracks,
+    Map<String, ChannelVisit>? channels,
   }) => WatchData(
     items: items ?? this.items,
     series: series ?? this.series,
     seriesTracks: seriesTracks ?? this.seriesTracks,
+    channels: channels ?? this.channels,
   );
 
   /// This data with [progress] added, replacing records with the same key.
@@ -235,6 +261,7 @@ final class WatchData {
         other.seriesTracks,
         (t) => t.updatedAt,
       ),
+      channels: newest(channels, other.channels, (v) => v.updatedAt),
     );
   }
 
@@ -255,6 +282,12 @@ final class WatchData {
           record('series:$key', value.updatedAt, value.toJson()),
         for (final MapEntry(:key, :value) in seriesTracks.entries)
           record('tracks:$key', value.updatedAt, value.memory.toJson()),
+        for (final MapEntry(:key, :value) in channels.entries)
+          record(
+            'channel:$key',
+            value.updatedAt,
+            value.forgotten ? {'forgotten': true} : const <String, Object?>{},
+          ),
       ],
     };
   }
@@ -264,6 +297,7 @@ final class WatchData {
     final items = <String, WatchProgress>{};
     final series = <int, SeriesProgress>{};
     final tracks = <int, SeriesTracks>{};
+    final channels = <String, ChannelVisit>{};
     for (final r in readList(readMap(json)?['records'])) {
       final record = readMap(r);
       final key = readString(record?['k']);
@@ -284,9 +318,19 @@ final class WatchData {
             TrackMemory.fromJson(value),
             time,
           );
+        case 'channel' when id.isNotEmpty:
+          channels[id] = ChannelVisit(
+            time,
+            forgotten: readBool(readMap(value)?['forgotten']),
+          );
       }
     }
-    return WatchData(items: items, series: series, seriesTracks: tracks);
+    return WatchData(
+      items: items,
+      series: series,
+      seriesTracks: tracks,
+      channels: channels,
+    );
   }
 }
 

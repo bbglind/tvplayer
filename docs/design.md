@@ -72,8 +72,9 @@ weights 400, 500, 600, 700.
     3 px accent bar on the left edge (inside the item).
   - Inactive item: text `textSecondary`, weight 500.
   - Settings sits at the bottom, pushed down.
-  - Order (when the sections exist): Search, Home, Live TV, TV Guide,
-    Movies, Series, Downloads, … Settings at the bottom.
+  - Order (when the sections exist): Home, Search, Live TV, TV Guide,
+    Movies, Series, Downloads, … Settings at the bottom. The app opens on
+    Home.
 - **Main area**: page title row (title left, search field right, then
   page actions such as reload), then sections stacked vertically. On
   pages with a category list the title row spans the full width above the
@@ -125,6 +126,18 @@ weights 400, 500, 600, 700.
   long press (touch) and Menu key / Shift+F10. Menus and dialogs can't be
   drawn over the embedded mpv video: next to it, use a side panel (like the
   track panel) instead.
+- **Start page (Home)**: header with the greeting ("Good morning /
+  afternoon / evening") left and a search field right that opens the
+  Search page with what was typed. Then rows, each with a section title
+  (20/600) and a horizontally scrolling list (vertical wheel scrolls the
+  page; Shift+wheel, touchpad, hover arrows and the keyboard scroll the
+  row): the Featured banner (backdrop with the bottom fade, or the poster
+  at the left on `card`; hero title, meta line, two lines of plot, Play
+  and More info, page dots; rotates every 8 s unless hovered or focused,
+  Left/Right page), recently viewed channel cards, my-category tiles
+  (icon, type overline, name, count), Continue watching thumbnails and
+  Recently added posters with "See all". Rows still loading show `card`
+  placeholders; empty rows are left out.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).
@@ -142,6 +155,10 @@ English for now.
 | Favourite (star) | The item is in at least one of my categories |
 | Continue watching | Started movies and episodes |
 | Hidden | Hidden provider categories |
+| Featured | The banner at the top of Home |
+| Recently viewed channels | The last live channels played (up to 20) |
+| Recently added series / movies | Newest series (by last update) / movies (by date added) |
+| Edit home | The mode that moves and hides Home rows |
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).
@@ -159,6 +176,14 @@ English for now.
 - Sort: "Recently added" (Series: "Recently updated"), "A–Z", "Top rated".
   Year filter: "This year", "Last 2 years", "Last 5 years", "Custom
   range…". "Reset filters" clears year and genre.
+- Home: "Continue watching" mixes movies and episodes, most recently
+  watched first, without hidden categories; Enter or a click resumes
+  playback, the context menu has "Open details". Its card says what is
+  left: "S2 · E4 · 18 min left", "1 h 02 min left". Recently viewed
+  channels say "Watched 1 h ago" and the programme on now; their context
+  menu has "Remove from recently viewed". "See all" opens Movies/Series
+  with "All" and "Recently added". With no categories of mine, the row
+  shows a hint about the star.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".
 

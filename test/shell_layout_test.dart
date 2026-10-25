@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
+import 'package:tvplayer/state/navigation.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -30,6 +31,9 @@ Future<FakeSettingsStorage> _pump(
       child: const AppShell(),
     ),
   );
+  await tester.pumpAndSettle();
+  // The app opens on Home; these tests start on Live TV.
+  await tester.tap(find.byKey(Key('nav.${AppSection.live.index}')));
   await tester.pumpAndSettle();
   return settings;
 }

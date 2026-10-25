@@ -100,4 +100,39 @@ void main() {
       VodSort.recent,
     );
   });
+
+  test('home layout: moves and hides rows, round-trips, repairs bad JSON', () {
+    final layout = HomeLayout.defaults
+        .move(HomeRowId.recentMovies, -2)
+        .withVisible(HomeRowId.featured, false);
+    expect(layout.rows.map((r) => r.id), [
+      HomeRowId.featured,
+      HomeRowId.channels,
+      HomeRowId.myCategories,
+      HomeRowId.recentMovies,
+      HomeRowId.continueWatching,
+      HomeRowId.recentSeries,
+    ]);
+    expect(layout.move(HomeRowId.featured, -1), same(layout));
+    final settings = AppSettings(homeLayout: layout);
+    expect(AppSettings.fromJson(settings.toJson()).homeLayout, layout);
+
+    // Unknown and repeated rows are dropped, missing ones added, shown.
+    final repaired = HomeLayout.fromJson([
+      {'id': 'recentSeries', 'visible': false},
+      {'id': 'downloads'},
+      {'id': 'recentSeries'},
+      'garbage',
+    ]);
+    expect(
+      repaired.rows.first,
+      const HomeRow(HomeRowId.recentSeries, visible: false),
+    );
+    expect(repaired.rows, hasLength(HomeRowId.values.length));
+    expect(repaired.rows.skip(1).every((r) => r.visible), isTrue);
+    expect(
+      AppSettings.fromJson({'homeLayout': 3}).homeLayout,
+      HomeLayout.defaults,
+    );
+  });
 }

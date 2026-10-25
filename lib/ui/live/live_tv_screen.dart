@@ -389,29 +389,7 @@ class _ChannelContent extends StatelessWidget {
             style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
-        Container(
-          width: 44,
-          height: 44,
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.all(Radius.circular(AppRadius.small)),
-          ),
-          clipBehavior: Clip.antiAlias,
-          padding: const EdgeInsets.all(4),
-          child: logo == null || logo.isEmpty
-              ? const Icon(
-                  Icons.live_tv_outlined,
-                  size: 20,
-                  color: AppColors.textMuted,
-                )
-              : Poster(
-                  url: logo,
-                  decodeWidth: 88,
-                  fit: BoxFit.contain,
-                  placeholder: Icons.live_tv_outlined,
-                  background: AppColors.background,
-                ),
-        ),
+        ChannelLogo(logo),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
@@ -431,6 +409,41 @@ class _ChannelContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The 44×44 logo tile of a channel, with a TV icon when it has no logo.
+class ChannelLogo extends StatelessWidget {
+  const ChannelLogo(this.url, {super.key});
+
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = url;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.all(Radius.circular(AppRadius.small)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.all(4),
+      child: logo == null || logo.isEmpty
+          ? const Icon(
+              Icons.live_tv_outlined,
+              size: 20,
+              color: AppColors.textMuted,
+            )
+          : Poster(
+              url: logo,
+              decodeWidth: 88,
+              fit: BoxFit.contain,
+              placeholder: Icons.live_tv_outlined,
+              background: AppColors.background,
+            ),
     );
   }
 }

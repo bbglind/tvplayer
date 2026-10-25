@@ -49,8 +49,8 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
   }
 }
 
-/// Shows setup when no provider is saved, Live TV otherwise, and a keyring
-/// error with retry when the saved provider can't be read.
+/// Shows setup when no provider is saved, the app (on Home) otherwise,
+/// and a keyring error with retry when the saved provider can't be read.
 class RootGate extends ConsumerWidget {
   const RootGate({super.key});
 

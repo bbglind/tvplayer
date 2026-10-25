@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
+import 'package:tvplayer_core/tvplayer_core.dart'
+    as core
+    show forgetChannel, recordChannel;
 
 import 'providers.dart';
 
@@ -108,6 +111,14 @@ class WatchController extends Notifier<WatchData> {
   /// Brings the stored summary of [info] up to date (e.g. new episodes).
   void refreshSeriesSummary(SeriesInfo info) =>
       _update(refreshSeries(state, info));
+
+  /// Adds [channel] to "Recently viewed channels".
+  void recordChannel(LiveStream channel) =>
+      _update(core.recordChannel(state, channel.stableId, _now));
+
+  /// Removes channel [stableId] from "Recently viewed channels".
+  void forgetChannel(String stableId) =>
+      _update(core.forgetChannel(state, stableId, _now));
 
   /// Remembers a manual track choice for the rest of a series.
   void rememberTracks(int seriesId, TrackMemory memory) {

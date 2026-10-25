@@ -207,21 +207,40 @@ class _FavouriteButtonState extends ConsumerState<FavouriteButton> {
   }
 }
 
+/// An entry of an [ItemContextMenu] besides "Add to favourites…".
+@immutable
+final class ItemMenuAction {
+  const ItemMenuAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final Key? key;
+}
+
 /// The context menu of a channel, movie or series around [child]: opened
 /// by a right click, a long press (touch) or the Menu key / Shift+F10
-/// while [child] has focus. For now it offers "Add to favourites…", which
-/// turns the menu into the favourites checkboxes in place.
+/// while [child] has focus. It offers [actions], then "Add to
+/// favourites…", which turns the menu into the favourites checkboxes in
+/// place.
 class ItemContextMenu extends ConsumerStatefulWidget {
   const ItemContextMenu({
     super.key,
     required this.item,
     required this.name,
     required this.child,
+    this.actions = const [],
   });
 
   final ItemRef item;
   final String name;
   final Widget child;
+  final List<ItemMenuAction> actions;
 
   @override
   ConsumerState<ItemContextMenu> createState() => _ItemContextMenuState();
@@ -279,15 +298,24 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
             onNew: () =>
                 _addToNewCategory(context, ref, widget.item, widget.name),
           )
-        else
+        else ...[
+          for (final (i, a) in widget.actions.indexed)
+            MenuItemButton(
+              key: a.key,
+              focusNode: i == 0 ? _first : null,
+              leadingIcon: Icon(a.icon),
+              onPressed: a.onPressed,
+              child: Text(a.label),
+            ),
           MenuItemButton(
             key: const Key('context.favourites'),
-            focusNode: _first,
+            focusNode: widget.actions.isEmpty ? _first : null,
             closeOnActivate: false,
             leadingIcon: const Icon(Icons.star_border),
             onPressed: _showFavourites,
             child: const Text('Add to favourites…'),
           ),
+        ],
       ],
       child: CallbackShortcuts(
         bindings: {

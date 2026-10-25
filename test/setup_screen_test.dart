@@ -74,9 +74,7 @@ void main() {
     expect(find.byKey(const Key('setup.host')), findsOneWidget);
   });
 
-  testWidgets('with a saved provider, opens straight to Live TV', (
-    tester,
-  ) async {
+  testWidgets('with a saved provider, opens straight to Home', (tester) async {
     await _pumpGate(
       tester,
       storage: FakeProviderStorage(
@@ -88,8 +86,9 @@ void main() {
       ),
     );
     expect(find.text('Add a provider'), findsNothing);
-    // In the sidebar and as the page title.
-    expect(find.text('Live TV'), findsNWidgets(2));
+    expect(find.byKey(const Key('home.search')), findsOneWidget);
+    await tester.tap(find.text('Live TV'));
+    await tester.pumpAndSettle();
     expect(find.text('Test Channel 1'), findsOneWidget);
   });
 
@@ -168,7 +167,7 @@ void main() {
     expect(find.textContaining('Connected'), findsNothing);
   });
 
-  testWidgets('saving stores the config and opens Live TV', (tester) async {
+  testWidgets('saving stores the config and opens Home', (tester) async {
     final storage = FakeProviderStorage();
     await _pumpGate(tester, storage: storage);
     await _fillXtream(tester);
@@ -179,7 +178,7 @@ void main() {
     expect(storage.saved?.type, ProviderType.xtream);
     expect(storage.saved?.username, _user);
     expect(storage.saved?.password, _pass);
-    expect(find.text('Test Channel 1'), findsOneWidget);
+    expect(find.byKey(const Key('home.search')), findsOneWidget);
   });
 
   testWidgets('M3U mode tests the playlist', (tester) async {

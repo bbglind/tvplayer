@@ -4,6 +4,10 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import 'home_layout.dart';
+
+export 'home_layout.dart';
+
 /// User preferences that are not secret.
 final class AppSettings {
   const AppSettings({
@@ -21,6 +25,7 @@ final class AppSettings {
     this.showHiddenInGlobalSearch = false,
     this.movieSort = VodSort.recent,
     this.seriesSort = VodSort.recent,
+    this.homeLayout = HomeLayout.defaults,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -83,6 +88,9 @@ final class AppSettings {
   /// Sort order of the Series tab.
   final VodSort seriesSort;
 
+  /// Order and visibility of the start page rows.
+  final HomeLayout homeLayout;
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -104,6 +112,7 @@ final class AppSettings {
     bool? showHiddenInGlobalSearch,
     VodSort? movieSort,
     VodSort? seriesSort,
+    HomeLayout? homeLayout,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -120,6 +129,7 @@ final class AppSettings {
         showHiddenInGlobalSearch ?? this.showHiddenInGlobalSearch,
     movieSort: movieSort ?? this.movieSort,
     seriesSort: seriesSort ?? this.seriesSort,
+    homeLayout: homeLayout ?? this.homeLayout,
   );
 
   Map<String, Object?> toJson() => {
@@ -137,6 +147,7 @@ final class AppSettings {
     'showHiddenInGlobalSearch': showHiddenInGlobalSearch,
     'movieSort': movieSort.name,
     'seriesSort': seriesSort.name,
+    'homeLayout': homeLayout.toJson(),
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -179,6 +190,7 @@ final class AppSettings {
       showHiddenInGlobalSearch: json['showHiddenInGlobalSearch'] == true,
       movieSort: VodSort.byName(_string(json['movieSort'])) ?? VodSort.recent,
       seriesSort: VodSort.byName(_string(json['seriesSort'])) ?? VodSort.recent,
+      homeLayout: HomeLayout.fromJson(json['homeLayout']),
     );
   }
 

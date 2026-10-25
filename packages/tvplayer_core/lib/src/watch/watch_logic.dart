@@ -266,3 +266,52 @@ List<(int, SeriesProgress)> continueSeries(WatchData data) {
   ]..sort((a, b) => b.$2.updatedAt.compareTo(a.$2.updatedAt));
   return result;
 }
+
+/// How many channels "Recently viewed channels" remembers.
+const maxChannelHistory = 20;
+
+/// [data] with channel [stableId] watched at [now]. Only the newest
+/// [maxChannelHistory] channels (and as many removals) are kept.
+WatchData recordChannel(WatchData data, String stableId, DateTime now) =>
+    data.copyWith(
+      channels: _trimChannels({
+        ...data.channels,
+        stableId: ChannelVisit(now),
+      }),
+    );
+
+/// [data] with channel [stableId] removed from the history at [now].
+WatchData forgetChannel(WatchData data, String stableId, DateTime now) {
+  final visit = data.channels[stableId];
+  if (visit == null || visit.forgotten) return data;
+  return data.copyWith(
+    channels: _trimChannels({
+      ...data.channels,
+      stableId: ChannelVisit(now, forgotten: true),
+    }),
+  );
+}
+
+/// The newest [maxChannelHistory] visits and as many removals.
+Map<String, ChannelVisit> _trimChannels(Map<String, ChannelVisit> channels) {
+  final sorted = channels.entries.toList()
+    ..sort((a, b) => b.value.updatedAt.compareTo(a.value.updatedAt));
+  var visits = 0;
+  var removals = 0;
+  return {
+    for (final MapEntry(:key, :value) in sorted)
+      if (value.forgotten
+          ? ++removals <= maxChannelHistory
+          : ++visits <= maxChannelHistory)
+        key: value,
+  };
+}
+
+/// Recently watched channels, newest first, as (stable id, time).
+List<(String, DateTime)> recentChannels(WatchData data) {
+  final result = [
+    for (final MapEntry(:key, :value) in data.channels.entries)
+      if (!value.forgotten) (key, value.updatedAt),
+  ]..sort((a, b) => b.$2.compareTo(a.$2));
+  return result.take(maxChannelHistory).toList();
+}

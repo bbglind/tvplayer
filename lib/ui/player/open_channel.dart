@@ -7,9 +7,12 @@ import '../../state/providers.dart';
 import 'mpv_player_screen.dart';
 import 'player_screen.dart';
 
-/// Opens the player for [channel].
-void openChannel(BuildContext context, WidgetRef ref, LiveStream channel) =>
-    openPlayback(context, ref, LivePlayback(channel));
+/// Opens the player for [channel] and adds it to "Recently viewed
+/// channels".
+void openChannel(BuildContext context, WidgetRef ref, LiveStream channel) {
+  ref.read(watchProvider.notifier).recordChannel(channel);
+  openPlayback(context, ref, LivePlayback(channel));
+}
 
 /// Opens the player for [request].
 Future<void> openPlayback(

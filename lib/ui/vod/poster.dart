@@ -59,6 +59,7 @@ class Poster extends ConsumerWidget {
     required this.url,
     this.decodeWidth = 300,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.placeholder = Icons.movie_outlined,
     this.background = AppColors.card,
   });
@@ -66,6 +67,9 @@ class Poster extends ConsumerWidget {
   final String? url;
   final int decodeWidth;
   final BoxFit fit;
+
+  /// Which part stays visible when [fit] crops the image.
+  final Alignment alignment;
   final IconData placeholder;
 
   /// Behind the placeholder icon.
@@ -85,6 +89,7 @@ class Poster extends ConsumerWidget {
         width: decodeWidth,
       ),
       fit: fit,
+      alignment: alignment,
       gaplessPlayback: true,
       frameBuilder: (context, child, frame, sync) =>
           frame == null && !sync ? fallback : child,
@@ -152,6 +157,9 @@ class PosterCard extends StatefulWidget {
     this.placeholder = Icons.movie_outlined,
     this.favourite,
     this.focusNode,
+    this.actions = const [],
+    this.imageAlignment = Alignment.center,
+    this.decodeWidth = 300,
   });
 
   final String title;
@@ -165,6 +173,14 @@ class PosterCard extends StatefulWidget {
   final IconData placeholder;
   final ItemRef? favourite;
   final FocusNode? focusNode;
+
+  /// More context menu entries (with a [favourite] only).
+  final List<ItemMenuAction> actions;
+
+  /// Which part of the image stays visible when it is cropped, e.g. the
+  /// top of a poster in a 16:9 thumbnail.
+  final Alignment imageAlignment;
+  final int decodeWidth;
 
   @override
   State<PosterCard> createState() => _PosterCardState();
@@ -192,6 +208,7 @@ class _PosterCardState extends State<PosterCard> {
                   child: ItemContextMenu(
                     item: favourite,
                     name: widget.title,
+                    actions: widget.actions,
                     child: card,
                   ),
                 ),
@@ -232,6 +249,8 @@ class _PosterCardState extends State<PosterCard> {
                       Poster(
                         url: widget.imageUrl,
                         placeholder: widget.placeholder,
+                        alignment: widget.imageAlignment,
+                        decodeWidth: widget.decodeWidth,
                       ),
                       if (_hovered)
                         ColoredBox(

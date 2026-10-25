@@ -212,6 +212,10 @@ class VodFilterNotifier extends Notifier<VodFilter> {
 
   void setQuery(String query) => state = state.copyWith(query: query);
 
+  /// Selects [category] with no search or filters.
+  void show(CategorySelection category) =>
+      state = VodFilter(category: category);
+
   void setFilters(VodFilters filters) =>
       state = state.copyWith(filters: filters);
 

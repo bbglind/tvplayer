@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_settings.dart';
+import '../../state/navigation.dart';
 import '../../state/providers.dart';
 import '../epg/guide_screen.dart';
+import '../home/home_screen.dart';
 import '../live/live_tv_screen.dart';
 import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
@@ -28,14 +30,13 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  /// Opens on Live TV.
-  int _index = 1;
-
   /// The width the user is dragging the sidebar to; null when not dragging.
   /// Below [AppSettings.minSidebarWidth] it previews icons only.
   double? _dragWidth;
 
+  /// In [AppSection] order; Settings is [_settings].
   static const _sections = [
+    (icon: Icons.home_outlined, label: 'Home'),
     (icon: Icons.search, label: 'Search'),
     (icon: Icons.live_tv_outlined, label: 'Live TV'),
     (icon: Icons.calendar_view_week_outlined, label: 'TV Guide'),
@@ -73,6 +74,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final settings =
         ref.watch(appSettingsProvider).value ?? const AppSettings();
+    final section = ref.watch(appSectionProvider);
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -98,19 +100,22 @@ class _AppShellState extends ConsumerState<AppShell> {
                     width: width,
                     collapsed: collapsed,
                     onToggle: forced ? null : () => _toggle(collapsed),
-                    selectedIndex: _index,
-                    onSelect: (i) => setState(() => _index = i),
+                    selectedIndex: section.index,
+                    onSelect: (i) => ref
+                        .read(appSectionProvider.notifier)
+                        .select(AppSection.values[i]),
                     items: _sections,
                     bottomItem: _settings,
                   ),
                   Expanded(
-                    child: switch (_index) {
-                      0 => const SearchScreen(),
-                      1 => const LiveTvScreen(),
-                      2 => const GuideScreen(),
-                      3 => const MoviesScreen(),
-                      4 => const SeriesScreen(),
-                      _ => const SettingsScreen(),
+                    child: switch (section) {
+                      AppSection.home => const HomeScreen(),
+                      AppSection.search => const SearchScreen(),
+                      AppSection.live => const LiveTvScreen(),
+                      AppSection.guide => const GuideScreen(),
+                      AppSection.movies => const MoviesScreen(),
+                      AppSection.series => const SeriesScreen(),
+                      AppSection.settings => const SettingsScreen(),
                     },
                   ),
                 ],

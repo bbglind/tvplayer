@@ -348,6 +348,8 @@ void main() {
     });
   });
 
+  _channelHistoryTests();
+
   group('storage', () {
     WatchData sample() => _play(WatchData.empty, (1, 1), 10, _t0)
         .withItems({
@@ -439,4 +441,42 @@ void main() {
 
 extension<T> on T {
   R let<R>(R Function(T) f) => f(this);
+}
+
+void _channelHistoryTests() {
+  group('channel history', () {
+    test('newest first, at most 20, watching again moves to the front', () {
+      var data = WatchData.empty;
+      for (var i = 0; i < 25; i++) {
+        data = recordChannel(data, 'ch$i', _at(i));
+      }
+      data = recordChannel(data, 'ch10', _at(30));
+      final recent = recentChannels(data);
+      expect(recent, hasLength(maxChannelHistory));
+      expect(recent.first, ('ch10', _at(30)));
+      expect(recent[1].$1, 'ch24');
+      expect(recent.map((r) => r.$1), isNot(contains('ch0')));
+    });
+
+    test('forgetting survives a merge with an older copy', () {
+      final watched = recordChannel(WatchData.empty, 'a', _at(1));
+      final forgotten = forgetChannel(watched, 'a', _at(2));
+      expect(recentChannels(forgotten), isEmpty);
+      expect(recentChannels(watched.merge(forgotten)), isEmpty);
+      expect(recentChannels(forgotten.merge(watched)), isEmpty);
+      // Watching it again brings it back.
+      expect(recentChannels(recordChannel(forgotten, 'a', _at(3))), [
+        ('a', _at(3)),
+      ]);
+    });
+
+    test('JSON round trip', () {
+      final data = forgetChannel(
+        recordChannel(recordChannel(WatchData.empty, 'a', _at(1)), 'b', _at(2)),
+        'a',
+        _at(3),
+      );
+      expect(WatchData.fromJson(data.toJson()).channels, data.channels);
+    });
+  });
 }

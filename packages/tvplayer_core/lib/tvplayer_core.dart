@@ -11,6 +11,7 @@ export 'src/epg/epg_guide.dart';
 export 'src/epg/guide_time.dart';
 export 'src/favourites/favourites_data.dart';
 export 'src/favourites/favourites_logic.dart';
+export 'src/home/home_picks.dart';
 export 'src/live/live_source.dart';
 export 'src/m3u/m3u_client.dart';
 export 'src/metadata/metadata_source.dart';
