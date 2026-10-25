@@ -151,6 +151,7 @@ class PosterCard extends StatefulWidget {
     this.progress,
     this.placeholder = Icons.movie_outlined,
     this.favourite,
+    this.focusNode,
   });
 
   final String title;
@@ -163,6 +164,7 @@ class PosterCard extends StatefulWidget {
   final double? progress;
   final IconData placeholder;
   final ItemRef? favourite;
+  final FocusNode? focusNode;
 
   @override
   State<PosterCard> createState() => _PosterCardState();
@@ -211,6 +213,7 @@ class _PosterCardState extends State<PosterCard> {
   Widget _buildCard(ThemeData theme) {
     return InkWell(
       onTap: widget.onTap,
+      focusNode: widget.focusNode,
       onFocusChange: (f) => setState(() => _focused = f),
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       child: Padding(

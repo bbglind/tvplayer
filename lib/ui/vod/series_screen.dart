@@ -10,17 +10,46 @@ import 'poster.dart';
 import 'series_details_screen.dart';
 import 'vod_browser.dart';
 
-/// The Series tab: categories, search, "Continue watching" (with the next
-/// episode to watch) and a poster grid.
+/// Opens the details page of [series].
+void openSeries(BuildContext context, Series series) => Navigator.of(context)
+    .push(
+      MaterialPageRoute<void>(
+        builder: (_) => SeriesDetailsScreen(series: series),
+      ),
+    );
+
+/// The poster of [series] in a grid: title, year, favourite star and watch
+/// state.
+Widget seriesPoster(
+  BuildContext context,
+  WatchData watch,
+  Series series, {
+  Key? key,
+  FocusNode? focusNode,
+}) {
+  final progress = watch.series[series.seriesId];
+  return PosterCard(
+    key: key ?? ValueKey(series.seriesId),
+    focusNode: focusNode,
+    title: series.name,
+    favourite: seriesItemRef(series),
+    subtitle: series.year?.toString(),
+    imageUrl: series.coverUrl,
+    placeholder: Icons.tv,
+    watched: progress?.finished ?? false,
+    // Started: at least a sliver, so the bar shows.
+    progress: progress == null ? null : math.max(progress.fraction, 0.03),
+    onTap: () => openSeries(context, series),
+  );
+}
+
+/// The Series tab: categories, search, sort and filters, "Continue
+/// watching" (with the next episode to watch) and a poster grid.
 class SeriesScreen extends ConsumerWidget {
   const SeriesScreen({super.key});
 
   static void _open(BuildContext context, Series series) =>
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => SeriesDetailsScreen(series: series),
-        ),
-      );
+      openSeries(context, series);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,14 +57,13 @@ class SeriesScreen extends ConsumerWidget {
     final filter = ref.watch(seriesFilterProvider);
     final watch = ref.watch(watchProvider);
     final catalog = state.catalog;
-    final filterNotifier = ref.read(seriesFilterProvider.notifier);
     return VodBrowser<Series>(
+      title: 'Series',
       what: 'series',
       kind: ContentKind.series,
       state: state,
       filter: filter,
-      onCategory: filterNotifier.selectCategory,
-      onQuery: filterNotifier.setQuery,
+      notifier: ref.read(seriesFilterProvider.notifier),
       categoryOf: (item) => item.categoryId,
       itemRef: seriesItemRef,
       onRefresh: ref.read(seriesCatalogProvider.notifier).refresh,
@@ -45,21 +73,7 @@ class SeriesScreen extends ConsumerWidget {
             if (catalog.byId(id) case final series?)
               (series, _continueCard(context, watch, series, progress)),
       ],
-      itemBuilder: (context, series) {
-        final progress = watch.series[series.seriesId];
-        return PosterCard(
-          key: ValueKey(series.seriesId),
-          title: series.name,
-          favourite: seriesItemRef(series),
-          subtitle: series.year?.toString(),
-          imageUrl: series.coverUrl,
-          placeholder: Icons.tv,
-          watched: progress?.finished ?? false,
-          // Started: at least a sliver, so the bar shows.
-          progress: progress == null ? null : math.max(progress.fraction, 0.03),
-          onTap: () => _open(context, series),
-        );
-      },
+      itemBuilder: (context, series) => seriesPoster(context, watch, series),
     );
   }
 

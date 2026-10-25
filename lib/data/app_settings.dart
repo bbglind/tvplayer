@@ -19,6 +19,8 @@ final class AppSettings {
     this.categoryListWidth = defaultCategoryListWidth,
     this.guideChannelWidth = defaultGuideChannelWidth,
     this.showHiddenInGlobalSearch = false,
+    this.movieSort = VodSort.recent,
+    this.seriesSort = VodSort.recent,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -75,6 +77,12 @@ final class AppSettings {
   /// Whether global search also finds items in hidden provider categories.
   final bool showHiddenInGlobalSearch;
 
+  /// Sort order of the Movies tab.
+  final VodSort movieSort;
+
+  /// Sort order of the Series tab.
+  final VodSort seriesSort;
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -94,6 +102,8 @@ final class AppSettings {
     double? categoryListWidth,
     double? guideChannelWidth,
     bool? showHiddenInGlobalSearch,
+    VodSort? movieSort,
+    VodSort? seriesSort,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -108,6 +118,8 @@ final class AppSettings {
     guideChannelWidth: guideChannelWidth ?? this.guideChannelWidth,
     showHiddenInGlobalSearch:
         showHiddenInGlobalSearch ?? this.showHiddenInGlobalSearch,
+    movieSort: movieSort ?? this.movieSort,
+    seriesSort: seriesSort ?? this.seriesSort,
   );
 
   Map<String, Object?> toJson() => {
@@ -123,6 +135,8 @@ final class AppSettings {
     'categoryListWidth': categoryListWidth,
     'guideChannelWidth': guideChannelWidth,
     'showHiddenInGlobalSearch': showHiddenInGlobalSearch,
+    'movieSort': movieSort.name,
+    'seriesSort': seriesSort.name,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -163,8 +177,21 @@ final class AppSettings {
         defaultGuideChannelWidth,
       ),
       showHiddenInGlobalSearch: json['showHiddenInGlobalSearch'] == true,
+      movieSort: VodSort.byName(_string(json['movieSort'])) ?? VodSort.recent,
+      seriesSort: VodSort.byName(_string(json['seriesSort'])) ?? VodSort.recent,
     );
   }
+
+  static String? _string(Object? json) => json is String ? json : null;
+
+  /// The sort order of [section] (`movies` or `series`).
+  VodSort sortOf(String section) =>
+      section == 'series' ? seriesSort : movieSort;
+
+  /// These settings with [sort] for [section] (`movies` or `series`).
+  AppSettings withSort(String section, VodSort sort) => section == 'series'
+      ? copyWith(seriesSort: sort)
+      : copyWith(movieSort: sort);
 
   /// A width from JSON, clamped to [min]..[max]; [fallback] when invalid.
   static double _width(Object? json, double min, double max, double fallback) =>

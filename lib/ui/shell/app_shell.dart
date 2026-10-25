@@ -5,6 +5,7 @@ import '../../data/app_settings.dart';
 import '../../state/providers.dart';
 import '../epg/guide_screen.dart';
 import '../live/live_tv_screen.dart';
+import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -27,13 +28,15 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _index = 0;
+  /// Opens on Live TV.
+  int _index = 1;
 
   /// The width the user is dragging the sidebar to; null when not dragging.
   /// Below [AppSettings.minSidebarWidth] it previews icons only.
   double? _dragWidth;
 
   static const _sections = [
+    (icon: Icons.search, label: 'Search'),
     (icon: Icons.live_tv_outlined, label: 'Live TV'),
     (icon: Icons.calendar_view_week_outlined, label: 'TV Guide'),
     (icon: Icons.movie_outlined, label: 'Movies'),
@@ -102,10 +105,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ),
                   Expanded(
                     child: switch (_index) {
-                      0 => const LiveTvScreen(),
-                      1 => const GuideScreen(),
-                      2 => const MoviesScreen(),
-                      3 => const SeriesScreen(),
+                      0 => const SearchScreen(),
+                      1 => const LiveTvScreen(),
+                      2 => const GuideScreen(),
+                      3 => const MoviesScreen(),
+                      4 => const SeriesScreen(),
                       _ => const SettingsScreen(),
                     },
                   ),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/errors.dart';
+import '../../format.dart';
 import '../../state/category_selection.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
@@ -18,26 +19,76 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'separator_header.dart';
 
-/// Categories on the left, searchable channel list on the right.
-class LiveTvScreen extends ConsumerWidget {
+/// The page title and channel search on top; categories on the left and
+/// the channel list on the right. The search covers all channels (except
+/// hidden categories) unless "Only in …" limits it to the selected
+/// category.
+class LiveTvScreen extends ConsumerStatefulWidget {
   const LiveTvScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LiveTvScreen> createState() => _LiveTvScreenState();
+}
+
+class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
+  late final _search = TextEditingController(
+    text: ref.read(channelQueryProvider),
+  );
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final catalog = ref.watch(liveCatalogProvider);
-    return catalog.when(
-      skipLoadingOnRefresh: false,
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => _ErrorView(
-        message: describeProviderError(error),
-        onRetry: () => ref.invalidate(liveCatalogProvider),
-      ),
-      data: (catalog) => CategoryLayout(
-        section: 'live',
-        headerAction: const CategoryEditButton(section: 'live'),
-        list: _CategoryList(catalog: catalog),
-        content: const _ChannelPane(),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PageHeader(
+          title: 'Live TV',
+          search: SearchField(
+            key: const Key('live.search'),
+            controller: _search,
+            onChanged: ref.read(channelQueryProvider.notifier).set,
+            debounce: ref.watch(searchDebounceProvider),
+            hintText: 'Search channels',
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Reload channels',
+              icon: const Icon(Icons.refresh),
+              onPressed: () => ref.invalidate(liveCatalogProvider),
+            ),
+            if (ref.watch(guideProvider) case final guide when guide.supported)
+              IconButton(
+                tooltip: 'Refresh TV guide',
+                icon: const Icon(Icons.event_repeat),
+                onPressed: guide.loading
+                    ? null
+                    : ref.read(guideProvider.notifier).refresh,
+              ),
+          ],
+        ),
+        Expanded(
+          child: catalog.when(
+            skipLoadingOnRefresh: false,
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => _ErrorView(
+              message: describeProviderError(error),
+              onRetry: () => ref.invalidate(liveCatalogProvider),
+            ),
+            data: (catalog) => CategoryLayout(
+              section: 'live',
+              headerAction: const CategoryEditButton(section: 'live'),
+              list: _CategoryList(catalog: catalog),
+              content: _ChannelPane(catalog: catalog),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -98,78 +149,89 @@ class _CategoryList extends ConsumerWidget {
   }
 }
 
-class _ChannelPane extends ConsumerStatefulWidget {
-  const _ChannelPane();
+class _ChannelPane extends ConsumerWidget {
+  const _ChannelPane({required this.catalog});
 
-  @override
-  ConsumerState<_ChannelPane> createState() => _ChannelPaneState();
-}
-
-class _ChannelPaneState extends ConsumerState<_ChannelPane> {
-  late final _search = TextEditingController(
-    text: ref.read(channelQueryProvider),
-  );
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  void _setQuery(String q) {
-    ref.read(channelQueryProvider.notifier).set(q);
-  }
+  final LiveCatalog catalog;
 
   /// Items of the selected one of my categories that the provider no
-  /// longer lists, matching the search.
-  List<FavouriteMembership> _missing() {
-    final catalog = ref.watch(liveCatalogProvider).value;
+  /// longer lists, matching the search. Left out while searching all
+  /// channels.
+  List<FavouriteMembership> _missing(WidgetRef ref, bool searchAll) {
     final selection = ref.watch(liveSelectionProvider);
-    if (catalog == null || selection is! MyCategory) return const [];
-    final query = ref.watch(channelQueryProvider).trim().toLowerCase();
+    if (selection is! MyCategory || searchAll) return const [];
+    final query = SearchQuery(ref.watch(channelQueryProvider));
     return [
       for (final m in ref.watch(favouritesProvider).itemsIn(selection.id))
         if (catalog.byStableId(m.item.id) == null &&
-            m.name.toLowerCase().contains(query))
+            query.matches(SearchKey(m.name)))
           m,
     ];
   }
 
+  /// The name of the selected category.
+  String _selectionName(WidgetRef ref) =>
+      switch (ref.watch(liveSelectionProvider)) {
+        AllCategories() => 'All channels',
+        ProviderCategory(:final id) =>
+          catalog.categories.where((c) => c.id == id).firstOrNull?.name ?? '',
+        MyCategory(:final id) =>
+          ref.watch(favouritesProvider).category(id)?.name ?? '',
+      };
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final channels = ref.watch(visibleChannelsProvider).value ?? const [];
-    final missing = _missing();
-    final mine = ref.watch(liveSelectionProvider) is MyCategory;
+    final selection = ref.watch(liveSelectionProvider);
+    final searching = !SearchQuery(ref.watch(channelQueryProvider)).isEmpty;
+    final inCategory = ref.watch(channelSearchInCategoryProvider);
+    final searchAll = searching && !inCategory && selection is! AllCategories;
+    final missing = _missing(ref, searchAll);
+    final mine = selection is MyCategory;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 28, 28, 16),
+          padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
           child: Row(
             children: [
               const ShowCategoriesButton(section: 'live'),
               Expanded(
-                child: SearchField(
-                  key: const Key('live.search'),
-                  controller: _search,
-                  onChanged: _setQuery,
-                  hintText: 'Search channels',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (searching && selection is! AllCategories)
+                      ToolbarChip(
+                        key: const Key('live.onlyIn'),
+                        icon: inCategory
+                            ? Icons.check
+                            : Icons.filter_alt_outlined,
+                        selected: inCategory,
+                        tooltip: inCategory
+                            ? 'Search all channels'
+                            : 'Search only in this category',
+                        label: 'Only in ${_selectionName(ref)}',
+                        onPressed: () => ref
+                            .read(channelSearchInCategoryProvider.notifier)
+                            .set(!inCategory),
+                      ),
+                    if (searching)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          formatCountOf(
+                            channels.length + missing.length,
+                            'channel',
+                            'channels',
+                          ),
+                          key: const Key('live.count'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Reload channels',
-                icon: const Icon(Icons.refresh),
-                onPressed: () => ref.invalidate(liveCatalogProvider),
-              ),
-              if (ref.watch(guideProvider) case final guide
-                  when guide.supported)
-                IconButton(
-                  tooltip: 'Refresh TV guide',
-                  icon: const Icon(Icons.event_repeat),
-                  onPressed: guide.loading
-                      ? null
-                      : ref.read(guideProvider.notifier).refresh,
-                ),
             ],
           ),
         ),
@@ -177,9 +239,11 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
           child: channels.isEmpty && missing.isEmpty
               ? Center(
                   child: Text(
-                    mine && _search.text.isEmpty
+                    mine && !searching
                         ? 'No channels yet. Add some with the star on a '
                               'channel.'
+                        : searching
+                        ? 'No channels found'
                         : 'No channels',
                   ),
                 )
@@ -212,9 +276,10 @@ class _ChannelPaneState extends ConsumerState<_ChannelPane> {
 /// a favourite star (shown on hover or focus, or when it is a favourite).
 /// Right click, long press or the Menu key open its context menu.
 class ChannelRow extends StatefulWidget {
-  const ChannelRow({super.key, required this.channel});
+  const ChannelRow({super.key, required this.channel, this.focusNode});
 
   final LiveStream channel;
+  final FocusNode? focusNode;
 
   static const _padding = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
 
@@ -265,6 +330,7 @@ class _ChannelRowState extends State<ChannelRow> {
                   padding: ChannelRow._padding.copyWith(
                     right: ChannelRow._padding.right + ChannelRow._starSpace,
                   ),
+                  focusNode: widget.focusNode,
                   onTap: () => openChannel(context, ref, channel),
                   child: _ChannelContent(
                     number: channel.number,

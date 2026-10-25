@@ -88,7 +88,8 @@ void main() {
       ),
     );
     expect(find.text('Add a provider'), findsNothing);
-    expect(find.text('Live TV'), findsOneWidget);
+    // In the sidebar and as the page title.
+    expect(find.text('Live TV'), findsNWidgets(2));
     expect(find.text('Test Channel 1'), findsOneWidget);
   });
 

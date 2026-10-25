@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'helpers.dart';
 
@@ -47,8 +48,9 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('live.search')), 'channel 42');
     await tester.pumpAndSettle();
-    // Only names containing "channel 42" match, i.e. 4200-4299.
-    expect(find.text('Channel 4200'), findsOneWidget);
+    // Names containing "channel" and "42" match, in provider order.
+    expect(find.text('Channel 0042'), findsOneWidget);
+    expect(find.text('Channel 0142'), findsOneWidget);
     expect(find.text('Channel 0000'), findsNothing);
 
     await tester.enterText(
@@ -64,18 +66,81 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('live.search')), 'nothing');
     await tester.pumpAndSettle();
-    expect(find.text('No channels'), findsOneWidget);
+    expect(find.text('No channels found'), findsOneWidget);
+    expect(find.text('0 channels'), findsOneWidget);
   });
 
-  testWidgets('search applies within the selected category', (tester) async {
-    await _pump(tester, FakeLiveSource(syntheticCatalog()));
+  testWidgets('search ignores spaces, case and accents', (tester) async {
+    await _pump(
+      tester,
+      FakeLiveSource(
+        LiveCatalog(
+          categories: const [Category(id: 'a', name: 'A')],
+          channels: const [
+            LiveStream(id: '1', name: 'SVT 1 HD', categoryIds: ['a']),
+            LiveStream(id: '2', name: 'Kanal Ö', categoryIds: ['a']),
+            LiveStream(id: '3', name: 'Other', categoryIds: ['a']),
+          ],
+        ),
+      ),
+    );
+    await tester.enterText(find.byKey(const Key('live.search')), 'svt1');
+    await tester.pumpAndSettle();
+    expect(find.text('SVT 1 HD'), findsOneWidget);
+    expect(find.text('Other'), findsNothing);
+    expect(find.text('1 channel'), findsOneWidget);
 
+    await tester.enterText(find.byKey(const Key('live.search')), 'kanal o');
+    await tester.pumpAndSettle();
+    expect(find.text('Kanal Ö'), findsOneWidget);
+  });
+
+  testWidgets('search covers all channels; "Only in" limits it to the '
+      'selected category', (tester) async {
+    await _pump(tester, FakeLiveSource(syntheticCatalog()));
+    final onlyIn = find.byKey(const Key('live.onlyIn'));
+
+    // Under All channels there is nothing to limit.
+    await tester.enterText(
+      find.byKey(const Key('live.search')),
+      'channel 1234',
+    );
+    await tester.pumpAndSettle();
+    expect(onlyIn, findsNothing);
+
+    // Channel 1234 is in Category 4, but the search still finds it.
     await tester.tap(find.text('Category 2'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('live.search')), 'channel 123');
+    expect(find.text('Channel 1234'), findsOneWidget);
+    expect(find.text('Only in Category 2'), findsOneWidget);
+
+    await tester.tap(onlyIn);
+    await tester.pumpAndSettle();
+    expect(find.text('Channel 1234'), findsNothing);
+    expect(find.text('No channels found'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('live.search')),
+      'channel 1232',
+    );
     await tester.pumpAndSettle();
     expect(find.text('Channel 1232'), findsOneWidget);
-    expect(find.text('Channel 1234'), findsNothing);
+
+    // Off again: the whole section.
+    await tester.tap(onlyIn);
+    await tester.enterText(
+      find.byKey(const Key('live.search')),
+      'channel 1234',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Channel 1234'), findsOneWidget);
+
+    // Without a search the category shows as before, and the chip goes.
+    await tester.enterText(find.byKey(const Key('live.search')), '');
+    await tester.pumpAndSettle();
+    expect(onlyIn, findsNothing);
+    expect(find.text('Channel 0002'), findsOneWidget);
+    expect(find.text('Channel 0000'), findsNothing);
   });
 
   testWidgets('shows loading, then the list', (tester) async {

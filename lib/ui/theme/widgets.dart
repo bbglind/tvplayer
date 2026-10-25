@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -157,6 +158,7 @@ class AppTile extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.ringInside = true,
     this.autofocus = false,
+    this.focusNode,
   });
 
   final Widget child;
@@ -168,6 +170,7 @@ class AppTile extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool ringInside;
   final bool autofocus;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +186,7 @@ class AppTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           autofocus: autofocus,
+          focusNode: focusNode,
           child: Padding(padding: padding, child: child),
         ),
       ),
@@ -289,17 +293,28 @@ class CategoryPill extends StatelessWidget {
 }
 
 /// The pill search field: `surface` fill, search icon, clear button.
-class SearchField extends StatelessWidget {
+/// With a [debounce], [onChanged] is called once typing pauses for that
+/// long (the clear button and [onSubmitted] report at once), so heavy
+/// searches don't run on every key press.
+class SearchField extends StatefulWidget {
   const SearchField({
     super.key,
     required this.controller,
     required this.hintText,
     required this.onChanged,
+    this.debounce = Duration.zero,
+    this.focusNode,
+    this.autofocus = false,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
   final String hintText;
   final ValueChanged<String> onChanged;
+  final Duration debounce;
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final ValueChanged<String>? onSubmitted;
 
   static const _pill = OutlineInputBorder(
     borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
@@ -307,23 +322,57 @@ class SearchField extends StatelessWidget {
   );
 
   @override
+  State<SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<SearchField> {
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _changed(String text) {
+    _timer?.cancel();
+    if (widget.debounce == Duration.zero) {
+      widget.onChanged(text);
+    } else {
+      _timer = Timer(widget.debounce, () => widget.onChanged(text));
+    }
+  }
+
+  void _now(String text) {
+    _timer?.cancel();
+    widget.onChanged(text);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     return SizedBox(
       height: 44,
       child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) => TextField(
           controller: controller,
-          onChanged: onChanged,
+          focusNode: widget.focusNode,
+          autofocus: widget.autofocus,
+          onChanged: _changed,
+          onSubmitted: (text) {
+            _now(text);
+            widget.onSubmitted?.call(text);
+          },
           textAlignVertical: TextAlignVertical.center,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search, size: 18),
-            hintText: hintText,
+            hintText: widget.hintText,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            border: _pill,
-            enabledBorder: _pill,
-            focusedBorder: _pill.copyWith(
+            border: SearchField._pill,
+            enabledBorder: SearchField._pill,
+            focusedBorder: SearchField._pill.copyWith(
               borderSide: const BorderSide(
                 color: AppColors.accent,
                 width: AppTheme.focusWidth,
@@ -336,13 +385,120 @@ class SearchField extends StatelessWidget {
                     icon: const Icon(Icons.clear, size: 18),
                     onPressed: () {
                       controller.clear();
-                      onChanged('');
+                      _now('');
                     },
                   ),
           ),
         ),
       ),
     );
+  }
+}
+
+/// The title row of a page: the page title (h1) on the left, and on the
+/// right an optional [search] field (up to [searchWidth] wide) followed by
+/// [actions]. Page padding: 28 at the top, 40 at the sides.
+class PageHeader extends StatelessWidget {
+  const PageHeader({
+    super.key,
+    required this.title,
+    this.search,
+    this.actions = const [],
+    this.searchWidth = 380,
+  });
+
+  final String title;
+  final Widget? search;
+  final List<Widget> actions;
+  final double searchWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final search = this.search;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(40, 28, 40, 16),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+          ),
+          const SizedBox(width: 24),
+          if (search != null)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: searchWidth),
+                  child: search,
+                ),
+              ),
+            )
+          else
+            const Spacer(),
+          if (actions.isNotEmpty) ...[const SizedBox(width: 8), ...actions],
+        ],
+      ),
+    );
+  }
+}
+
+/// A chip in a toolbar (sort, filters, search scope): pill, height 40,
+/// `surface` normally and accent while [selected]. With [dropdown] it shows
+/// an arrow, for chips that open a menu. Long labels are cut off at
+/// [maxLabelWidth].
+class ToolbarChip extends StatelessWidget {
+  const ToolbarChip({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.selected = false,
+    this.dropdown = false,
+    this.icon,
+    this.tooltip,
+    this.maxLabelWidth = 260,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool selected;
+  final bool dropdown;
+  final IconData? icon;
+  final String? tooltip;
+  final double maxLabelWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.onAccent : AppColors.textSecondary;
+    final chip = FocusRing(
+      radius: AppRadius.pill,
+      child: FilterChip(
+        // No padded tap target, so the ring hugs the chip.
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        selected: selected,
+        avatar: icon == null ? null : Icon(icon, color: color),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxLabelWidth),
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            if (dropdown) ...[
+              const SizedBox(width: 2),
+              Icon(Icons.arrow_drop_down, size: 20, color: color),
+            ],
+          ],
+        ),
+        onSelected: onPressed == null ? null : (_) => onPressed!(),
+      ),
+    );
+    final tooltip = this.tooltip;
+    return tooltip == null ? chip : Tooltip(message: tooltip, child: chip);
   }
 }
 

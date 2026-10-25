@@ -133,10 +133,10 @@ void main() {
         'remembered per section', (tester) async {
       final settings = await _pump(tester);
       final list = find.byKey(const Key('live.categories'));
-      final search = find.byKey(const Key('live.search'));
+      final channels = find.byKey(const Key('live.channels'));
       expect(list, findsOneWidget);
       expect(find.byTooltip('Hide categories'), findsOneWidget);
-      final searchLeft = tester.getTopLeft(search).dx;
+      final channelsLeft = tester.getTopLeft(channels).dx;
 
       await tester.tap(find.byKey(const Key('live.categories.hide')));
       await tester.pumpAndSettle();
@@ -144,7 +144,7 @@ void main() {
       expect(settings.saved.hiddenCategoryLists, {'live'});
       expect(find.byTooltip('Show categories'), findsOneWidget);
       // The content takes the freed width.
-      expect(tester.getTopLeft(search).dx, lessThan(searchLeft - 200));
+      expect(tester.getTopLeft(channels).dx, lessThan(channelsLeft - 200));
 
       await tester.tap(find.byKey(const Key('live.categories.show')));
       await tester.pumpAndSettle();

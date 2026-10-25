@@ -102,7 +102,7 @@ class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 28, 12, 8),
+                padding: const EdgeInsets.fromLTRB(16, 4, 12, 8),
                 child: Row(
                   children: [
                     Expanded(

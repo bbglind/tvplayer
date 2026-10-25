@@ -30,3 +30,18 @@ String formatRuntime(Duration d) {
   if (h == 0) return '$m min';
   return m == 0 ? '$h h' : '$h h $m min';
 }
+
+/// A count with thousands separators: `36,000`.
+String formatCount(int n) {
+  final digits = n.abs().toString();
+  final out = StringBuffer(n < 0 ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
+    out.write(digits[i]);
+  }
+  return out.toString();
+}
+
+/// [n] and the noun, singular for one: `1 movie`, `2,000 movies`.
+String formatCountOf(int n, String singular, String plural) =>
+    '${formatCount(n)} ${n == 1 ? singular : plural}';

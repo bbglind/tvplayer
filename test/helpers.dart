@@ -403,6 +403,9 @@ Widget testApp({
       watchStoreProvider.overrideWithValue((_) => watchStore),
       favouritesStoreProvider.overrideWithValue((_) => favouritesStore),
       posterLoaderProvider.overrideWithValue(FakePosterLoader()),
+      // Background isolates don't finish inside fake-async widget tests.
+      backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),
+      searchDebounceProvider.overrideWithValue(Duration.zero),
       deviceTimeZoneProvider.overrideWithValue('Europe/Stockholm'),
       if (now != null) clockProvider.overrideWith(() => FixedClock(now)),
       ...overrides,

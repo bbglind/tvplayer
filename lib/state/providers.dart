@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,28 @@ import 'favourites_controller.dart';
 import 'guide_controller.dart';
 import 'vod_controller.dart';
 import 'watch_controller.dart';
+
+/// Runs a task in a background isolate, so heavy work (building search
+/// indexes, searching every catalogue) doesn't freeze the UI. The task
+/// must not capture widgets, refs or other unsendable objects. Tests
+/// replace it with one running the task directly.
+typedef BackgroundRunner = Future<R> Function<R>(FutureOr<R> Function() task);
+
+final backgroundRunnerProvider = Provider<BackgroundRunner>(
+  (ref) => Isolate.run,
+);
+
+/// A [SearchIndex] of [names], built with [run].
+Future<SearchIndex> buildSearchIndex(
+  BackgroundRunner run,
+  List<String> names,
+) => run(() => SearchIndex(names));
+
+/// How long search fields wait after the last key press before searching.
+/// Zero in tests.
+final searchDebounceProvider = Provider<Duration>(
+  (ref) => const Duration(milliseconds: 200),
+);
 
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
@@ -235,7 +258,11 @@ class _FileFavouritesStore implements FavouritesStore {
 final liveCatalogProvider = FutureProvider<LiveCatalog>((ref) async {
   final source = ref.watch(liveSourceProvider);
   if (source == null) throw StateError('No provider configured');
-  return source.load();
+  final catalog = await source.load();
+  catalog.attachSearchIndex(
+    await buildSearchIndex(ref.read(backgroundRunnerProvider), catalog.names),
+  );
+  return catalog;
 });
 
 /// Selected live category, shared by Live TV and the TV guide. Resets when
@@ -296,17 +323,45 @@ class ChannelQuery extends Notifier<String> {
   void set(String query) => state = query;
 }
 
-/// Channels of the selected category whose name contains the search text
-/// (case-insensitive). Separators are kept, except while searching.
+/// Whether the channel search is limited to the selected category ("Only
+/// in …"); otherwise it searches all channels. Resets when the provider
+/// changes.
+final channelSearchInCategoryProvider =
+    NotifierProvider<ChannelSearchInCategory, bool>(
+      ChannelSearchInCategory.new,
+    );
+
+class ChannelSearchInCategory extends Notifier<bool> {
+  @override
+  bool build() {
+    ref.watch(liveSourceProvider);
+    return false;
+  }
+
+  void set(bool value) => state = value;
+}
+
+/// What the channel list shows: the selected category's channels (with
+/// separators), or while searching the matching channels (without
+/// separators) of all channels except hidden categories, or only of the
+/// selected category with [channelSearchInCategoryProvider].
 final visibleChannelsProvider = Provider<AsyncValue<List<LiveStream>>>((ref) {
-  final query = ref.watch(channelQueryProvider).trim().toLowerCase();
-  return ref.watch(categoryChannelsProvider).whenData((channels) {
-    if (query.isEmpty) return channels;
-    return [
-      for (final ch in channels)
-        if (!ch.isSeparator && ch.name.toLowerCase().contains(query)) ch,
-    ];
-  });
+  final query = ref.watch(channelQueryProvider);
+  final inCategory =
+      ref.watch(channelSearchInCategoryProvider) ||
+      ref.watch(liveSelectionProvider) is AllCategories;
+  final channels = ref.watch(categoryChannelsProvider);
+  if (SearchQuery(query).isEmpty) return channels;
+  final catalog = ref.watch(liveCatalogProvider);
+  final hidden = ref.watch(
+    favouritesProvider.select((f) => f.hiddenIds(ContentKind.live)),
+  );
+  return catalog.whenData(
+    (c) => c.search(
+      query,
+      within: inCategory ? channels.value : c.channelsExcluding(hidden),
+    ),
+  );
 });
 
 /// Where non-secret settings are persisted. Overridden in tests.

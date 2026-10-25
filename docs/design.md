@@ -72,10 +72,12 @@ weights 400, 500, 600, 700.
     3 px accent bar on the left edge (inside the item).
   - Inactive item: text `textSecondary`, weight 500.
   - Settings sits at the bottom, pushed down.
-  - Order (when the sections exist): Home, Live TV, TV Guide, Movies,
-    Series, Downloads, … Settings at the bottom.
-- **Main area**: page title row (title left, search field right), then
-  sections stacked vertically.
+  - Order (when the sections exist): Search, Home, Live TV, TV Guide,
+    Movies, Series, Downloads, … Settings at the bottom.
+- **Main area**: page title row (title left, search field right, then
+  page actions such as reload), then sections stacked vertically. On
+  pages with a category list the title row spans the full width above the
+  list and the content. The TV Guide keeps its own toolbar.
 
 ## Components
 
@@ -86,6 +88,11 @@ weights 400, 500, 600, 700.
 - **Secondary button**: `hover` background, `textPrimary` text, 500.
 - **Chip** (category filter): height 40, pill. Selected: accent bg,
   `onAccent` text, 600. Unselected: `surface` bg, `textSecondary` text.
+- **Toolbar chip** (sort, filters, search scope): a chip with a leading
+  icon and, when it opens a menu, a dropdown arrow. Accent while a filter
+  is active. Above the grid: sort, year, genre (Series), "Only in …"
+  while searching, the result count (13, textMuted) and "Reset filters"
+  while a filter is active.
 - **Scrollbar**: thin pill, `accent` thumb (`accentHover` while hovered or
   dragged); where a track is shown it is `surface`, with no border.
 - **Search field**: pill, `surface` bg, height 44, search icon in
@@ -145,7 +152,15 @@ English for now.
   in hidden categories, with the ones in the selected category first. With
   none, the row and its heading are left out.
 - The favourites menu saves each checkbox at once; "Done", Esc or a click
-  outside closes it.
+  outside closes it. The genre menu works the same way.
+- The search field of Live TV, Movies and Series searches the whole
+  section (except hidden categories); "Only in <category>" limits it to
+  the selected category.
+- Sort: "Recently added" (Series: "Recently updated"), "A–Z", "Top rated".
+  Year filter: "This year", "Last 2 years", "Last 5 years", "Custom
+  range…". "Reset filters" clears year and genre.
+- Search page groups: "Live TV", "Movies", "Series", each with its count
+  and "Show all".
 
 ## Icons
 

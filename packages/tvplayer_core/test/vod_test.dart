@@ -107,27 +107,19 @@ void main() {
       final c = catalog();
       expect(c.countIn('a'), 15000);
       expect(c.countIn('x'), 0);
-      expect(c.filter(), same(c.items));
-      expect(c.filter(categoryId: 'd').first.streamId, 1);
-      // Names are zero-padded, so "Movie 02999" doesn't match.
-      final found = c.filter(query: 'MOVIE 2999');
+      expect(c.query().length, 30000);
+      expect(c.query(scope: const VodScope.category('d')).first.streamId, 1);
+      // Words match anywhere in a name, so "Movie 02999" and "Movie 12999"
+      // match too.
+      final found = c.query(search: 'MOVIE 2999');
       expect(
         [for (final m in found) m.streamId],
-        [
-          29990,
-          29991,
-          29992,
-          29993,
-          29994,
-          29995,
-          29996,
-          29997,
-          29998,
-          29999,
-        ],
+        [2999, 12999, 22999, for (var i = 29990; i < 30000; i++) i],
       );
       expect(
-        c.filter(categoryId: 'a', query: 'movie 2999').map((m) => m.streamId),
+        c
+            .query(scope: const VodScope.category('a'), search: 'movie 2999')
+            .map((m) => m.streamId),
         [29990, 29992, 29994, 29996, 29998],
       );
       expect(c.byId(123)?.name, 'Movie 00123');

@@ -1,3 +1,5 @@
+import '../text/title_parser.dart';
+
 // Lenient readers for JSON values as returned by real-world Xtream panels,
 // which mix numbers and strings freely and often send null, "" or the wrong
 // container type for missing data.
@@ -114,7 +116,6 @@ String? readImdbId(Object? value) {
 }
 
 final _yearPattern = RegExp(r'^\s*(\d{4})');
-final _yearInNamePattern = RegExp(r'\((\d{4})\)\s*$');
 
 /// The year at the start of a date like `2020-05-01` or `2020`.
 int? readYear(String? date) {
@@ -123,8 +124,6 @@ int? readYear(String? date) {
   return year != null && year > 1800 ? year : null;
 }
 
-/// The year in a trailing `(YYYY)` of a title like `Some Movie (2020)`.
-int? yearInName(String name) {
-  final match = _yearInNamePattern.firstMatch(name);
-  return match == null ? null : int.parse(match.group(1)!);
-}
+/// The year in a trailing `(YYYY)` of a title like `Some Movie (2020)` or
+/// `Some Movie (2020) (US)` (see [ParsedTitle]).
+int? yearInName(String name) => ParsedTitle.parse(name).year;

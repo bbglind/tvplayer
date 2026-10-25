@@ -8,17 +8,41 @@ import 'movie_details_screen.dart';
 import 'poster.dart';
 import 'vod_browser.dart';
 
-/// The Movies tab: categories, search, "Continue watching" and a poster
-/// grid.
+/// Opens the details page of [movie].
+void openMovie(BuildContext context, Movie movie) => Navigator.of(context).push(
+  MaterialPageRoute<void>(builder: (_) => MovieDetailsScreen(movie: movie)),
+);
+
+/// The poster of [movie] in a grid: title, year, favourite star and watch
+/// state.
+Widget moviePoster(
+  BuildContext context,
+  WatchData watch,
+  Movie movie, {
+  Key? key,
+  FocusNode? focusNode,
+}) {
+  final progress = watch.movie(movie.streamId);
+  return PosterCard(
+    key: key ?? ValueKey(movie.streamId),
+    focusNode: focusNode,
+    title: movie.name,
+    favourite: movieItemRef(movie),
+    subtitle: movie.year?.toString(),
+    imageUrl: movie.posterUrl,
+    watched: progress?.watched ?? false,
+    progress: isInProgress(progress) ? progress!.fraction : null,
+    onTap: () => openMovie(context, movie),
+  );
+}
+
+/// The Movies tab: categories, search, sort and filters, "Continue
+/// watching" and a poster grid.
 class MoviesScreen extends ConsumerWidget {
   const MoviesScreen({super.key});
 
-  static void _open(BuildContext context, Movie movie) => Navigator.of(context)
-      .push(
-        MaterialPageRoute<void>(
-          builder: (_) => MovieDetailsScreen(movie: movie),
-        ),
-      );
+  static void _open(BuildContext context, Movie movie) =>
+      openMovie(context, movie);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -26,14 +50,13 @@ class MoviesScreen extends ConsumerWidget {
     final filter = ref.watch(movieFilterProvider);
     final watch = ref.watch(watchProvider);
     final catalog = state.catalog;
-    final filterNotifier = ref.read(movieFilterProvider.notifier);
     return VodBrowser<Movie>(
+      title: 'Movies',
       what: 'movies',
       kind: ContentKind.movie,
       state: state,
       filter: filter,
-      onCategory: filterNotifier.selectCategory,
-      onQuery: filterNotifier.setQuery,
+      notifier: ref.read(movieFilterProvider.notifier),
       categoryOf: (item) => item.categoryId,
       itemRef: movieItemRef,
       onRefresh: ref.read(movieCatalogProvider.notifier).refresh,
@@ -54,19 +77,7 @@ class MoviesScreen extends ConsumerWidget {
                 ),
               ),
       ],
-      itemBuilder: (context, movie) {
-        final progress = watch.movie(movie.streamId);
-        return PosterCard(
-          key: ValueKey(movie.streamId),
-          title: movie.name,
-          favourite: movieItemRef(movie),
-          subtitle: movie.year?.toString(),
-          imageUrl: movie.posterUrl,
-          watched: progress?.watched ?? false,
-          progress: isInProgress(progress) ? progress!.fraction : null,
-          onTap: () => _open(context, movie),
-        );
-      },
+      itemBuilder: (context, movie) => moviePoster(context, watch, movie),
     );
   }
 }

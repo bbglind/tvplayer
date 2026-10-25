@@ -7,6 +7,7 @@ import '../models/category.dart';
 import '../models/live_channel.dart';
 import '../models/m3u_entry.dart';
 import '../models/provider_config.dart';
+import '../text/search_text.dart';
 import '../xtream/xtream_client.dart';
 
 /// A live channel, independent of whether it came from Xtream or M3U.
@@ -75,6 +76,9 @@ final class LiveCatalog {
       }
       _byStableId.putIfAbsent(channel.stableId, () => channel);
     }
+    for (final (i, channel) in channels.indexed) {
+      _position[channel] = i;
+    }
   }
 
   final List<Category> categories;
@@ -85,7 +89,60 @@ final class LiveCatalog {
   final Map<String, int> _counts = {};
   final Map<String, LiveStream> _byStableId = {};
 
+  final Map<LiveStream, int> _position = Map.identity();
+  SearchIndex? _searchIndex;
+
   int _channelCount = 0;
+
+  /// The search index of the channel names, built on first use unless
+  /// [attachSearchIndex] gave one (built in a background isolate).
+  SearchIndex get searchIndex =>
+      _searchIndex ??= SearchIndex([for (final c in channels) c.name]);
+
+  /// Whether the search index is built (or attached).
+  bool get hasSearchIndex => _searchIndex != null;
+
+  /// Uses [index], built elsewhere from the channel names in order (see
+  /// [names]), instead of building one on first use.
+  void attachSearchIndex(SearchIndex index) {
+    if (index.length != channels.length) {
+      throw ArgumentError(
+        'Search index of ${index.length} names for '
+        '${channels.length} channels',
+      );
+    }
+    _searchIndex = index;
+  }
+
+  /// The channel names in order, for building a [SearchIndex] elsewhere.
+  List<String> get names => [for (final c in channels) c.name];
+
+  /// Channels of [within] (all channels when null) whose name matches
+  /// [query] (see [SearchQuery]), without separators. With [ranked], the
+  /// best matches come first (see [SearchIndex.ranked]); otherwise they
+  /// keep their order. An empty query matches every channel.
+  List<LiveStream> search(
+    String query, {
+    Iterable<LiveStream>? within,
+    bool ranked = false,
+  }) {
+    final q = SearchQuery(query);
+    final positions = [
+      for (final c in within ?? channels)
+        if (!c.isSeparator) ?_position[c],
+    ];
+    if (ranked) {
+      return [
+        for (final i in searchIndex.ranked(q, within: positions)) channels[i],
+      ];
+    }
+    if (q.isEmpty) return [for (final i in positions) channels[i]];
+    final hits = searchIndex.matching(q);
+    return [
+      for (final i in positions)
+        if (hits[i] == 1) channels[i],
+    ];
+  }
 
   /// Number of real channels, without separators.
   int get channelCount => _channelCount;

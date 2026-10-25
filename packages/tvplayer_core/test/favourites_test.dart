@@ -517,15 +517,32 @@ void main() {
         fetchedAt: _t0,
       );
       expect(movies.countExcluding({'a'}), 2);
-      expect(movies.filter(hidden: {'a'}).map((m) => m.streamId), [2, 4]);
-      expect(movies.filter(hidden: {'a'}, query: 'ta').map((m) => m.name), [
-        'Beta',
-        'Delta',
-      ]);
+      List<String> names(List<Movie> list) => [for (final m in list) m.name];
+      expect(
+        movies
+            .query(scope: const VodScope.all(hidden: {'a'}))
+            .map((m) => m.streamId),
+        [2, 4],
+      );
+      expect(
+        names(
+          movies.query(
+            scope: const VodScope.all(hidden: {'a'}),
+            search: 'ta',
+          ),
+        ),
+        ['Beta', 'Delta'],
+      );
       // A chosen category still shows, even when hidden.
-      expect(movies.filter(categoryId: 'a', hidden: {'a'}).length, 2);
-      expect(movies.pick([3, 99, 1]).map((m) => m.name), ['Gamma', 'Alpha']);
-      expect(movies.pick([3, 1], query: 'AL').map((m) => m.name), ['Alpha']);
+      expect(movies.query(scope: const VodScope.category('a')).length, 2);
+      expect(names(movies.query(scope: const VodScope.ids([3, 99, 1]))), [
+        'Gamma',
+        'Alpha',
+      ]);
+      expect(
+        names(movies.query(scope: const VodScope.ids([3, 1]), search: 'AL')),
+        ['Alpha'],
+      );
     });
   });
 }

@@ -900,7 +900,7 @@ void main() {
       await tester.enterText(find.byKey(const Key('live.search')), 'sweden');
       await tester.pumpAndSettle();
       expect(header, findsNothing);
-      expect(find.text('No channels'), findsOneWidget);
+      expect(find.text('No channels found'), findsOneWidget);
     });
   });
 

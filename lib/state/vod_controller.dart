@@ -68,6 +68,7 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
     } catch (e) {
       debugPrint('Could not read the $what cache (${e.runtimeType})');
     }
+    if (cached != null) await _prepareSearch(cached);
     if (!ref.mounted) return;
     if (cached != null) state = VodState<T>(catalog: cached);
     await _refreshIfStale();
@@ -78,6 +79,14 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
     final now = ref.read(clockProvider);
     if (catalog != null && now.difference(catalog.fetchedAt) < maxAge) return;
     await refresh();
+  }
+
+  /// Builds [catalog]'s search index in the background unless it has one.
+  Future<void> _prepareSearch(VodCatalog<T> catalog) async {
+    if (catalog.hasSearchIndex) return;
+    catalog.attachSearchIndex(
+      await buildSearchIndex(ref.read(backgroundRunnerProvider), catalog.names),
+    );
   }
 
   /// Downloads a fresh catalogue, keeping the current one until it is
@@ -92,6 +101,7 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
     state = VodState<T>(catalog: state.catalog, loading: true);
     try {
       final catalog = await download(source, ref.read(clockProvider));
+      await _prepareSearch(catalog);
       if (!ref.mounted) return;
       state = VodState<T>(catalog: catalog);
       try {
@@ -143,16 +153,53 @@ class SeriesCatalogController extends VodController<Series> {
       ref.read(vodRepositoryProvider).saveSeries(key, catalog);
 }
 
-/// Category and search text of a movie or series tab.
+/// Category, search text, filters and search scope of a movie or series
+/// tab.
 @immutable
 final class VodFilter {
-  const VodFilter({this.category = const AllCategories(), this.query = ''});
+  const VodFilter({
+    this.category = const AllCategories(),
+    this.query = '',
+    this.filters = const VodFilters(),
+    this.searchInCategory = false,
+  });
 
   final CategorySelection category;
   final String query;
+
+  /// Year and genre filters.
+  final VodFilters filters;
+
+  /// Whether the search is limited to [category] ("Only in …"); otherwise
+  /// it searches the whole section.
+  final bool searchInCategory;
+
+  VodFilter copyWith({
+    CategorySelection? category,
+    String? query,
+    VodFilters? filters,
+    bool? searchInCategory,
+  }) => VodFilter(
+    category: category ?? this.category,
+    query: query ?? this.query,
+    filters: filters ?? this.filters,
+    searchInCategory: searchInCategory ?? this.searchInCategory,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is VodFilter &&
+      other.category == category &&
+      other.query == query &&
+      other.filters == filters &&
+      other.searchInCategory == searchInCategory;
+
+  @override
+  int get hashCode => Object.hash(category, query, filters, searchInCategory);
 }
 
-/// [VodFilter] of one tab. Resets when the provider changes.
+/// [VodFilter] of one tab, kept while switching tabs. Resets when the
+/// provider changes.
 class VodFilterNotifier extends Notifier<VodFilter> {
   @override
   VodFilter build() {
@@ -161,8 +208,13 @@ class VodFilterNotifier extends Notifier<VodFilter> {
   }
 
   void selectCategory(CategorySelection category) =>
-      state = VodFilter(category: category, query: state.query);
+      state = state.copyWith(category: category);
 
-  void setQuery(String query) =>
-      state = VodFilter(category: state.category, query: query);
+  void setQuery(String query) => state = state.copyWith(query: query);
+
+  void setFilters(VodFilters filters) =>
+      state = state.copyWith(filters: filters);
+
+  void setSearchInCategory(bool value) =>
+      state = state.copyWith(searchInCategory: value);
 }

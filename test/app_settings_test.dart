@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 void main() {
   test('track defaults: Swedish then English subtitles, on', () {
@@ -84,5 +85,19 @@ void main() {
     expect(bad.hiddenCategoryLists, {'live'});
     expect(bad.categoryListWidth, AppSettings.defaultCategoryListWidth);
     expect(bad.guideChannelWidth, AppSettings.defaultGuideChannelWidth);
+  });
+
+  test('sort per section round-trips; unknown values use the default', () {
+    final settings = const AppSettings().withSort('series', VodSort.rating);
+    expect(settings.sortOf('series'), VodSort.rating);
+    expect(settings.sortOf('movies'), VodSort.recent);
+    final back = AppSettings.fromJson(settings.toJson());
+    expect(back.seriesSort, VodSort.rating);
+    expect(back.movieSort, VodSort.recent);
+    expect(
+      AppSettings.fromJson({'movieSort': 'sideways', 'seriesSort': 3})
+          .movieSort,
+      VodSort.recent,
+    );
   });
 }

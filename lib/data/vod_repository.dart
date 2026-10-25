@@ -40,7 +40,9 @@ class FileVodRepository implements VodRepository {
   Future<VodCatalog<Movie>?> loadMovies(String providerKey) async {
     final path = await _path(providerKey, 'movies');
     return Isolate.run(
-      () async => VodCatalog.moviesFromJson(await _readJson(path)),
+      // The search index is built here too, off the UI thread.
+      () async =>
+          VodCatalog.moviesFromJson(await _readJson(path))?..searchIndex,
     );
   }
 
@@ -48,7 +50,8 @@ class FileVodRepository implements VodRepository {
   Future<VodCatalog<Series>?> loadSeries(String providerKey) async {
     final path = await _path(providerKey, 'series');
     return Isolate.run(
-      () async => VodCatalog.seriesFromJson(await _readJson(path)),
+      () async =>
+          VodCatalog.seriesFromJson(await _readJson(path))?..searchIndex,
     );
   }
 
