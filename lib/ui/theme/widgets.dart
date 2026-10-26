@@ -617,12 +617,25 @@ class ChannelNumber extends StatelessWidget {
 /// [Text] with an ellipsis that shows its full [text] in a tooltip when it
 /// doesn't fit: on hover, and while the focusable widget around it (a
 /// row's [InkWell]) has keyboard focus.
+///
+/// With a [tooltip] that tooltip always shows instead, e.g. a provider's
+/// full name for a shortened title. [leading] goes before the text, e.g. a
+/// label; it needs a [tooltip].
 class TruncatedText extends StatefulWidget {
-  const TruncatedText(this.text, {super.key, this.style, this.maxLines = 1});
+  const TruncatedText(
+    this.text, {
+    super.key,
+    this.style,
+    this.maxLines = 1,
+    this.tooltip,
+    this.leading,
+  }) : assert(leading == null || tooltip != null);
 
   final String text;
   final TextStyle? style;
   final int maxLines;
+  final String? tooltip;
+  final InlineSpan? leading;
 
   @override
   State<TruncatedText> createState() => _TruncatedTextState();
@@ -665,12 +678,34 @@ class _TruncatedTextState extends State<TruncatedText> {
 
   @override
   Widget build(BuildContext context) {
-    final text = Text(
-      widget.text,
-      maxLines: widget.maxLines,
-      overflow: TextOverflow.ellipsis,
-      style: widget.style,
-    );
+    final leading = widget.leading;
+    final text = leading == null
+        ? Text(
+            widget.text,
+            maxLines: widget.maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: widget.style,
+          )
+        : Text.rich(
+            TextSpan(
+              children: [
+                leading,
+                TextSpan(text: widget.text),
+              ],
+            ),
+            maxLines: widget.maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: widget.style,
+          );
+    if (widget.tooltip case final message?) {
+      _truncated = true;
+      return Tooltip(
+        key: _tooltip,
+        message: message,
+        waitDuration: const Duration(milliseconds: 500),
+        child: text,
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final painter = TextPainter(

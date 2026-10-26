@@ -12,6 +12,7 @@ import '../shell/category_layout.dart';
 import '../shell/category_list.dart';
 import '../theme/widgets.dart';
 import 'poster.dart';
+import 'provider_title.dart';
 import 'vod_filters.dart';
 
 /// The page title and search field on top; categories on the left; sort
@@ -483,7 +484,11 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
         placeholder: Icons.block,
         favourite: m.item,
         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('The provider no longer lists “${m.name}”.')),
+          SnackBar(
+            content: Text(
+              'The provider no longer lists “${plainTitle(ref, m.name)}”.',
+            ),
+          ),
         ),
       );
 

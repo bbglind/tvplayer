@@ -24,7 +24,7 @@ class PlayerScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.scrim,
       appBar: AppBar(
-        title: Text(request.title),
+        title: Text(request.title(ref.watch(providerTagsProvider))),
         actions: [
           if (request case LivePlayback(:final channel))
             FavouriteButton(item: liveItemRef(channel), name: channel.name),

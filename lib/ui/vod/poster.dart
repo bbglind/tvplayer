@@ -12,6 +12,7 @@ import '../favourites/favourite_menu.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import 'provider_title.dart';
 
 /// An image loaded through a [PosterLoader] (the disk cache).
 ///
@@ -275,7 +276,7 @@ class _PosterCardState extends State<PosterCard> {
               ),
             ),
             const SizedBox(height: 8),
-            TruncatedText(
+            ProviderTitle(
               widget.title,
               maxLines: 2,
               style: theme.textTheme.titleSmall,

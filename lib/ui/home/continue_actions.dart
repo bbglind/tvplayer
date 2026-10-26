@@ -4,6 +4,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/providers.dart';
 import '../favourites/favourite_menu.dart';
+import '../vod/provider_title.dart';
 
 /// How long the "Undo" of a removal stays offered.
 const removeUndoDuration = Duration(seconds: 6);
@@ -28,13 +29,13 @@ ItemMenuAction removeFromContinueAction(
       final String name;
       final VoidCallback undo;
       if (movie != null) {
-        name = movie.name;
+        name = plainTitle(ref, movie.name);
         final previous = watch.removeMovieFromContinue(movie.streamId);
         undo = () {
           if (previous != null) watch.restoreMovie(movie.streamId, previous);
         };
       } else {
-        name = series!.name;
+        name = plainTitle(ref, series!.name);
         watch.removeSeriesFromContinue(series.seriesId);
         undo = () => watch.restoreSeries(series.seriesId);
       }

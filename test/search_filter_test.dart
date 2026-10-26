@@ -493,9 +493,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Harbour TV'), findsOneWidget);
       expect(find.text('Harbour Hidden'), findsNothing);
-      expect(find.text('4K-TOP - Lantern Harbour (2026)'), findsOneWidget);
-      expect(find.text('SC - Bramble Harbour (2025)'), findsNothing);
-      expect(find.text('Harbour Lights (2010)'), findsOneWidget);
+      expect(find.text('4K-TOP - Lantern Harbour'), findsOneWidget);
+      expect(find.text('SC - Bramble Harbour'), findsNothing);
+      expect(find.text('Harbour Lights'), findsOneWidget);
       expect(find.text('Harbour Secrets'), findsNothing);
       for (final g in ['live', 'movies', 'series']) {
         expect(
@@ -524,7 +524,7 @@ void main() {
       await tester.enterText(find.byKey(const Key('search.field')), 'harbour');
       await tester.pumpAndSettle();
       expect(find.text('Harbour Hidden'), findsOneWidget);
-      expect(find.text('SC - Bramble Harbour (2025)'), findsOneWidget);
+      expect(find.text('SC - Bramble Harbour'), findsOneWidget);
       expect(find.text('Harbour Secrets'), findsOneWidget);
     });
 
@@ -616,7 +616,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text('Loading channels…'), findsOneWidget);
-      expect(find.text('Harbour Lights (2010)'), findsOneWidget);
+      expect(find.text('Harbour Lights'), findsOneWidget);
 
       live.gate!.complete();
       await tester.pumpAndSettle();

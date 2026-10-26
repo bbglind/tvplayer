@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../vod/movies_screen.dart';
 import '../vod/poster.dart';
+import '../vod/provider_title.dart';
 import '../vod/series_screen.dart';
 import 'home_playback.dart';
 import 'home_row.dart';
@@ -369,10 +370,11 @@ class _Info extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TruncatedText(
+        ProviderTitle(
           view.title,
           key: const Key('home.featured.title'),
           maxLines: 2,
+          large: true,
           style: text.displayMedium,
         ),
         if (view.facts.isNotEmpty) ...[

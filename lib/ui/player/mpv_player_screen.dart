@@ -22,6 +22,7 @@ import '../epg/now_next.dart';
 import '../favourites/favourite_menu.dart';
 import '../favourites/favourite_panel.dart';
 import '../theme/app_colors.dart';
+import '../vod/provider_title.dart';
 import 'next_episode_card.dart';
 import 'open_channel.dart';
 import 'player_controls.dart';
@@ -209,7 +210,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       _lastSave = DateTime.now();
       _session = _player.open(
         url,
-        title: _request.title,
+        title: _request.title(ref.read(providerTagsProvider)),
         wid: wid,
         start: _request.start,
         volume: _appSettings.playerVolume,
@@ -466,7 +467,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       if (_panel == _Panel.zap) _panel = _Panel.none;
       _session = _player.open(
         url,
-        title: request.title,
+        title: request.title(ref.read(providerTagsProvider)),
         wid: _wid,
         start: request.start,
         volume: _player.state.volume?.round() ?? _appSettings.playerVolume,
@@ -674,7 +675,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                           ),
                         )
                       : null,
-                  title: Text(_request.title),
+                  title: _buildTitle(),
                 ),
           body: body,
         ),
@@ -856,12 +857,39 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     },
   };
 
+  /// The app bar title: the provider's label and the clean title, the
+  /// full name in the hint line.
+  Widget _buildTitle() {
+    final tags = ref.watch(providerTagsProvider);
+    return switch (_request) {
+      LivePlayback(:final channel) => Text(channel.name),
+      MoviePlayback(:final movie) => ProviderTitle(movie.name, player: true),
+      EpisodePlayback(:final info, :final episode) => ProviderTitle(
+        info.series.name,
+        title: _request.title(tags),
+        fullName: episodeFullName(info.series, episode),
+        player: true,
+      ),
+    };
+  }
+
+  /// [next]'s own name, without the series name and code.
+  String _nextTitle(Episode next) => switch (_request) {
+    EpisodePlayback(:final info) => episodeDisplayTitle(
+      info.series,
+      next,
+      ref.watch(providerTagsProvider),
+    ),
+    _ => next.title,
+  };
+
   Widget? _buildNextCard() {
     final seconds = _countdown;
     final next = _nextEpisode;
     if (seconds == null || next == null) return null;
     return NextEpisodeCard(
       next: next,
+      title: _nextTitle(next),
       seconds: seconds,
       playNowFocus: _playNowFocus,
       onPlayNow: _playNext,
@@ -1139,7 +1167,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
             const SizedBox(height: 16),
             Text(
               '${formatEpisodeCode(next.season, next.episodeNumber)} · '
-              '${next.title}',
+              '${_nextTitle(next)}',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),

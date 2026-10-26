@@ -6,6 +6,7 @@ import '../../data/errors.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
 import '../player/open_channel.dart';
+import '../vod/provider_title.dart';
 
 /// Plays [movie], from where it was left off if it was started.
 void playMovie(BuildContext context, WidgetRef ref, Movie movie) {
@@ -50,7 +51,9 @@ Future<void> playSeries(
       info.episodes.firstOrNull;
   if (episode == null) {
     messenger.showSnackBar(
-      SnackBar(content: Text('“${series.name}” has no episodes.')),
+      SnackBar(
+        content: Text('“${plainTitle(ref, series.name)}” has no episodes.'),
+      ),
     );
     return;
   }

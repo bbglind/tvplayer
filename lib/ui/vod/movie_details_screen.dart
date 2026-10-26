@@ -11,6 +11,7 @@ import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'poster.dart';
+import 'provider_title.dart';
 
 /// One movie: poster, facts, plot and cast from the metadata source, and
 /// Play/Resume.
@@ -61,8 +62,11 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
     final watched = progress?.watched ?? false;
     final resume = resumePosition(progress);
     final rating = meta?.rating ?? movie.rating;
+    final tags = ref.watch(providerTagsProvider);
+    final display = tags.display(movie.name);
     final facts = [
       if ((meta?.year ?? movie.year) case final year?) '$year',
+      ?display.country,
       ?meta?.genre,
       if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
       if (meta?.duration case final d?) formatRuntime(d),
@@ -110,8 +114,15 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(
-                        meta?.title ?? movie.name,
+                      child: ProviderTitle(
+                        movie.name,
+                        key: const Key('movie.title'),
+                        title: switch (meta?.title) {
+                          final t? => tags.display(t).title,
+                          null => null,
+                        },
+                        maxLines: 3,
+                        large: true,
                         style: theme.textTheme.headlineMedium,
                       ),
                     ),

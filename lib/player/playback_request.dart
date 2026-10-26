@@ -6,8 +6,12 @@ import '../format.dart';
 sealed class PlaybackRequest {
   const PlaybackRequest();
 
-  /// Shown in the app bar and as the mpv window title.
-  String get title;
+  /// The provider's name of what plays: the channel, movie or series.
+  String get name;
+
+  /// Shown in the app bar and as the mpv window title: [name] without the
+  /// provider's tag (see [ProviderTags]).
+  String title(ProviderTags tags);
 
   /// Whether the content has a fixed length (a movie or an episode), so it
   /// gets a seek bar and a saved position. Live streams don't: mpv's
@@ -31,7 +35,10 @@ final class LivePlayback extends PlaybackRequest {
   final LiveStream channel;
 
   @override
-  String get title => channel.name;
+  String get name => channel.name;
+
+  @override
+  String title(ProviderTags tags) => channel.name;
 
   @override
   bool get fixedLength => false;
@@ -49,7 +56,10 @@ final class MoviePlayback extends PlaybackRequest {
   final Duration? start;
 
   @override
-  String get title => movie.name;
+  String get name => movie.name;
+
+  @override
+  String title(ProviderTags tags) => tags.display(movie.name).title;
 
   @override
   String get watchKey => movieKey(movie.streamId);
@@ -69,7 +79,10 @@ final class EpisodePlayback extends PlaybackRequest {
   final Duration? start;
 
   @override
-  String get title => episodeTitle(info.series, episode);
+  String get name => info.series.name;
+
+  @override
+  String title(ProviderTags tags) => episodeTitle(info.series, episode, tags);
 
   @override
   String get watchKey => episodeKey(episode.id);
@@ -78,15 +91,18 @@ final class EpisodePlayback extends PlaybackRequest {
   Uri? url({LiveSource? live, VodSource? vod}) => vod?.episodeUrl(episode);
 }
 
-/// E.g. `Series · S01E02 · Pilot`. Panels often put the series name and
-/// code in the episode title already; those parts aren't repeated.
-String episodeTitle(Series series, Episode episode) {
-  final code = formatEpisodeCode(episode.season, episode.episodeNumber);
-  final title = episode.title;
-  final lower = title.toLowerCase();
-  return [
-    if (!lower.contains(series.name.toLowerCase())) series.name,
-    if (!lower.contains(code.toLowerCase())) code,
-    title,
-  ].join(' · ');
-}
+/// E.g. `Series · S01E02 · Pilot`, without the provider's tag. Panels
+/// often put the series name and code in the episode title already; those
+/// parts aren't repeated (see [episodeDisplayTitle]).
+String episodeTitle(Series series, Episode episode, ProviderTags tags) => [
+  tags.display(series.name).title,
+  formatEpisodeCode(episode.season, episode.episodeNumber),
+  episodeDisplayTitle(series, episode, tags),
+].join(' · ');
+
+/// The provider's full name of [episode] for a tooltip: its title, with
+/// the series name in front unless the title has it already.
+String episodeFullName(Series series, Episode episode) =>
+    episode.title.toLowerCase().contains(series.name.toLowerCase())
+    ? episode.title
+    : '${series.name} · ${episode.title}';

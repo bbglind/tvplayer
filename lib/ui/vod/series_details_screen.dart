@@ -13,6 +13,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'poster.dart';
+import 'provider_title.dart';
 
 /// One series: details, a tab per season (specials last) with watched
 /// progress, and the season's episodes.
@@ -129,6 +130,12 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
             return _EpisodeTile(
               key: ValueKey('episode.${e.id}'),
               episode: e,
+              title: episodeDisplayTitle(
+                info.series,
+                e,
+                ref.watch(providerTagsProvider),
+                title: meta?.episode(e)?.title,
+              ),
               meta: meta?.episode(e),
               fallbackImage: meta?.posterUrl ?? widget.series.coverUrl,
               progress: watch.episode(e.id),
@@ -151,8 +158,11 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     final theme = Theme.of(context);
     final series = widget.series;
     final rating = meta?.rating ?? series.rating;
+    final tags = ref.watch(providerTagsProvider);
+    final display = tags.display(series.name);
     final facts = [
       if ((meta?.year ?? series.year) case final year?) '$year',
+      ?display.country,
       ?(meta?.genre ?? series.genre),
       if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
     ];
@@ -183,8 +193,15 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  meta?.title ?? series.name,
+                ProviderTitle(
+                  series.name,
+                  key: const Key('series.title'),
+                  title: switch (meta?.title) {
+                    final t? => tags.display(t).title,
+                    null => null,
+                  },
+                  maxLines: 3,
+                  large: true,
                   style: theme.textTheme.headlineMedium,
                 ),
                 if (facts.isNotEmpty) ...[
@@ -334,6 +351,7 @@ class _EpisodeTile extends StatelessWidget {
   const _EpisodeTile({
     super.key,
     required this.episode,
+    required this.title,
     required this.meta,
     required this.fallbackImage,
     required this.progress,
@@ -342,6 +360,9 @@ class _EpisodeTile extends StatelessWidget {
   });
 
   final Episode episode;
+
+  /// The episode's own name (see [episodeDisplayTitle]).
+  final String title;
   final EpisodeMetadata? meta;
   final String? fallbackImage;
   final WatchProgress? progress;
@@ -403,9 +424,12 @@ class _EpisodeTile extends StatelessWidget {
                       children: [
                         Flexible(
                           child: TruncatedText(
-                            '${episode.episodeNumber}. '
-                            '${meta?.title ?? episode.title}',
+                            '${episode.episodeNumber}. $title',
+                            key: const Key('episode.title'),
                             style: theme.textTheme.titleMedium,
+                            tooltip: title == episode.title
+                                ? null
+                                : episode.title,
                           ),
                         ),
                         if (watched) ...[

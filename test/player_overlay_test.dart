@@ -113,12 +113,16 @@ class _Launcher extends ConsumerWidget {
   final PlaybackRequest request;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    body: TextButton(
-      onPressed: () => openPlayback(context, ref, request),
-      child: const Text('open'),
-    ),
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Loads the catalogues, as Home does in the app.
+    ref.watch(providerTagsProvider);
+    return Scaffold(
+      body: TextButton(
+        onPressed: () => openPlayback(context, ref, request),
+        child: const Text('open'),
+      ),
+    );
+  }
 }
 
 void main() {
@@ -132,6 +136,8 @@ void main() {
     PlaybackRequest request, {
     AppSettings appSettings = const AppSettings(),
     FavouritesData? favourites,
+    FakeVodSource? vod,
+    FakeVodRepository? vodCache,
   }) async {
     player = FakeExternalPlayer();
     embed = FakeVideoEmbed();
@@ -147,7 +153,7 @@ void main() {
           liveSourceProvider.overrideWithValue(
             FakeLiveSource(_catalog, hasGuide: true),
           ),
-          vodSourceProvider.overrideWithValue(FakeVodSource()),
+          vodSourceProvider.overrideWithValue(vod ?? FakeVodSource()),
           providerKeyProvider.overrideWithValue('test'),
           useExternalMpvProvider.overrideWithValue(true),
           externalMpvProvider.overrideWithValue(player),
@@ -156,6 +162,7 @@ void main() {
         ],
         settings: settings,
         watch: watch,
+        vod: vodCache,
         favourites: MemoryFavouritesStore(favourites),
         epg: FakeEpgRepository(cached: _guide()),
         now: _t0,
@@ -378,6 +385,60 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('zap.hint')), findsNothing);
     });
+  });
+
+  testWidgets('the title shows the provider label; the full name is a hint', (
+    tester,
+  ) async {
+    const series = Series(seriesId: 9, name: 'NF-DO - Bramble Lane (2025)');
+    final info = SeriesInfo(
+      series: series,
+      seasons: const [],
+      episodes: const [
+        Episode(
+          id: '91',
+          season: 1,
+          episodeNumber: 1,
+          title: 'NF-DO - Bramble Lane (2025) - S01E01 - The Gate',
+        ),
+      ],
+    );
+    final catalog = VodCatalog.series(
+      categories: const [],
+      items: [
+        series,
+        for (var i = 0; i < 3; i++)
+          Series(seriesId: i, name: 'NF-DO - Other $i'),
+      ],
+      fetchedAt: _t0,
+    );
+    await open(
+      tester,
+      EpisodePlayback(info, info.episodes.first),
+      vod: FakeVodSource(series: catalog),
+      // Cached, as it is before anything plays.
+      vodCache: FakeVodRepository()..series['test'] = catalog,
+    );
+    final bar = find.byType(AppBar);
+    expect(find.descendant(of: bar, matching: find.text('NF-DO')), findsOne);
+    expect(
+      find.descendant(
+        of: bar,
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is Text &&
+              (w.textSpan?.toPlainText() ?? '').endsWith(
+                'Bramble Lane · S01E01 · The Gate',
+              ),
+        ),
+      ),
+      findsOne,
+    );
+    expect(
+      findPlayerTooltip('NF-DO - Bramble Lane (2025) - S01E01 - The Gate'),
+      findsOne,
+    );
+    expect(player.opened.single.title, startsWith('Bramble Lane · S01E01'));
   });
 
   group('play next', () {

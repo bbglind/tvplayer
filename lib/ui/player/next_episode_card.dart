@@ -13,6 +13,7 @@ class NextEpisodeCard extends StatelessWidget {
   const NextEpisodeCard({
     super.key,
     required this.next,
+    required this.title,
     required this.seconds,
     required this.onPlayNow,
     required this.onCancel,
@@ -20,6 +21,9 @@ class NextEpisodeCard extends StatelessWidget {
   });
 
   final Episode next;
+
+  /// [next]'s own name (see [episodeDisplayTitle]).
+  final String title;
   final int seconds;
   final VoidCallback onPlayNow;
   final VoidCallback onCancel;
@@ -48,7 +52,7 @@ class NextEpisodeCard extends StatelessWidget {
               const SizedBox(height: 4),
               TruncatedText(
                 '${formatEpisodeCode(next.season, next.episodeNumber)} · '
-                '${next.title}',
+                '$title',
                 maxLines: 2,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,

@@ -92,11 +92,24 @@ class SeriesScreen extends ConsumerWidget {
         progress.nextSeason != null && progress.nextEpisodeNumber != null
         ? formatEpisodeCode(progress.nextSeason!, progress.nextEpisodeNumber!)
         : null;
+    final title = switch (progress.nextTitle) {
+      final t? => episodeDisplayTitle(
+        series,
+        Episode(
+          id: next ?? '',
+          season: progress.nextSeason ?? 0,
+          episodeNumber: progress.nextEpisodeNumber ?? 0,
+          title: t,
+        ),
+        ref.watch(providerTagsProvider),
+      ),
+      null => null,
+    };
     return PosterCard(
       key: ValueKey('continue.${series.seriesId}'),
       title: series.name,
       favourite: seriesItemRef(series),
-      subtitle: [?code, ?progress.nextTitle].join(' · '),
+      subtitle: [?code, ?title].join(' · '),
       imageUrl: series.coverUrl,
       placeholder: Icons.tv,
       progress: isInProgress(episode) ? episode!.fraction : null,

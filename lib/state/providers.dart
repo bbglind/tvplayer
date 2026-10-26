@@ -164,6 +164,19 @@ final seriesCatalogProvider =
       SeriesCatalogController.new,
     );
 
+/// The provider tags (`NF-DO`, `4K-SC`…) of the movie and series
+/// catalogues, for titles with a label. Knows none until a catalogue is
+/// loaded, so names show whole until then.
+final providerTagsProvider = Provider<ProviderTags>((ref) {
+  final movies = ref.watch(movieCatalogProvider.select((s) => s.catalog));
+  final series = ref.watch(seriesCatalogProvider.select((s) => s.catalog));
+  if (movies == null && series == null) return ProviderTags.empty;
+  return ProviderTags.fromNames([
+    for (final m in movies?.items ?? const <Movie>[]) m.name,
+    for (final s in series?.items ?? const <Series>[]) s.name,
+  ]);
+});
+
 final movieFilterProvider = NotifierProvider<VodFilterNotifier, VodFilter>(
   VodFilterNotifier.new,
 );
