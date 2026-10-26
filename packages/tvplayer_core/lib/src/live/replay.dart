@@ -62,8 +62,8 @@ final class ReplayWindow {
     required DateTime now,
     bool? archived,
   }) {
-    if (!available) return ReplayBlock.noArchive;
     if (!start.isBefore(now)) return ReplayBlock.future;
+    if (!available) return ReplayBlock.noArchive;
     if (start.isBefore(earliest(now))) return ReplayBlock.tooOld;
     if (archived == false) return ReplayBlock.notArchived;
     return null;

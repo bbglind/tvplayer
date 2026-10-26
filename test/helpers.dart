@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:tvplayer/data/app_settings.dart';
+import 'package:tvplayer/data/archive_epg_repository.dart';
 import 'package:tvplayer/data/epg_repository.dart';
 import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
@@ -143,6 +144,33 @@ class FakeLiveSource implements LiveSource {
 
   @override
   void close() {}
+}
+
+/// In-memory [ArchiveEpgRepository].
+class MemoryArchiveEpgRepository implements ArchiveEpgRepository {
+  final saved = <String, Map<String, ArchiveEntry>>{};
+  var saves = 0;
+  final cleared = <String>[];
+
+  @override
+  Future<Map<String, ArchiveEntry>> load(String providerKey) async => {
+    ...?saved[providerKey],
+  };
+
+  @override
+  Future<void> save(
+    String providerKey,
+    Map<String, ArchiveEntry> entries,
+  ) async {
+    saves++;
+    saved[providerKey] = {...entries};
+  }
+
+  @override
+  Future<void> clear(String providerKey) async {
+    cleared.add(providerKey);
+    saved.remove(providerKey);
+  }
 }
 
 /// In-memory [PlaylistStatusStore].
@@ -447,7 +475,7 @@ const activeAccountJson = {
 /// with the app's [InputModeScope].
 ///
 /// The provider storage (empty unless [providerStorage] is given),
-/// settings, the guide and catalogue caches, the watch history, favourites,
+/// settings, the guide, past programme and catalogue caches, the watch history, favourites,
 /// posters and the device time zone (`Europe/Stockholm`) are always faked;
 /// pass [settings], [epg], [vod], [watch], [favourites] or [playlistStatus]
 /// to inspect them. [now] fixes the
@@ -462,6 +490,7 @@ Widget testApp({
   WatchStore? watch,
   FavouritesStore? favourites,
   PlaylistStatusStore? playlistStatus,
+  ArchiveEpgRepository? archive,
   DateTime? now,
   Duration searchDebounce = Duration.zero,
 }) {
@@ -478,6 +507,9 @@ Widget testApp({
       ),
       epgRepositoryProvider.overrideWithValue(epg ?? FakeEpgRepository()),
       vodRepositoryProvider.overrideWithValue(vod ?? FakeVodRepository()),
+      archiveEpgRepositoryProvider.overrideWithValue(
+        archive ?? MemoryArchiveEpgRepository(),
+      ),
       watchStoreProvider.overrideWithValue((_) => watchStore),
       favouritesStoreProvider.overrideWithValue((_) => favouritesStore),
       playlistStatusStoreProvider.overrideWithValue((_) => statusStore),

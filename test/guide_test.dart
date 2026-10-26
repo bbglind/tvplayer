@@ -12,6 +12,7 @@ import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/device_time_zone.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/epg/guide_screen.dart';
+import 'package:tvplayer/ui/epg/programme_panel.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
 import 'package:tvplayer/ui/theme/app_colors.dart';
@@ -450,8 +451,9 @@ void main() {
       await tester.tap(_program('1', _utc(25, 1, 30)));
       await tester.pumpAndSettle();
       expect(player.opened, isEmpty);
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(ProgrammePanel), findsOneWidget);
       expect(find.text('After The Switch description'), findsOneWidget);
+      expect(find.text('Not started yet'), findsOneWidget);
       expect(
         find.text('SE: Kanal 1 HD · Sun 25 Oct 02:30–03:30'),
         findsOneWidget,

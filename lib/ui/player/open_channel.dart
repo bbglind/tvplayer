@@ -25,7 +25,7 @@ Future<void> openPlayback(
   if (switch (request) {
         MoviePlayback(:final movie) => movieKey(movie.streamId),
         EpisodePlayback(:final info) => seriesKey(info.series.seriesId),
-        LivePlayback() => null,
+        LivePlayback() || ReplayPlayback() => null,
       }
       case final key?) {
     ref.read(watchProvider.notifier).recordPlayed(key);
@@ -49,7 +49,8 @@ Route<void> playbackRoute(WidgetRef ref, PlaybackRequest request) =>
 /// The playback URL of [request], from the one source it needs. Contains
 /// credentials: never log or show it.
 Uri? playbackUrl(WidgetRef ref, PlaybackRequest request) => switch (request) {
-  LivePlayback() => request.url(live: ref.read(liveSourceProvider)),
+  LivePlayback() ||
+  ReplayPlayback() => request.url(live: ref.read(liveSourceProvider)),
   MoviePlayback() ||
   EpisodePlayback() => request.url(vod: ref.read(vodSourceProvider)),
 };

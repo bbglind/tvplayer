@@ -37,8 +37,10 @@ final class GuideState {
 /// `PlaylistRefreshController`). Records each download in
 /// [playlistStatusProvider].
 class GuideController extends Notifier<GuideState> {
-  /// How far back finished programmes are kept.
-  static const keepPast = Duration(hours: 6);
+  /// How far back finished programmes are kept: providers' XMLTV guides
+  /// reach about a day back. Further back, replay uses the providers'
+  /// past listings (see `ArchiveListingsController`).
+  static const keepPast = Duration(hours: 24);
 
   Future<String?>? _refreshing;
   Completer<void> _started = Completer();

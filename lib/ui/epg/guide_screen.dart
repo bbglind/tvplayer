@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -9,6 +10,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/app_settings.dart';
 import '../../data/errors.dart';
 import '../../format.dart';
+import '../../state/archive_listings.dart';
 import '../../state/category_selection.dart';
 import '../../state/guide_controller.dart';
 import '../../state/playlist_refresh.dart';
@@ -20,6 +22,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../player/open_channel.dart';
+import 'programme_panel.dart';
 
 /// The full TV guide: channels down the side, time across the top.
 class GuideScreen extends ConsumerStatefulWidget {
@@ -313,10 +316,15 @@ class GuideGrid extends ConsumerStatefulWidget {
       .max(40.0, _line(context, Theme.of(context).textTheme.titleSmall) + 14)
       .ceilToDouble();
 
-  /// How far back the grid starts, before the current hour.
+  /// How far back the grid starts, before the current hour, unless
+  /// channels can be replayed (see [GuideGridState]).
   static const past = Duration(hours: 2);
 
-  /// The grid shows at least this much, and at most [maxSpan].
+  /// The grid never reaches back further than this, whatever the archive.
+  static const maxPastDays = 7;
+
+  /// The grid shows at least this much, and at most [maxSpan] beyond its
+  /// past.
   static const minSpan = Duration(hours: 24);
   static const maxSpan = Duration(days: 8);
 
@@ -330,6 +338,24 @@ class GuideGridState extends ConsumerState<GuideGrid> {
   static const _stepMinutes = 120;
 
   late final DateTime _opened = ref.read(clockProvider);
+
+  /// How far back the grid reaches: over the longest archive of the
+  /// provider's channels (so it stays put when the category changes), else
+  /// [GuideGrid.past].
+  late final Duration _past = () {
+    var days = 0;
+    for (final c in ref.read(liveCatalogProvider).value?.channels ?? const []) {
+      if (c.archiveDays > days) days = c.archiveDays;
+    }
+    days = math.min(days, GuideGrid.maxPastDays);
+    return days == 0 ? GuideGrid.past : Duration(days: days);
+  }();
+
+  /// Reports the visible channels and time after scrolling settles, so
+  /// their past listings can load.
+  Timer? _report;
+  static const _reportDelay = Duration(milliseconds: 300);
+
   late final ScrollController _bodyH;
   late final ScrollController _headerH;
   final _bodyV = ScrollController();
@@ -345,10 +371,10 @@ class GuideGridState extends ConsumerState<GuideGrid> {
   /// How much of the time before a jump target stays in view.
   static const _lead = Duration(minutes: 30);
 
-  /// Start of the grid (a UTC instant on a display-zone hour): [GuideGrid.past]
+  /// Start of the grid (a UTC instant on a display-zone hour): [_past]
   /// before opening, or earlier so a jump to tonight shows its lead.
   DateTime _start(GuideTime time) {
-    final past = _opened.subtract(GuideGrid.past);
+    final past = _opened.subtract(_past);
     final tonight = time.tonight(_opened).at.subtract(_lead);
     return time.startOfHour(tonight.isBefore(past) ? tonight : past);
   }
@@ -367,6 +393,54 @@ class GuideGridState extends ConsumerState<GuideGrid> {
     _bodyV.addListener(() => _sync(_bodyV, _channelsV));
     _channelsV.addListener(() => _sync(_channelsV, _bodyV));
     _bodyH.addListener(_onHorizontal);
+    _bodyV.addListener(_scheduleReport);
+    _bodyH.addListener(_scheduleReport);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleReport());
+  }
+
+  void _scheduleReport() {
+    _report?.cancel();
+    _report = Timer(_reportDelay, _reportVisible);
+  }
+
+  /// Asks for the past listings of the visible channels with replay whose
+  /// XMLTV programmes start after the visible time, nearest to the middle
+  /// of the view first. Channels scrolled away are no longer asked for.
+  void _reportVisible() {
+    if (!mounted || !_bodyH.hasClients || !_bodyV.hasClients) return;
+    final lookup = ref.read(guideLookupProvider);
+    if (lookup == null) return;
+    final time = ref.read(guideTimeProvider);
+    final now = ref.read(clockProvider);
+    final start = _start(time);
+    final from = start.add(
+      Duration(seconds: (_bodyH.offset / _px * 60).round()),
+    );
+    final to = from.add(
+      Duration(seconds: (_bodyH.position.viewportDimension / _px * 60).round()),
+    );
+    final rowHeight = GuideGrid.rowHeight(context);
+    final first = (_bodyV.offset / rowHeight).floor();
+    final count = (_bodyV.position.viewportDimension / rowHeight).ceil() + 1;
+    final middle = first + count / 2;
+    final wanted = <(double, LiveStream)>[];
+    for (var i = first; i < first + count && i < widget.channels.length; i++) {
+      final channel = widget.channels[i];
+      // Only the past within the archive comes from the listings.
+      if (!channel.hasReplay || !from.isBefore(now)) continue;
+      if (to.isBefore(ReplayWindow(channel.archiveDays).earliest(now))) {
+        continue;
+      }
+      final guideStart = lookup.guideStart(channel);
+      if (guideStart != null && !from.isBefore(time.adjust(guideStart))) {
+        continue;
+      }
+      wanted.add(((i - middle).abs(), channel));
+    }
+    wanted.sort((a, b) => a.$1.compareTo(b.$1));
+    ref.read(archiveListingsProvider.notifier).want([
+      for (final (_, c) in wanted) c,
+    ]);
   }
 
   int _stepOf(double offset) => offset ~/ (_stepMinutes * _px);
@@ -470,6 +544,7 @@ class GuideGridState extends ConsumerState<GuideGrid> {
 
   @override
   void dispose() {
+    _report?.cancel();
     _bodyH.dispose();
     _headerH.dispose();
     _bodyV.dispose();
@@ -481,6 +556,7 @@ class GuideGridState extends ConsumerState<GuideGrid> {
   Widget build(BuildContext context) {
     final time = ref.watch(guideTimeProvider);
     final now = ref.watch(clockProvider);
+    final lookup = ref.watch(guideLookupProvider) ?? GuideLookup(widget.guide);
     final start = _start(time);
     var span = GuideGrid.minSpan;
     if (widget.guide.end case final end?) {
@@ -494,7 +570,8 @@ class GuideGridState extends ConsumerState<GuideGrid> {
         .add(const Duration(hours: 4))
         .difference(start);
     if (tonightSpan > span) span = tonightSpan;
-    if (span > GuideGrid.maxSpan) span = GuideGrid.maxSpan;
+    final maxSpan = GuideGrid.maxSpan + _past;
+    if (span > maxSpan) span = maxSpan;
     final width = span.inMinutes * _px;
     final channelWidth = _clampWidth(
       _dragWidth ??
@@ -608,7 +685,7 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                                             )
                                           : _GuideRow(
                                               channel: widget.channels[i],
-                                              guide: widget.guide,
+                                              lookup: lookup,
                                               time: time,
                                               start: start,
                                               window: window,
@@ -891,7 +968,7 @@ class _ChannelCell extends ConsumerWidget {
 class _GuideRow extends ConsumerWidget {
   const _GuideRow({
     required this.channel,
-    required this.guide,
+    required this.lookup,
     required this.time,
     required this.start,
     required this.window,
@@ -901,7 +978,7 @@ class _GuideRow extends ConsumerWidget {
   });
 
   final LiveStream channel;
-  final EpgGuide guide;
+  final GuideLookup lookup;
   final GuideTime time;
   final DateTime start;
   final _Window window;
@@ -917,8 +994,7 @@ class _GuideRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final guideNow = time.unadjust(now);
-    final programs = guide.between(
+    final programs = lookup.between(
       channel,
       time.unadjust(window.from),
       time.unadjust(window.to),
@@ -928,7 +1004,11 @@ class _GuideRow extends ConsumerWidget {
       final left = math.max(0.0, _x(time.adjust(p.start)));
       final right = math.min(width, _x(time.adjust(p.stop)));
       if (right <= left) continue;
-      final airing = p.isAiringAt(guideNow);
+      final realStart = time.adjust(p.start);
+      final started = !realStart.isAfter(now);
+      final ended = !time.adjust(p.stop).isAfter(now);
+      final airing = started && !ended;
+      final replay = started && replayBlock(channel, p, time, now) == null;
       cells.add(
         Positioned(
           left: left,
@@ -943,17 +1023,22 @@ class _GuideRow extends ConsumerWidget {
             program: p,
             label: time.formatRange(p.start, p.stop),
             airing: airing,
+            replay: replay,
+            dimmed: ended && !replay,
             left: left,
             width: right - left,
             scroll: scroll,
-            onTap: airing
+            // On now without an archive there is only live TV to offer.
+            onTap: airing && !channel.hasReplay
                 ? () => openChannel(context, ref, channel)
-                : () => _showDetails(context, p),
+                : () => _showPanel(context, ref, p),
+            onMenu: () => _showPanel(context, ref, p),
           ),
         ),
       );
     }
-    if (cells.isEmpty && guide.programsFor(channel).isEmpty) {
+    if (_pastNote(ref) case final note?) cells.insert(0, note);
+    if (cells.isEmpty && lookup.programsFor(channel).isEmpty) {
       cells.add(
         Positioned(
           left: math.max(0.0, _x(window.from)) + 8,
@@ -977,38 +1062,84 @@ class _GuideRow extends ConsumerWidget {
     );
   }
 
-  void _showDetails(BuildContext context, EpgProgram p) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(p.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${channel.name} · ${formatGuideDate(time, time.adjust(p.start))} '
-              '${time.formatRange(p.start, p.stop)}',
-            ),
-            if (p.category case final category?) ...[
-              const SizedBox(height: 4),
-              Text(category, style: Theme.of(context).textTheme.bodySmall),
-            ],
-            if (p.description case final description?) ...[
-              const SizedBox(height: 12),
-              Text(description),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
+  /// While the past listing of a channel with replay loads (or failed), a
+  /// note in the stretch of its archive before its programmes.
+  Widget? _pastNote(WidgetRef ref) {
+    if (!channel.hasReplay) return null;
+    final status = ref.watch(
+      archiveListingsProvider.select((s) => s.statusOf(channel.id)),
+    );
+    if (status != ArchiveStatus.loading && status != ArchiveStatus.failed) {
+      return null;
+    }
+    final first = lookup.programsFor(channel).firstOrNull;
+    final end = first == null ? now : time.adjust(first.start);
+    final from = ReplayWindow(channel.archiveDays).earliest(now);
+    final left = math.max(0.0, _x(from));
+    final right = math.min(width, _x(end));
+    if (right - left < 40) return null;
+    return Positioned(
+      key: Key('guide.past.${channel.id}'),
+      left: left,
+      width: right - left,
+      top: 0,
+      bottom: 0,
+      child: _PinnedText(
+        status == ArchiveStatus.loading
+            ? 'Loading past programmes…'
+            : "Couldn't load past programmes",
+        left: left,
+        width: right - left,
+        scroll: scroll,
       ),
     );
   }
+
+  void _showPanel(BuildContext context, WidgetRef ref, EpgProgram p) =>
+      showProgrammePanel(context, channel: channel, program: p);
+}
+
+/// Muted text that stays at the visible left edge of a block [left] and
+/// [width] wide in the scrolled grid.
+class _PinnedText extends StatelessWidget {
+  const _PinnedText(
+    this.text, {
+    required this.left,
+    required this.width,
+    required this.scroll,
+  });
+
+  final String text;
+  final double left;
+  final double width;
+  final ScrollController scroll;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: scroll,
+    builder: (context, child) {
+      final offset = scroll.hasClients
+          ? scroll.offset
+          : scroll.initialScrollOffset;
+      final double inset = (offset - left).clamp(
+        0.0,
+        math.max(0.0, width - 200),
+      );
+      return Padding(
+        padding: EdgeInsets.only(left: inset + 8),
+        child: child,
+      );
+    },
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    ),
+  );
 }
 
 class _ProgramCell extends StatelessWidget {
@@ -1018,15 +1149,27 @@ class _ProgramCell extends StatelessWidget {
     required this.label,
     required this.airing,
     required this.onTap,
+    required this.onMenu,
     required this.left,
     required this.width,
     required this.scroll,
+    this.replay = false,
+    this.dimmed = false,
   });
 
   final EpgProgram program;
   final String label;
   final bool airing;
+
+  /// Whether it can be replayed: shows the replay icon.
+  final bool replay;
+
+  /// Ended without replay: the title is muted.
+  final bool dimmed;
   final VoidCallback onTap;
+
+  /// Right click, long press or the Menu key: the programme panel.
+  final VoidCallback onMenu;
 
   /// Position and width of the block in the grid.
   final double left;
@@ -1045,61 +1188,95 @@ class _ProgramCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // textMuted is too faint on hover for small text.
+    final labelStyle = theme.textTheme.bodySmall?.copyWith(
+      color: airing ? AppColors.textSecondary : null,
+    );
     return Padding(
       padding: margin,
       child: FocusRing(
         radius: _radius,
         inset: true,
-        child: Material(
-          color: airing ? AppColors.hover : AppColors.card,
-          borderRadius: BorderRadius.circular(_radius),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Tooltip(
-              message: '$label  ${program.title}',
-              waitDuration: const Duration(milliseconds: 600),
-              child: ListenableBuilder(
-                listenable: scroll,
-                // A block that starts left of the visible area keeps its text
-                // at the visible edge instead of scrolled out of sight.
-                builder: (context, child) {
-                  final offset = scroll.hasClients
-                      ? scroll.offset
-                      : scroll.initialScrollOffset;
-                  final double inset = (offset - left).clamp(
-                    0.0,
-                    math.max(0.0, width - _minTextWidth),
-                  );
-                  return Padding(
-                    padding: EdgeInsets.only(left: inset),
-                    child: child,
-                  );
-                },
-                child: Padding(
-                  padding: padding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        program.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        softWrap: false,
-                        style: theme.textTheme.titleSmall,
-                      ),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        softWrap: false,
-                        // textMuted is too faint on hover for small text.
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: airing ? AppColors.textSecondary : null,
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.contextMenu): onMenu,
+            const SingleActivator(LogicalKeyboardKey.f10, shift: true): onMenu,
+          },
+          child: Material(
+            color: airing ? AppColors.hover : AppColors.card,
+            borderRadius: BorderRadius.circular(_radius),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              onSecondaryTap: onMenu,
+              onLongPress: onMenu,
+              child: Tooltip(
+                message:
+                    '$label  ${program.title}'
+                    '${replay ? ' · Replay available' : ''}',
+                waitDuration: const Duration(milliseconds: 600),
+                child: ListenableBuilder(
+                  listenable: scroll,
+                  // A block that starts left of the visible area keeps its
+                  // text at the visible edge instead of scrolled out of
+                  // sight.
+                  builder: (context, child) {
+                    final offset = scroll.hasClients
+                        ? scroll.offset
+                        : scroll.initialScrollOffset;
+                    final double inset = (offset - left).clamp(
+                      0.0,
+                      math.max(0.0, width - _minTextWidth),
+                    );
+                    return Padding(
+                      padding: EdgeInsets.only(left: inset),
+                      child: child,
+                    );
+                  },
+                  child: Padding(
+                    padding: padding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          program.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          softWrap: false,
+                          style: dimmed
+                              ? theme.textTheme.titleSmall?.copyWith(
+                                  color: AppColors.textMuted,
+                                )
+                              : theme.textTheme.titleSmall,
                         ),
-                      ),
-                    ],
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              if (replay) ...[
+                                WidgetSpan(
+                                  alignment: PlaceholderAlignment.middle,
+                                  child: Icon(
+                                    Icons.history,
+                                    key: const Key('guide.replay'),
+                                    size: 14,
+                                    color:
+                                        labelStyle?.color ??
+                                        AppColors.textMuted,
+                                  ),
+                                ),
+                                const TextSpan(text: ' '),
+                              ],
+                              TextSpan(text: label),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          softWrap: false,
+                          style: labelStyle,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

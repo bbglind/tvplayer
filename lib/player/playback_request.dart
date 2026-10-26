@@ -47,6 +47,53 @@ final class LivePlayback extends PlaybackRequest {
   Uri? url({LiveSource? live, VodSource? vod}) => live?.streamUrl(channel);
 }
 
+/// A live channel from the provider's archive (catch-up), from the real
+/// moment [from] on: a past programme, or live TV behind live.
+final class ReplayPlayback extends PlaybackRequest {
+  /// [serverZone] is the zone the provider reads start times in;
+  /// [requestedAt] is now, which decides how much is asked for.
+  ReplayPlayback(
+    this.channel, {
+    required this.from,
+    required this.serverZone,
+    required this.requestedAt,
+  }) : timeshift = TimeshiftStart.at(
+         from,
+         GuideTime.findZone(serverZone) ?? GuideTime.findZone('UTC')!,
+       );
+
+  final LiveStream channel;
+  final DateTime from;
+  final String serverZone;
+  final DateTime requestedAt;
+
+  /// The start as the provider wants it, and how far into the stream
+  /// [from] is.
+  final TimeshiftStart timeshift;
+
+  @override
+  String get name => channel.name;
+
+  @override
+  String title(ProviderTags tags) => withoutReplayMark(channel.name);
+
+  /// The archive is a file of what was recorded: it has a length and can
+  /// be sought in.
+  @override
+  bool get fixedLength => true;
+
+  @override
+  Duration? get start =>
+      timeshift.offset > Duration.zero ? timeshift.offset : null;
+
+  @override
+  Uri? url({LiveSource? live, VodSource? vod}) => live?.replayUrl(
+    channel,
+    timeshift,
+    timeshiftMinutes(timeshift.floored, requestedAt),
+  );
+}
+
 final class MoviePlayback extends PlaybackRequest {
   const MoviePlayback(this.movie, {this.start});
 

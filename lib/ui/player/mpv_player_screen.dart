@@ -866,6 +866,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final tags = ref.watch(providerTagsProvider);
     return switch (_request) {
       LivePlayback(:final channel) => Text(channelDisplayName(channel)),
+      ReplayPlayback(:final channel) => Text(channelDisplayName(channel)),
       MoviePlayback(:final movie) => ProviderTitle(movie.name, player: true),
       EpisodePlayback(:final info, :final episode) => ProviderTitle(
         info.series.name,

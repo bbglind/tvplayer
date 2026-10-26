@@ -29,6 +29,7 @@ void main() {
       );
       expect(check(now), ReplayBlock.future);
       expect(check(DateTime.utc(2026, 10, 27)), ReplayBlock.future);
+      expect(check(DateTime.utc(2026, 10, 27), days: 0), ReplayBlock.future);
       expect(check(DateTime.utc(2026, 10, 23, 17)), ReplayBlock.tooOld);
       expect(
         check(DateTime.utc(2026, 10, 26, 17), archived: false),

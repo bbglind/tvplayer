@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../data/app_settings.dart';
+import '../data/archive_epg_repository.dart';
 import '../data/connection_tester.dart';
 import '../data/device_time_zone.dart';
 import '../data/epg_repository.dart';
@@ -106,6 +107,11 @@ class SavedProviderNotifier extends AsyncNotifier<ProviderConfig?> {
       await ref.read(vodRepositoryProvider).clear(providerKey(previous));
     } catch (e) {
       debugPrint('Could not clear the catalogue cache (${e.runtimeType})');
+    }
+    try {
+      await ref.read(archiveEpgRepositoryProvider).clear(providerKey(previous));
+    } catch (e) {
+      debugPrint('Could not clear the past programmes (${e.runtimeType})');
     }
   }
 }
@@ -548,6 +554,33 @@ class Clock extends Notifier<DateTime> {
 final epgRepositoryProvider = Provider<EpgRepository>(
   (ref) => FileEpgRepository(),
 );
+
+/// Caches past programmes from the providers' archives. Overridden in
+/// tests.
+final archiveEpgRepositoryProvider = Provider<ArchiveEpgRepository>(
+  (ref) => FileArchiveEpgRepository(),
+);
+
+/// The IANA zone the provider reads replay start times in: its own
+/// (`server_info.timezone`) when it says, else the guide's time zone.
+/// After a failure the guide's zone is used for a minute, then the
+/// provider is asked again.
+final serverTimeZoneProvider = FutureProvider<String>((ref) async {
+  final source = ref.watch(liveSourceProvider);
+  try {
+    final zone = await source?.serverTimeZone();
+    if (zone != null && GuideTime.findZone(zone) != null) return zone;
+  } catch (e) {
+    // Only the plain description: never the URL or credentials.
+    debugPrint(
+      "Could not read the provider's time zone: "
+      '${describeRefreshError(e)}',
+    );
+    final retry = Timer(const Duration(minutes: 1), ref.invalidateSelf);
+    ref.onDispose(retry.cancel);
+  }
+  return ref.read(guideTimeProvider).zoneName;
+});
 
 /// The TV guide of the active provider.
 final guideProvider = NotifierProvider<GuideController, GuideState>(
