@@ -1168,6 +1168,22 @@ void main() {
       );
     });
 
+    testWidgets('Now and Tonight show their icons', (tester) async {
+      await open(tester, local(27, 14), guide(until: local(29, 0)));
+      for (final (chip, icon) in [
+        (now, Icons.schedule_outlined),
+        (tonight, Icons.bedtime_outlined),
+      ]) {
+        final found = find.descendant(of: chip, matching: find.byIcon(icon));
+        expect(found, findsOneWidget, reason: '$icon');
+        expect(tester.getSize(found).width, greaterThan(0));
+        final glyph = tester.widget<RichText>(
+          find.descendant(of: found, matching: find.byType(RichText)),
+        );
+        expect(glyph.text.style?.color?.a, greaterThan(0));
+      }
+    });
+
     for (final scale in [1.0, 1.4]) {
       testWidgets('time labels around midnight never overlap at text size '
           '$scale', (tester) async {
