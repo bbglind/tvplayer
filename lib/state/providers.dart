@@ -547,6 +547,10 @@ class Clock extends Notifier<DateTime> {
     return _now();
   }
 
+  /// The current time to the moment, between the ticks of [state]; for
+  /// decisions that can't wait for the next tick (how far behind live).
+  DateTime now() => _now();
+
   static DateTime _now() => DateTime.now().toUtc();
 }
 

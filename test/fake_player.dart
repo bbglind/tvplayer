@@ -9,7 +9,20 @@ import 'package:tvplayer/player/video_pointer.dart';
 /// Records calls instead of starting mpv; tests drive [state] directly.
 class FakeExternalPlayer extends ExternalMpvPlayer {
   final opened =
-      <({Uri url, String title, int? wid, Duration? start, int? volume})>[];
+      <
+        ({
+          Uri url,
+          String title,
+          int? wid,
+          Duration? start,
+          int? volume,
+          bool keepOpen,
+        })
+      >[];
+
+  /// [reload] calls: the media replaced in the running mpv.
+  final reloaded =
+      <({Uri url, String title, Duration? start, bool keepOpen})>[];
   final stopped = <int?>[];
   var pauseToggles = 0;
   final seeks = <Duration>[];
@@ -29,13 +42,16 @@ class FakeExternalPlayer extends ExternalMpvPlayer {
     int? wid,
     Duration? start,
     int? volume,
+    bool keepOpen = false,
   }) {
+    loads.add(url);
     opened.add((
       url: url,
       title: title,
       wid: wid,
       start: start,
       volume: volume,
+      keepOpen: keepOpen,
     ));
     final session = state.session + 1;
     state = ExternalPlaybackState(
@@ -46,6 +62,29 @@ class FakeExternalPlayer extends ExternalMpvPlayer {
   }
 
   @override
+  int reload(
+    Uri url, {
+    required String title,
+    int? wid,
+    Duration? start,
+    bool keepOpen = false,
+  }) {
+    loads.add(url);
+    reloaded.add((url: url, title: title, start: start, keepOpen: keepOpen));
+    final session = state.session + 1;
+    state = ExternalPlaybackState(
+      session: session,
+      status: ExternalPlayerStatus.starting,
+      volume: state.volume,
+      muted: state.muted,
+    );
+    return session;
+  }
+
+  /// Every URL loaded, by [open] or [reload], in order.
+  final loads = <Uri>[];
+
+  @override
   Future<void> stop({int? session}) async => stopped.add(session);
 
   @override
@@ -53,6 +92,12 @@ class FakeExternalPlayer extends ExternalMpvPlayer {
 
   @override
   Future<void> seekBy(Duration offset) async => seeks.add(offset);
+
+  /// [seek] calls (absolute positions).
+  final seeksTo = <Duration>[];
+
+  @override
+  Future<void> seek(Duration position) async => seeksTo.add(position);
 
   @override
   Future<void> changeVolume(int percent) async => volumeChanges.add(percent);

@@ -29,6 +29,8 @@ class ExternalPlaybackState {
     this.muted = false,
     this.fileLoaded = false,
     this.endedAtEof = false,
+    this.eofReached = false,
+    this.seekable,
   });
 
   /// Increases with every [ExternalMpvPlayer.open].
@@ -73,6 +75,13 @@ class ExternalPlaybackState {
   /// stopped or failing).
   final bool endedAtEof;
 
+  /// Whether a file opened with `keepOpen` reached its end: mpv then holds
+  /// the last frame instead of ending (mpv `eof-reached`).
+  final bool eofReached;
+
+  /// Whether mpv can seek in the media (mpv `seekable`); null until known.
+  final bool? seekable;
+
   List<MediaTrack> get audioTracks => [
     for (final t in tracks)
       if (t.type == TrackType.audio) t,
@@ -98,6 +107,8 @@ class ExternalPlaybackState {
     bool? muted,
     bool? fileLoaded,
     bool? endedAtEof,
+    bool? eofReached,
+    bool? Function()? seekable,
   }) => ExternalPlaybackState(
     session: session,
     status: status ?? this.status,
@@ -114,6 +125,8 @@ class ExternalPlaybackState {
     muted: muted ?? this.muted,
     fileLoaded: fileLoaded ?? this.fileLoaded,
     endedAtEof: endedAtEof ?? this.endedAtEof,
+    eofReached: eofReached ?? this.eofReached,
+    seekable: seekable == null ? this.seekable : seekable(),
   );
 }
 
@@ -165,14 +178,17 @@ class ExternalMpvPlayer extends ChangeNotifier {
 
   /// Closes any running mpv, then plays [url] in a new one titled [title],
   /// embedded into X11 window [wid] if given (see [MpvLaunchConfig.wid]),
-  /// from [start] if given, at [volume] percent if given. Returns the new
-  /// session id; progress is reported through [state].
+  /// from [start] if given, at [volume] percent if given. With [keepOpen]
+  /// mpv holds the last frame at the end (see
+  /// [ExternalPlaybackState.eofReached]). Returns the new session id;
+  /// progress is reported through [state].
   int open(
     Uri url, {
     required String title,
     int? wid,
     Duration? start,
     int? volume,
+    bool keepOpen = false,
   }) {
     final session = _state.session + 1;
     final previous = _run;
@@ -181,8 +197,87 @@ class ExternalMpvPlayer extends ChangeNotifier {
       session: session,
       status: ExternalPlayerStatus.starting,
     );
-    unawaited(_play(run, previous, url, title, wid, start, volume));
+    unawaited(_play(run, previous, url, title, wid, start, volume, keepOpen));
     return session;
+  }
+
+  /// Plays [url] in the running mpv instead of the media it plays (mpv
+  /// `loadfile … replace`), which closes the old stream before opening the
+  /// new one and keeps the window, volume and overlays. Starts a new mpv
+  /// with [open] when none runs. Returns the new session id.
+  int reload(
+    Uri url, {
+    required String title,
+    int? wid,
+    Duration? start,
+    bool keepOpen = false,
+  }) {
+    final run = _run;
+    if (run == null || run.closed || run.exited || run.ipc == null) {
+      return open(
+        url,
+        title: title,
+        wid: wid,
+        start: start,
+        volume: _state.volume?.round(),
+        keepOpen: keepOpen,
+      );
+    }
+    final session = _state.session + 1;
+    state = ExternalPlaybackState(
+      session: session,
+      status: ExternalPlayerStatus.starting,
+      volume: _state.volume,
+      muted: _state.muted,
+    );
+    unawaited(_load(run, session, url, title, start, keepOpen));
+    return session;
+  }
+
+  Future<void> _load(
+    _MpvRun run,
+    int session,
+    Uri url,
+    String title,
+    Duration? start,
+    bool keepOpen,
+  ) async {
+    final ipc = run.ipc!;
+    run.redactor = UrlRedactor(url);
+    try {
+      await _setLoadOptions(ipc, start, keepOpen);
+      await ipc.command([
+        'set_property',
+        'title',
+        MpvLaunchConfig.escapePropertyExpansion(title),
+      ]);
+      await ipc.command(['loadfile', url.toString(), 'replace']);
+      if (_isCurrent(run) &&
+          _state.session == session &&
+          _state.status == ExternalPlayerStatus.starting) {
+        state = _state.copyWith(status: ExternalPlayerStatus.playing);
+      }
+    } on MpvIpcException {
+      // If mpv died on its own, the exit handler reports it.
+      if (!run.exited && _state.session == session) {
+        _fail(run, 'Lost connection to mpv.');
+      }
+    }
+  }
+
+  /// Options for the next file loaded: where to start, and whether to hold
+  /// the last frame at its end.
+  static Future<void> _setLoadOptions(
+    MpvIpc ipc,
+    Duration? start,
+    bool keepOpen,
+  ) async {
+    await ipc.command([
+      'set_property',
+      'start',
+      start != null && start > Duration.zero ? _secondsText(start) : 'none',
+    ]);
+    await ipc.command(['set_property', 'keep-open', keepOpen ? 'yes' : 'no']);
   }
 
   Future<void> _play(
@@ -193,9 +288,10 @@ class ExternalMpvPlayer extends ChangeNotifier {
     int? wid,
     Duration? start,
     int? volume,
+    bool keepOpen,
   ) async {
     await previous?.close();
-    final redactor = UrlRedactor(url);
+    run.redactor = UrlRedactor(url);
     try {
       if (run.closed) return;
       final dir = run.socketDir = await _createSocketDir();
@@ -216,7 +312,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
 
       final ipc = run.ipc = await _connectIpc(ipcPath, abort: process.exitCode);
       if (run.closed) return await run.close();
-      ipc.events.listen((e) => _onEvent(run, e, redactor));
+      ipc.events.listen((e) => _onEvent(run, e));
       await ipc.observeProperty(1, 'time-pos');
       await ipc.observeProperty(2, 'duration');
       await ipc.observeProperty(3, 'pause');
@@ -225,10 +321,13 @@ class ExternalMpvPlayer extends ChangeNotifier {
       await ipc.observeProperty(6, 'sid');
       await ipc.observeProperty(7, 'volume');
       await ipc.observeProperty(8, 'mute');
+      await ipc.observeProperty(9, 'eof-reached');
+      await ipc.observeProperty(10, 'seekable');
       if (start != null && start > Duration.zero) {
         // Applies to the next file loaded.
         await ipc.command(['set_property', 'start', _secondsText(start)]);
       }
+      if (keepOpen) await ipc.command(['set_property', 'keep-open', 'yes']);
       await ipc.command(['loadfile', url.toString()]);
       run.statsTimer = Timer.periodic(_statsInterval, (_) => _pollDrops(run));
       for (final id in _overlays.keys.toList()) {
@@ -252,7 +351,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
     }
   }
 
-  void _onEvent(_MpvRun run, MpvEvent event, UrlRedactor redactor) {
+  void _onEvent(_MpvRun run, MpvEvent event) {
     if (!_isCurrent(run)) return;
     switch (event.name) {
       case 'property-change':
@@ -266,8 +365,22 @@ class ExternalMpvPlayer extends ChangeNotifier {
           'sid' => _state.copyWith(subtitleId: () => _trackId(data)),
           'volume' when data is num => _state.copyWith(volume: data.toDouble()),
           'mute' => _state.copyWith(muted: data == true),
+          'eof-reached' => _state.copyWith(eofReached: data == true),
+          'seekable' => _state.copyWith(
+            seekable: () => data is bool ? data : null,
+          ),
           _ => _state,
         };
+      case 'start-file':
+        // A new file (after a reload): what was known of the old one goes.
+        state = _state.copyWith(
+          position: () => null,
+          duration: () => null,
+          fileLoaded: false,
+          endedAtEof: false,
+          eofReached: false,
+          seekable: () => null,
+        );
       case 'file-loaded':
         state = _state.copyWith(fileLoaded: true);
       case 'end-file' when event.fields['reason'] == 'eof':
@@ -275,7 +388,7 @@ class ExternalMpvPlayer extends ChangeNotifier {
       case 'end-file' when event.fields['reason'] == 'error':
         final detail = event.fields['file_error'];
         state = _state.copyWith(
-          error: redactor.redact(
+          error: run.redactor.redact(
             'mpv could not play the stream'
             '${detail is String ? ' ($detail)' : ''}.',
           ),
@@ -525,6 +638,9 @@ class _MpvRun {
   Process? process;
   MpvIpc? ipc;
   Directory? socketDir;
+
+  /// Redacts the URL of the media playing now from mpv's messages.
+  UrlRedactor redactor = UrlRedactor();
 
   /// Set once [close] was requested; resources acquired later are released
   /// by calling [close] again.

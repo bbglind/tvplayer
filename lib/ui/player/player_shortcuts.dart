@@ -33,7 +33,7 @@ bool _focusInPanel() {
 /// embedded in the app window:
 ///
 /// - space: pause/resume
-/// - left/right: seek 10 s back/forward
+/// - left/right: seek 10 s back/forward; with Shift 1 min
 /// - up/down: volume up/down
 /// - f: fullscreen on/off
 /// - Esc: [onEscape] (cancel, close a panel, leave fullscreen)
@@ -41,6 +41,7 @@ bool _focusInPanel() {
 /// - m: mute on/off
 /// - c: the channel list (live TV)
 /// - n: the next episode
+/// - l: go live (a replay, or live TV behind live)
 ///
 /// A null callback leaves its key alone (e.g. no seeking on live TV), and
 /// no key is handled while a text field has focus; arrows and space are
@@ -59,17 +60,21 @@ class PlayerShortcuts extends StatelessWidget {
     this.onToggleMute,
     this.onZap,
     this.onNextEpisode,
+    this.onGoLive,
     this.onActivity,
     this.focusNode,
   });
 
   static const seekStep = Duration(seconds: 10);
+
+  /// With Shift, e.g. to skip ads.
+  static const bigSeekStep = Duration(minutes: 1);
   static const volumeStep = 5;
 
   final Widget child;
   final VoidCallback? onTogglePause;
 
-  /// Called with [seekStep] forward or back.
+  /// Called with [seekStep] (with Shift [bigSeekStep]) forward or back.
   final ValueChanged<Duration>? onSeek;
 
   /// Called with [volumeStep] up or down, in percent points.
@@ -80,6 +85,7 @@ class PlayerShortcuts extends StatelessWidget {
   final VoidCallback? onToggleMute;
   final VoidCallback? onZap;
   final VoidCallback? onNextEpisode;
+  final VoidCallback? onGoLive;
   final VoidCallback? onActivity;
 
   /// The node that has focus while no control has it.
@@ -91,13 +97,16 @@ class PlayerShortcuts extends StatelessWidget {
     if (textInputHasFocus()) return KeyEventResult.ignored;
     final repeat = event is KeyRepeatEvent;
     final key = event.logicalKey;
+    final step = HardwareKeyboard.instance.isShiftPressed
+        ? bigSeekStep
+        : seekStep;
     if (_focusInPanel() && _panelKeys.contains(key)) {
       return KeyEventResult.ignored;
     }
     final VoidCallback? action = switch (key) {
       LogicalKeyboardKey.space when !repeat => onTogglePause,
-      LogicalKeyboardKey.arrowLeft => _bind(onSeek, -seekStep),
-      LogicalKeyboardKey.arrowRight => _bind(onSeek, seekStep),
+      LogicalKeyboardKey.arrowLeft => _bind(onSeek, -step),
+      LogicalKeyboardKey.arrowRight => _bind(onSeek, step),
       LogicalKeyboardKey.arrowUp => _bind(onVolume, volumeStep),
       LogicalKeyboardKey.arrowDown => _bind(onVolume, -volumeStep),
       LogicalKeyboardKey.keyF when !repeat => onToggleFullscreen,
@@ -106,6 +115,7 @@ class PlayerShortcuts extends StatelessWidget {
       LogicalKeyboardKey.keyM when !repeat => onToggleMute,
       LogicalKeyboardKey.keyC when !repeat => onZap,
       LogicalKeyboardKey.keyN when !repeat => onNextEpisode,
+      LogicalKeyboardKey.keyL when !repeat => onGoLive,
       _ => null,
     };
     if (action == null) return KeyEventResult.ignored;

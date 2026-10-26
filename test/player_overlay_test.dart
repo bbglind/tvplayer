@@ -807,7 +807,7 @@ void main() {
       expect(await hoverBar(tester, gesture), {
         'Back (stops playback)',
         'Pause (Space or click the video)',
-        'Seek (← / →: 10 s)',
+        'Seek (← / →: 10 s, with Shift: 1 min)',
         'Show the time left (double-click or Enter)',
         'Mute (m)',
         'Volume (↑ / ↓, or the mouse wheel on the video)',

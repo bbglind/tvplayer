@@ -252,6 +252,9 @@ class FixedClock extends Clock {
   @override
   DateTime build() => time;
 
+  @override
+  DateTime now() => state;
+
   void set(DateTime value) => state = value;
 }
 

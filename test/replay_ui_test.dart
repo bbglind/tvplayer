@@ -14,6 +14,7 @@ import 'package:tvplayer/ui/epg/guide_screen.dart';
 import 'package:tvplayer/ui/epg/programme_panel.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/player/open_channel.dart';
+import 'package:tvplayer/ui/player/player_controls.dart';
 import 'package:tvplayer/ui/theme/app_colors.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -151,11 +152,13 @@ void main() {
   late FakeLiveSource source;
   late FakeExternalPlayer player;
   late FakeVideoEmbed embed;
+  late MemoryWatchStore watch;
 
   setUp(() {
     source = FakeLiveSource(_catalog, hasGuide: true);
     player = FakeExternalPlayer();
     embed = FakeVideoEmbed();
+    watch = MemoryWatchStore();
   });
 
   tearDown(() => player.dispose());
@@ -181,6 +184,7 @@ void main() {
         ],
         epg: FakeEpgRepository(cached: _guide()),
         favourites: MemoryFavouritesStore(_favourites()),
+        watch: watch,
         now: _now,
         child: _scaled(scale, child),
       ),
@@ -685,5 +689,235 @@ void main() {
       await settle();
       expect(source.archiveRequests, isEmpty);
     });
+  });
+
+  group('replay player', () {
+    final kanal1 = _catalog.channels[0];
+
+    ReplayPlayback replay(DateTime from) => ReplayPlayback(
+      kanal1,
+      from: from,
+      serverZone: 'Europe/Stockholm',
+      requestedAt: _now,
+    );
+
+    Future<void> open(
+      WidgetTester tester,
+      PlaybackRequest request, {
+      double scale = 1.0,
+      Size size = const Size(1600, 900),
+    }) async {
+      await pump(tester, _Launcher(request), scale: scale, size: size);
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    /// mpv reports [position] in the loaded stream of [length].
+    Future<void> emit(
+      WidgetTester tester, {
+      Duration position = Duration.zero,
+      Duration? length,
+      bool eof = false,
+      bool seekable = true,
+    }) async {
+      player.emit(
+        player.state.copyWith(
+          status: ExternalPlayerStatus.playing,
+          position: () => position,
+          duration: () => length,
+          volume: 80,
+          eofReached: eof,
+          seekable: () => seekable,
+        ),
+      );
+      await tester.pump();
+    }
+
+    void setClock(WidgetTester tester, DateTime t) =>
+        (ProviderScope.containerOf(
+          tester.element(find.byType(_Launcher, skipOffstage: false)),
+        ).read(clockProvider.notifier) as FixedClock).set(t);
+
+    testWidgets('plays the archive from the minute, then seeks to the second; '
+        'clock time, REPLAY and the programme', (tester) async {
+      await open(
+        tester,
+        replay(_at(26, 17, 15).add(const Duration(seconds: 30))),
+      );
+      final opened = player.opened.single;
+      expect(opened.url.path, '/timeshift/user/pass/46/2026-10-26:18-15/1.ts');
+      expect(opened.start, const Duration(seconds: 30));
+      expect(opened.keepOpen, isTrue);
+
+      await emit(
+        tester,
+        position: const Duration(minutes: 1),
+        length: const Duration(minutes: 35),
+      );
+      expect(find.byKey(const Key('replay.badge')), findsOneWidget);
+      expect(find.text('Afternoon k1 · SE: Kanal 1 HD'), findsOneWidget);
+      expect(find.text('18:16:00'), findsOneWidget);
+      // An ended programme: the bar covers it, no "behind live".
+      expect(find.text('18:50'), findsOneWidget);
+      expect(find.byKey(const Key('replay.behind')), findsNothing);
+      expect(find.text('About Afternoon k1'), findsOneWidget);
+    });
+
+    testWidgets('seeking: inside the loaded stream, else from a new start; '
+        'Shift seeks a minute', (tester) async {
+      await open(tester, replay(_at(26, 17, 15)));
+      await emit(
+        tester,
+        position: const Duration(minutes: 1),
+        length: const Duration(minutes: 35),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      expect(player.seeksTo, [const Duration(minutes: 1, seconds: 10)]);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      expect(player.seeksTo.last, Duration.zero);
+      expect(player.reloaded, isEmpty);
+
+      // Past the end of what was loaded: the archive from there.
+      await emit(
+        tester,
+        position: const Duration(minutes: 34, seconds: 55),
+        length: const Duration(minutes: 35),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      final reload = player.reloaded.single;
+      expect(reload.url.path, '/timeshift/user/pass/11/2026-10-26:18-50/1.ts');
+      expect(reload.start, const Duration(seconds: 5));
+      expect(reload.keepOpen, isTrue);
+      expect(player.opened, hasLength(1), reason: 'one mpv, one stream');
+      // While it loads the bar shows progress.
+      expect(find.byKey(const Key('replay.loading')), findsOneWidget);
+    });
+
+    testWidgets('a stream mpv cannot seek in loads from a new start', (
+      tester,
+    ) async {
+      await open(tester, replay(_at(26, 17, 15)));
+      await emit(
+        tester,
+        position: const Duration(minutes: 1),
+        length: const Duration(minutes: 35),
+        seekable: false,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(player.seeksTo, isEmpty);
+      expect(
+        player.reloaded.single.url.path,
+        '/timeshift/user/pass/45/2026-10-26:18-16/1.ts',
+      );
+      expect(player.reloaded.single.start, const Duration(seconds: 10));
+    });
+
+    testWidgets('behind live: the bar reaches now; seeking close to now goes '
+        'live', (tester) async {
+      await open(tester, replay(_at(26, 17, 50)));
+      await emit(tester, length: const Duration(minutes: 10));
+      expect(find.text('Behind live 10 min'), findsOneWidget);
+      expect(find.text('Evening k1 · SE: Kanal 1 HD'), findsOneWidget);
+      // From 17:00 (two hours back, display time) to now.
+      expect(find.text('19:00'), findsOneWidget);
+
+      await emit(
+        tester,
+        position: const Duration(minutes: 9, seconds: 55),
+        length: const Duration(minutes: 10),
+      );
+      expect(find.text('Behind live 0:05'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(player.reloaded.single.url.path, '/live/user/pass/1.ts');
+      expect(player.reloaded.single.keepOpen, isFalse);
+    });
+
+    testWidgets('the end of the archive behind live loads it again from '
+        'there, without an error; again at once: live', (tester) async {
+      await open(tester, replay(_at(26, 17, 50)));
+      setClock(tester, _now.add(const Duration(seconds: 30)));
+      await emit(
+        tester,
+        position: const Duration(minutes: 9),
+        length: const Duration(minutes: 9),
+        eof: true,
+      );
+      await tester.pump();
+      final reload = player.reloaded.single;
+      expect(reload.url.path, '/timeshift/user/pass/3/2026-10-26:18-59/1.ts');
+      expect(reload.start, isNull);
+      expect(find.text('Playback failed'), findsNothing);
+      expect(find.byKey(const Key('replay.badge')), findsOneWidget);
+
+      // Nothing more came: the end again right away.
+      await emit(tester, eof: true);
+      await tester.pump();
+      expect(player.reloaded, hasLength(2));
+      expect(player.reloaded.last.url.path, '/live/user/pass/1.ts');
+      expect(player.opened, hasLength(1));
+    });
+
+    testWidgets('the end of the archive within 10 s of live: live', (
+      tester,
+    ) async {
+      await open(tester, replay(_at(26, 17, 59)));
+      setClock(tester, _now.add(const Duration(seconds: 30)));
+      await emit(
+        tester,
+        position: const Duration(seconds: 82),
+        length: const Duration(seconds: 82),
+        eof: true,
+      );
+      await tester.pump();
+      expect(player.reloaded.single.url.path, '/live/user/pass/1.ts');
+      expect(find.byKey(const Key('replay.badge')), findsNothing);
+    });
+
+    testWidgets('Go live (button or l) plays the channel live here and '
+        'counts it as viewed; no watch progress', (tester) async {
+      await open(tester, replay(_at(26, 17, 15)));
+      await emit(tester, length: const Duration(minutes: 35));
+      expect(
+        findPlayerTooltip('Go live: watch SE: Kanal 1 HD live (l)'),
+        findsOneWidget,
+      );
+      expect(watch.data.channels, isEmpty);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+      await tester.pump();
+      expect(player.reloaded.single.url.path, '/live/user/pass/1.ts');
+      expect(watch.data.channels.keys, ['1']);
+      expect(watch.data.items, isEmpty);
+      expect(find.byKey(const Key('player.goLive')), findsNothing);
+    });
+
+    testWidgets('the Go live button', (tester) async {
+      await open(tester, replay(_at(26, 17, 15)));
+      await emit(tester, length: const Duration(minutes: 35));
+      await tester.tap(find.byKey(const Key('player.goLive')));
+      await tester.pump();
+      expect(player.reloaded.single.url.path, '/live/user/pass/1.ts');
+    });
+
+    for (final scale in [1.0, 1.4]) {
+      testWidgets('the bar fits at text scale $scale', (tester) async {
+        await open(
+          tester,
+          replay(_at(26, 17, 50)),
+          scale: scale,
+          size: const Size(1280, 720),
+        );
+        await emit(tester, length: const Duration(minutes: 10));
+        // Layout errors fail the test.
+        expect(find.byKey(const Key('replay.behind')), findsOneWidget);
+        expect(find.byKey(const Key('player.goLive')), findsOneWidget);
+        expect(findPlayerTooltip(PlayerSeekBar.tooltip), findsOneWidget);
+      });
+    }
   });
 }

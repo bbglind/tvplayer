@@ -2,18 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../../state/archive_listings.dart';
 import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/widgets.dart';
 
-/// Now and next programme of [channel] at the current time, or null when
-/// the guide has nothing for it.
-NowNext? watchNowNext(WidgetRef ref, LiveStream channel) {
-  final guide = ref.watch(guideProvider.select((s) => s.guide));
-  if (guide == null) return null;
+/// Now and next programme of [channel] at the current time, or at the
+/// real moment [at] (a replay's position, past listings included); null
+/// when the guide has nothing for it.
+NowNext? watchNowNext(WidgetRef ref, LiveStream channel, {DateTime? at}) {
   final time = ref.watch(guideTimeProvider);
-  final now = ref.watch(clockProvider);
-  final result = guide.nowAndNext(channel, time.unadjust(now));
+  final NowNext result;
+  if (at != null) {
+    final lookup = ref.watch(guideLookupProvider);
+    if (lookup == null) return null;
+    result = lookup.nowAndNext(channel, time.unadjust(at));
+  } else {
+    final guide = ref.watch(guideProvider.select((s) => s.guide));
+    if (guide == null) return null;
+    final now = ref.watch(clockProvider);
+    result = guide.nowAndNext(channel, time.unadjust(now));
+  }
   return result.now == null && result.next == null ? null : result;
 }
 
@@ -68,15 +77,20 @@ class NowNextLine extends ConsumerWidget {
 
 /// Now (with progress) and next programme with their short descriptions,
 /// for under the video: two lines for now, one for next where there is
-/// room (a player at least [nextDescriptionMinHeight] high).
+/// room (a player at least [nextDescriptionMinHeight] high). In a replay
+/// "now" is the programme at the playing position [at].
 class NowNextBar extends ConsumerWidget {
   const NowNextBar({
     super.key,
     required this.channel,
+    this.at,
     this.color = AppColors.surface,
   });
 
   final LiveStream channel;
+
+  /// The real moment playing in a replay; null for live TV.
+  final DateTime? at;
   final Color color;
 
   static const nextDescriptionMinHeight = 600.0;
@@ -87,10 +101,10 @@ class NowNextBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final nowNext = watchNowNext(ref, channel);
+    final nowNext = watchNowNext(ref, channel, at: at);
     if (nowNext == null) return const SizedBox.shrink();
     final time = ref.watch(guideTimeProvider);
-    final clock = time.unadjust(ref.watch(clockProvider));
+    final clock = time.unadjust(at ?? ref.watch(clockProvider));
     final (:now, :next) = nowNext;
     final theme = Theme.of(context);
     final scaler = MediaQuery.textScalerOf(context);

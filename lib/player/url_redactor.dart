@@ -11,7 +11,9 @@ class UrlRedactor {
     url.host,
     url.userInfo,
     for (final s in url.pathSegments)
-      if (s.length >= 3 && !const {'live', 'movie', 'series'}.contains(s)) s,
+      if (s.length >= 3 &&
+          !const {'live', 'movie', 'series', 'timeshift'}.contains(s))
+        s,
     for (final v in url.queryParameters.values)
       if (v.length >= 3) v,
   }.where((s) => s.isNotEmpty).toList()..sort((a, b) => b.length - a.length);

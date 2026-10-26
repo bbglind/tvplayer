@@ -64,6 +64,8 @@ void main() {
       ['observe_property', 6, 'sid'],
       ['observe_property', 7, 'volume'],
       ['observe_property', 8, 'mute'],
+      ['observe_property', 9, 'eof-reached'],
+      ['observe_property', 10, 'seekable'],
       ['loadfile', _url.toString()],
     ]);
 
@@ -98,7 +100,7 @@ void main() {
     expect(mpv.arguments, contains('--wid=4242'));
     await player.togglePause();
     await player.seek(const Duration(seconds: 90, milliseconds: 500));
-    expect(mpv.commands.skip(9), [
+    expect(mpv.commands.skip(11), [
       ['cycle', 'pause'],
       ['seek', 90.5, 'absolute'],
     ]);
@@ -381,5 +383,103 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     expect(p.state.error, contains('mpv is not installed'));
+  });
+
+  group('reload', () {
+    final timeshift = Uri.parse(
+      'http://192.0.2.1/timeshift/user/pass/46/2026-10-26:18-15/101.ts',
+    );
+
+    test('replaces the media in the running mpv: the old stream closes '
+        'first, no second mpv', () async {
+      final first = player.open(_url, title: 'News', volume: 70);
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      final mpv = started.single;
+      final before = mpv.commands.length;
+
+      final second = player.reload(
+        timeshift,
+        title: r'News $1',
+        start: const Duration(seconds: 37),
+        keepOpen: true,
+      );
+      expect(second, first + 1);
+      expect(player.state.session, second);
+      expect(player.state.status, ExternalPlayerStatus.starting);
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      expect(started, hasLength(1));
+      expect(mpv.commands.skip(before), [
+        ['set_property', 'start', '37.000'],
+        ['set_property', 'keep-open', 'yes'],
+        ['set_property', 'title', r'News $$1'],
+        ['loadfile', timeshift.toString(), 'replace'],
+      ]);
+
+      // Back to live: no start, no keep-open.
+      player.reload(_url, title: 'News');
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      expect(mpv.commands.skip(before + 4).take(2), [
+        ['set_property', 'start', 'none'],
+        ['set_property', 'keep-open', 'no'],
+      ]);
+    });
+
+    test('a new file forgets the old position; eof-reached and seekable '
+        'are reported', () async {
+      player.open(timeshift, title: 'News', keepOpen: true);
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      final mpv = started.single;
+      expect(mpv.commands.where((c) => c.first == 'set_property'), [
+        ['set_property', 'keep-open', 'yes'],
+      ]);
+      mpv.send({
+        'event': 'property-change',
+        'id': 1,
+        'name': 'time-pos',
+        'data': 30,
+      });
+      mpv.send({
+        'event': 'property-change',
+        'id': 10,
+        'name': 'seekable',
+        'data': true,
+      });
+      mpv.send({
+        'event': 'property-change',
+        'id': 9,
+        'name': 'eof-reached',
+        'data': true,
+      });
+      var s = await waitFor((s) => s.eofReached);
+      expect(s.seekable, isTrue);
+      expect(s.position, const Duration(seconds: 30));
+
+      mpv.send({'event': 'start-file'});
+      s = await waitFor((s) => !s.eofReached);
+      expect(s.position, isNull);
+      expect(s.seekable, isNull);
+    });
+
+    test('without a running mpv it opens one', () async {
+      player.reload(_url, title: 'News');
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      expect(started, hasLength(1));
+      expect(started.single.commands.last, ['loadfile', _url.toString()]);
+    });
+
+    test('mpv errors are redacted for the reloaded URL', () async {
+      player.open(_url, title: 'News');
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      player.reload(timeshift, title: 'News');
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      started.single.send({
+        'event': 'end-file',
+        'reason': 'error',
+        'file_error': 'loading failed for $timeshift',
+      });
+      final s = await waitFor((s) => s.error != null);
+      expect(s.error, isNot(contains('192.0.2.1')));
+      expect(s.error, isNot(contains('pass')));
+    });
   });
 }

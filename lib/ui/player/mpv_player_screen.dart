@@ -16,6 +16,7 @@ import '../../player/playback_request.dart';
 import '../../player/pointer_forwarder.dart';
 import '../../player/video_gestures.dart';
 import '../../player/video_pointer.dart';
+import '../../state/archive_listings.dart';
 import '../../state/providers.dart';
 import '../../state/variants.dart';
 import '../../state/watch_controller.dart';
@@ -172,6 +173,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _settings = ref.read(appSettingsProvider.notifier);
     _url = playbackUrl(ref, _request);
     if (_url == null) return;
+    _needListing(_request);
     if (_request.watchKey != null) _watch = ref.read(watchProvider.notifier);
     _player.addListener(_onChange);
     _controls.addListener(_onControlsChange);
@@ -210,16 +212,21 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       _wid = wid;
       _mode = wid == null ? _Mode.external : _Mode.embedded;
       _lastSave = DateTime.now();
+      _loadedAt = _now();
       _session = _player.open(
         url,
         title: _request.title(ref.read(providerTagsProvider)),
         wid: wid,
         start: _request.start,
         volume: _appSettings.playerVolume,
+        keepOpen: _request is ReplayPlayback,
       );
     });
     if (wid == null) unawaited(_embed?.hide());
   }
+
+  /// The time to the moment (not the clock's 30 s ticks).
+  DateTime _now() => ref.read(clockProvider.notifier).now();
 
   bool get _isMine => _session != null && _player.state.session == _session;
 
@@ -242,6 +249,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _pickTracks(state);
     _rememberVolume(state);
     _updateCountdown(state);
+    _checkEndOfArchive(state);
     switch (state.status) {
       case ExternalPlayerStatus.exited
           when ModalRoute.of(context)?.isCurrent ?? false:
@@ -437,7 +445,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _switchTo(EpisodePlayback(info, next, start: start), save: false);
   }
 
-  /// Switches to [channel] without leaving the player.
+  /// Switches to [channel] without leaving the player: live, also from a
+  /// replay.
   void _zapTo(LiveStream channel) {
     setState(() => _panel = _Panel.none);
     _shortcutsFocus.requestFocus();
@@ -445,14 +454,27 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       return;
     }
     ref.read(watchProvider.notifier).recordChannel(channel);
-    _switchTo(LivePlayback(channel));
+    _switchTo(LivePlayback(channel), reuse: _channel?.id == channel.id);
   }
 
-  /// Plays [request] in a new mpv session in the same video area.
-  void _switchTo(PlaybackRequest request, {bool save = true}) {
+  /// The live channel of live TV or a replay.
+  LiveStream? get _channel => switch (_request) {
+    LivePlayback(:final channel) || ReplayPlayback(:final channel) => channel,
+    _ => null,
+  };
+
+  /// Plays [request] in a new mpv session in the same video area. With
+  /// [reuse] (the same channel live or from its archive) the running mpv
+  /// loads it in place of what it plays.
+  void _switchTo(
+    PlaybackRequest request, {
+    bool save = true,
+    bool reuse = false,
+  }) {
     final url = playbackUrl(ref, request);
     if (url == null) return;
     if (save && _playing) _saveProgress();
+    _needListing(request);
     setState(() {
       _request = request;
       _url = url;
@@ -465,16 +487,137 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       _position = null;
       _duration = null;
       _pickedFor = null;
-      _manualTracks = false;
+      // mpv keeps a chosen track for the next file of the same channel.
+      if (!reuse) _manualTracks = false;
       _lastSave = DateTime.now();
+      _loadedAt = _now();
       if (_panel == _Panel.zap) _panel = _Panel.none;
-      _session = _player.open(
-        url,
-        title: request.title(ref.read(providerTagsProvider)),
-        wid: _wid,
-        start: request.start,
-        volume: _player.state.volume?.round() ?? _appSettings.playerVolume,
-      );
+      final title = request.title(ref.read(providerTagsProvider));
+      final keepOpen = request is ReplayPlayback;
+      _session = reuse
+          ? _player.reload(
+              url,
+              title: title,
+              wid: _wid,
+              start: request.start,
+              keepOpen: keepOpen,
+            )
+          : _player.open(
+              url,
+              title: title,
+              wid: _wid,
+              start: request.start,
+              volume:
+                  _player.state.volume?.round() ?? _appSettings.playerVolume,
+              keepOpen: keepOpen,
+            );
+    });
+  }
+
+  /// A replay before the XMLTV guide needs the channel's past listing for
+  /// its title and now/next (an API request, not a stream).
+  void _needListing(PlaybackRequest request) {
+    if (request case ReplayPlayback(:final channel)) {
+      // Not while the widget tree builds (initState).
+      scheduleMicrotask(() {
+        if (mounted) ref.read(archiveListingsProvider.notifier).need(channel);
+      });
+    }
+  }
+
+  /// When the current media was loaded; a replay that ends right after
+  /// loading has nothing more to give.
+  DateTime? _loadedAt;
+
+  /// The session whose end of archive was handled.
+  int? _endHandled;
+
+  /// The moment a replay shows at [state]'s position.
+  DateTime? _replayPosition(ExternalPlaybackState state) {
+    final request = _request;
+    if (request is! ReplayPlayback) return null;
+    return ReplayTimeline(request.timeshift.floored)
+        .clockAt(state.position ?? request.start ?? Duration.zero);
+  }
+
+  /// Plays the channel live in the running mpv.
+  void _goLive() {
+    final channel = _channel;
+    if (channel == null || _request is LivePlayback) return;
+    ref.read(watchProvider.notifier).recordChannel(channel);
+    _switchTo(LivePlayback(channel), reuse: true);
+  }
+
+  /// Plays the channel's archive from the real moment [from] in the
+  /// running mpv.
+  void _replayFrom(DateTime from) {
+    final channel = _channel;
+    if (channel == null) return;
+    final zone = switch (_request) {
+      ReplayPlayback(:final serverZone) => serverZone,
+      _ => ref.read(serverTimeZoneProvider).value,
+    };
+    if (zone == null) return;
+    _switchTo(
+      ReplayPlayback(
+        channel,
+        from: from,
+        serverZone: zone,
+        requestedAt: _now(),
+      ),
+      reuse: true,
+    );
+  }
+
+  /// Seeks a replay to the real moment [target]: in the loaded stream when
+  /// it has it, else by loading the archive from there; close to now it
+  /// goes live.
+  void _seekReplayTo(DateTime target) {
+    final request = _request;
+    final channel = _channel;
+    if (request is! ReplayPlayback || channel == null) return;
+    final now = _now();
+    if (behindLive(target, now) <= ReplayTiming.liveThreshold) {
+      _goLive();
+      return;
+    }
+    final earliest = ReplayWindow(channel.archiveDays).earliest(now);
+    final to = target.isBefore(earliest) ? earliest : target;
+    final state = _player.state;
+    final timeline = ReplayTimeline(request.timeshift.floored);
+    if (state.seekable != false && timeline.contains(to, state.duration)) {
+      unawaited(_player.seek(timeline.positionOf(to)));
+    } else {
+      _replayFrom(to);
+    }
+  }
+
+  void _seekReplayBy(Duration offset) {
+    final position = _replayPosition(_player.state);
+    if (position != null) _seekReplayTo(position.add(offset));
+  }
+
+  /// At the end of the loaded archive: live when close to it (or when
+  /// loading again gave nothing more), else the archive again from there,
+  /// without an error.
+  void _checkEndOfArchive(ExternalPlaybackState state) {
+    if (!state.eofReached || _endHandled == state.session) return;
+    final position = _replayPosition(state);
+    if (position == null) return;
+    _endHandled = state.session;
+    final step = atEndOfArchive(
+      position: position,
+      now: _now(),
+      loadedAt: _loadedAt,
+    );
+    scheduleMicrotask(() {
+      if (!mounted || !_isMine) return;
+      switch (step) {
+        case EndOfArchive.goLive:
+          _goLive();
+        case EndOfArchive.reload:
+          _replayFrom(position);
+      }
     });
   }
 
@@ -644,10 +787,15 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     }
     final playing = _playing;
     final live = _request is LivePlayback;
+    final replay = _request is ReplayPlayback;
     return PlayerShortcuts(
       focusNode: _shortcutsFocus,
       onTogglePause: playing && !live ? _player.togglePause : null,
-      onSeek: playing && _request.fixedLength ? _player.seekBy : null,
+      onSeek: !playing || !_request.fixedLength
+          ? null
+          : replay
+          ? _seekReplayBy
+          : _player.seekBy,
       onVolume: playing ? _player.changeVolume : null,
       onToggleMute: playing ? _player.toggleMute : null,
       onToggleFullscreen: _mode == _Mode.embedded && _showVideo
@@ -655,8 +803,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           : null,
       onEscape: _onEscape,
       onCycleSubtitles: playing ? _cycleSubtitles : null,
-      onZap: live && _showVideo ? () => _setPanel(_Panel.zap) : null,
+      onZap: _channel != null && _showVideo
+          ? () => _setPanel(_Panel.zap)
+          : null,
       onNextEpisode: _nextEpisode != null ? _playNext : null,
+      onGoLive: replay && _showVideo ? _goLive : null,
       onActivity: _controls.activity,
       child: PlayerHintScope(
         controller: _hintsShown ? _hints : null,
@@ -744,11 +895,24 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           color: AppColors.scrim,
           child: PlayerHintLine(controller: _hints),
         ),
-        if (_request case LivePlayback(:final channel))
-          NowNextBar(channel: channel),
+        ?_buildNowNext(state),
       ],
     );
   }
+
+  /// Now/next of live TV, or at the playing position of a replay.
+  Widget? _buildNowNext(
+    ExternalPlaybackState state, {
+    Color color = AppColors.surface,
+  }) => switch (_request) {
+    LivePlayback(:final channel) => NowNextBar(channel: channel, color: color),
+    ReplayPlayback(:final channel) => NowNextBar(
+      channel: channel,
+      at: _replayPosition(state),
+      color: color,
+    ),
+    _ => null,
+  };
 
   /// The video fills the screen; the controls (with now/next on live TV),
   /// the panel and the next-episode card are laid out over it and shown
@@ -791,11 +955,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (_request case LivePlayback(:final channel))
-                            NowNextBar(
-                              channel: channel,
-                              color: Colors.transparent,
-                            ),
+                          ?_buildNowNext(state, color: Colors.transparent),
                           _buildControls(context, state, showStats),
                           if (_fullscreenHints)
                             PlayerHintLine(controller: _hints),
@@ -840,8 +1000,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         onClose: () => _setPanel(_Panel.none),
       ),
     ),
-    _Panel.favourites => switch (_request) {
-      LivePlayback(:final channel) => PlayerPanelScope(
+    _Panel.favourites => switch (_channel) {
+      final channel? => PlayerPanelScope(
         child: FavouritePanel(
           item: liveItemRef(channel),
           name: channel.name,
@@ -850,8 +1010,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       ),
       _ => null,
     },
-    _Panel.zap => switch (_request) {
-      LivePlayback(:final channel) => ZapPanel(
+    _Panel.zap => switch (_channel) {
+      final channel? => ZapPanel(
         current: channel,
         onSelect: _zapTo,
         onClose: () => _setPanel(_Panel.none),
@@ -866,7 +1026,13 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final tags = ref.watch(providerTagsProvider);
     return switch (_request) {
       LivePlayback(:final channel) => Text(channelDisplayName(channel)),
-      ReplayPlayback(:final channel) => Text(channelDisplayName(channel)),
+      ReplayPlayback(:final channel) => ListenableBuilder(
+        listenable: _player,
+        builder: (context, _) => _ReplayTitle(
+          channel: channel,
+          position: _isMine ? _replayPosition(_player.state) : null,
+        ),
+      ),
       MoviePlayback(:final movie) => ProviderTitle(movie.name, player: true),
       EpisodePlayback(:final info, :final episode) => ProviderTitle(
         info.series.name,
@@ -960,10 +1126,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final starting =
         _mode == _Mode.embedding ||
         state.status == ExternalPlayerStatus.starting;
-    final live = switch (_request) {
-      LivePlayback(:final channel) => channel,
-      _ => null,
-    };
+    // Live TV or a replay: the channel pills.
+    final live = _channel;
+    final replay = _request is ReplayPlayback;
     final showRemaining = ref.watch(
       appSettingsProvider.select((s) => s.value?.showRemainingTime ?? false),
     );
@@ -978,7 +1143,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               ..._leadingActions(state, starting),
               const SizedBox(width: 4),
               Expanded(
-                child: starting
+                child: replay
+                    ? _buildReplaySeekBar(state, loading: starting)
+                    : starting
                     ? const LinearProgressIndicator(minHeight: 4)
                     : _request.fixedLength
                     ? PlayerSeekBar(
@@ -995,6 +1162,19 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                       )
                     : const SizedBox.shrink(),
               ),
+              if (replay) ...[
+                const SizedBox(width: 8),
+                PlayerTooltip(
+                  message:
+                      'Go live: watch ${channelDisplayName(live!)} live (l)',
+                  child: OutlinedButton.icon(
+                    key: const Key('player.goLive'),
+                    onPressed: _goLive,
+                    icon: const Icon(Icons.skip_next),
+                    label: const Text('LIVE'),
+                  ),
+                ),
+              ],
               if (showStats) ...[
                 const SizedBox(width: 16),
                 _DropReadout(state),
@@ -1052,6 +1232,41 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The replay's seek bar in clock time, over the programme at the
+  /// playing position or, behind live, up to now. While a new stretch of
+  /// the archive loads ([loading]) it shows where it will start.
+  Widget _buildReplaySeekBar(
+    ExternalPlaybackState state, {
+    required bool loading,
+  }) {
+    final request = _request as ReplayPlayback;
+    final channel = request.channel;
+    final position = loading
+        ? request.from
+        : _replayPosition(state) ?? request.from;
+    final time = ref.watch(guideTimeProvider);
+    final now = ref.watch(clockProvider);
+    final program = watchNowNext(ref, channel, at: position)?.now;
+    final range = replaySeekRange(
+      position: position,
+      now: now,
+      earliest: ReplayWindow(channel.archiveDays).earliest(now),
+      programStart: program == null ? null : time.adjust(program.start),
+      programStop: program == null ? null : time.adjust(program.stop),
+    );
+    final toNow = range.to == now;
+    return ReplaySeekBar(
+      position: position,
+      from: range.from,
+      to: range.to,
+      time: time,
+      behind: toNow ? behindLive(position, now) : null,
+      loading: loading,
+      onSeek: _seekReplayTo,
+      onDragging: (v) => _controls.hold(#seek, v),
     );
   }
 
@@ -1196,6 +1411,37 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "REPLAY", then the programme at [position] and the channel.
+class _ReplayTitle extends ConsumerWidget {
+  const _ReplayTitle({required this.channel, required this.position});
+
+  final LiveStream channel;
+  final DateTime? position;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final position = this.position;
+    final name = channelDisplayName(channel);
+    final program = position == null
+        ? null
+        : watchNowNext(ref, channel, at: position)?.now;
+    return Row(
+      children: [
+        const ReplayBadge(),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            program == null ? name : '${program.title} · $name',
+            key: const Key('replay.title'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

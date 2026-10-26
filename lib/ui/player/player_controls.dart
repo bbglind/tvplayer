@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
 import '../theme/app_colors.dart';
@@ -139,7 +140,7 @@ class PlayerSeekBar extends StatefulWidget {
   final ValueChanged<Duration> onSeek;
   final ValueChanged<bool>? onDragging;
 
-  static const tooltip = 'Seek (← / →: 10 s)';
+  static const tooltip = 'Seek (← / →: 10 s, with Shift: 1 min)';
 
   @override
   State<PlayerSeekBar> createState() => _PlayerSeekBarState();
@@ -299,4 +300,118 @@ class _PlayerClockState extends State<PlayerClock> {
           ?.copyWith(color: AppColors.textSecondary),
     );
   }
+}
+
+/// The seek bar of a replay: positions are clock times. [position] is the
+/// moment playing, [from] and [to] the stretch the bar covers (see
+/// `replaySeekRange`); [behind] says how far behind live it plays, when
+/// the bar reaches up to now. While [loading] (a new stretch is being
+/// loaded) a progress bar replaces the slider.
+class ReplaySeekBar extends StatefulWidget {
+  const ReplaySeekBar({
+    super.key,
+    required this.position,
+    required this.from,
+    required this.to,
+    required this.time,
+    required this.onSeek,
+    this.behind,
+    this.loading = false,
+    this.onDragging,
+  });
+
+  final DateTime position;
+  final DateTime from;
+  final DateTime to;
+  final GuideTime time;
+  final ValueChanged<DateTime> onSeek;
+  final Duration? behind;
+  final bool loading;
+  final ValueChanged<bool>? onDragging;
+
+  @override
+  State<ReplaySeekBar> createState() => _ReplaySeekBarState();
+}
+
+class _ReplaySeekBarState extends State<ReplaySeekBar> {
+  double? _drag;
+
+  String _clock(DateTime t, {bool seconds = false}) {
+    final l = widget.time.local(t);
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(l.hour)}:${two(l.minute)}'
+        '${seconds ? ':${two(l.second)}' : ''}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final span = widget.to.difference(widget.from).inSeconds.toDouble();
+    final max = span <= 0 ? 1.0 : span;
+    // Whole seconds: the bar then changes once a second, which matters
+    // when its image is sent to mpv in fullscreen.
+    final playing = widget.position
+        .difference(widget.from)
+        .inSeconds
+        .toDouble();
+    final value = (_drag ?? playing).clamp(0.0, max);
+    final shown = widget.from.add(Duration(seconds: value.round()));
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Text(_clock(shown, seconds: true), key: const Key('replay.position')),
+        Expanded(
+          child: widget.loading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: LinearProgressIndicator(
+                    key: Key('replay.loading'),
+                    minHeight: 4,
+                  ),
+                )
+              : PlayerTooltip(
+                  message: PlayerSeekBar.tooltip,
+                  child: Slider(
+                    key: const Key('player.seek'),
+                    value: value,
+                    max: max,
+                    onChangeStart: (v) {
+                      widget.onDragging?.call(true);
+                      setState(() => _drag = v);
+                    },
+                    onChanged: (v) => setState(() => _drag = v),
+                    onChangeEnd: (v) {
+                      widget.onDragging?.call(false);
+                      widget.onSeek(
+                        widget.from.add(Duration(seconds: v.round())),
+                      );
+                      setState(() => _drag = null);
+                    },
+                  ),
+                ),
+        ),
+        Text(_clock(widget.to), key: const Key('replay.end')),
+        if (widget.behind case final behind?) ...[
+          const SizedBox(width: 12),
+          Text(
+            'Behind live ${formatBehindLive(behind)}',
+            key: const Key('replay.behind'),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// How far behind live, for "Behind live …": `0:45` under a minute,
+/// `12 min`, `1 h 05 min`.
+String formatBehindLive(Duration behind) {
+  final minutes = behind.inMinutes;
+  if (minutes < 1) {
+    return '0:${(behind.inSeconds % 60).toString().padLeft(2, '0')}';
+  }
+  if (minutes < 60) return '$minutes min';
+  return '${minutes ~/ 60} h ${(minutes % 60).toString().padLeft(2, '0')} min';
 }

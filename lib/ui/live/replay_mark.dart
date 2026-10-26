@@ -89,3 +89,33 @@ class ChannelName extends StatelessWidget {
     );
   }
 }
+
+/// "REPLAY" before the title of the player while it plays from the
+/// archive: like the LIVE badge, but in `hover` (the live colour stays
+/// LIVE's).
+class ReplayBadge extends StatelessWidget {
+  const ReplayBadge({super.key});
+
+  static const _size = 12.0;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('replay.badge'),
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: AppColors.hover,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: const Text(
+      'REPLAY',
+      maxLines: 1,
+      style: TextStyle(
+        color: AppColors.textPrimary,
+        fontSize: _size,
+        fontWeight: FontWeight.w700,
+        letterSpacing: _size * 0.08,
+        height: 1.25,
+      ),
+    ),
+  );
+}
