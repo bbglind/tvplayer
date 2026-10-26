@@ -108,6 +108,7 @@ class _TvPlayerViewState extends State<TvPlayerView> {
             ),
           ),
           IconButton(
+            tooltip: 'Dismiss the error',
             icon: const Icon(Icons.close, color: AppColors.onAccent),
             onPressed: _session.dismissError,
           ),
@@ -123,17 +124,20 @@ class _TvPlayerViewState extends State<TvPlayerView> {
         children: [
           const Text('hwdec'),
           const SizedBox(width: 8),
-          DropdownButton<String>(
-            value: widget.hwdec,
-            items: [
-              for (final mode in {...widget.hwdecModes, widget.hwdec})
-                DropdownMenuItem(value: mode, child: Text(mode)),
-            ],
-            onChanged: widget.onHwdecChanged == null
-                ? null
-                : (v) {
-                    if (v != null) widget.onHwdecChanged!(v);
-                  },
+          Tooltip(
+            message: 'Hardware decoding',
+            child: DropdownButton<String>(
+              value: widget.hwdec,
+              items: [
+                for (final mode in {...widget.hwdecModes, widget.hwdec})
+                  DropdownMenuItem(value: mode, child: Text(mode)),
+              ],
+              onChanged: widget.onHwdecChanged == null
+                  ? null
+                  : (v) {
+                      if (v != null) widget.onHwdecChanged!(v);
+                    },
+            ),
           ),
         ],
       ),
@@ -290,9 +294,12 @@ class _TvPlayerViewState extends State<TvPlayerView> {
               children: [
                 Text('Log (${logs.length})'),
                 const Spacer(),
-                TextButton(
-                  onPressed: _session.clearLogs,
-                  child: const Text('Clear'),
+                Tooltip(
+                  message: 'Clear the log',
+                  child: TextButton(
+                    onPressed: _session.clearLogs,
+                    child: const Text('Clear'),
+                  ),
                 ),
               ],
             ),

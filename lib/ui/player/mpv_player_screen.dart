@@ -25,6 +25,7 @@ import '../theme/app_colors.dart';
 import 'next_episode_card.dart';
 import 'open_channel.dart';
 import 'player_controls.dart';
+import 'player_hint.dart';
 import 'player_shortcuts.dart';
 import 'track_panel.dart';
 import 'zap_panel.dart';
@@ -84,6 +85,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// How long the volume must stay put before it is saved.
   static const _volumeSaveDelay = Duration(seconds: 1);
 
+  /// Whether the hint line is also part of the fullscreen bar (drawn by
+  /// mpv). Off: fullscreen shows no hints, as before.
+  static const _fullscreenHints = true;
+
   late final ExternalMpvPlayer _player = ref.read(externalMpvProvider);
   late final VideoEmbed? _embed = ref.read(embedMpvProvider)
       ? ref.read(videoEmbedProvider)
@@ -134,6 +139,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   Timer? _volumeSave;
 
   final _controls = ControlsVisibility();
+
+  /// The hint of the control under the mouse or with keyboard focus.
+  final _hints = PlayerHintController();
   late final _gestures = VideoGestures(
     onClick: _onVideoClick,
     onDoubleClick: () => _setFullscreen(!_fullscreen),
@@ -519,6 +527,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   void _onControlsChange() {
     if (!mounted) return;
+    if (!_controls.visible) _hints.clear();
     if (!_controls.visible && _barFocus.hasFocus) {
       _shortcutsFocus.requestFocus();
     }
@@ -550,6 +559,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   }
 
   void _fullscreenChanged() {
+    _hints.clear();
     _controls.autoHide = _fullscreen;
     if (!_fullscreen) _forwarder?.remove();
     _updateCursor();
@@ -576,6 +586,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     }
     _gestures.dispose();
     _controls.dispose();
+    _hints.dispose();
     _forwarder?.remove();
     if (_volumeSave != null) {
       _volumeSave!.cancel();
@@ -643,13 +654,44 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       onZap: live && _showVideo ? () => _setPanel(_Panel.zap) : null,
       onNextEpisode: _nextEpisode != null ? _playNext : null,
       onActivity: _controls.activity,
-      child: Scaffold(
-        backgroundColor: _showVideo ? AppColors.scrim : null,
-        appBar: _fullscreen ? null : AppBar(title: Text(_request.title)),
-        body: body,
+      child: PlayerHintScope(
+        controller: _hintsShown ? _hints : null,
+        panelsInLine: _fullscreen,
+        panelWidth: _panelWidth,
+        child: Scaffold(
+          backgroundColor: _showVideo ? AppColors.scrim : null,
+          appBar: _fullscreen
+              ? null
+              : AppBar(
+                  // Its own tooltip would open below, behind the video.
+                  leading: _showVideo
+                      ? PlayerTooltip(
+                          message: 'Back (stops playback)',
+                          child: IconButton(
+                            key: const Key('player.back'),
+                            icon: const BackButtonIcon(),
+                            onPressed: () => Navigator.of(context).maybePop(),
+                          ),
+                        )
+                      : null,
+                  title: Text(_request.title),
+                ),
+          body: body,
+        ),
       ),
     );
   }
+
+  static const _stopTooltip = 'Stop and go back';
+  static const _nextTooltip = 'Play the next episode (n)';
+
+  /// Whether player tooltips go to the hint line: the video is embedded
+  /// (Flutter can't draw over it) and the line shows.
+  bool get _hintsShown =>
+      _mode == _Mode.embedded &&
+      _showVideo &&
+      !_ended &&
+      (!_fullscreen || _fullscreenHints);
 
   Widget _buildEmbedded(
     BuildContext context,
@@ -694,6 +736,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ),
         ),
         _buildControls(context, state, showStats),
+        ColoredBox(
+          color: AppColors.scrim,
+          child: PlayerHintLine(controller: _hints),
+        ),
         if (_request case LivePlayback(:final channel))
           NowNextBar(channel: channel),
       ],
@@ -747,6 +793,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                               color: Colors.transparent,
                             ),
                           _buildControls(context, state, showStats),
+                          if (_fullscreenHints)
+                            PlayerHintLine(controller: _hints),
                         ],
                       ),
                     ),
@@ -836,7 +884,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     );
     return PlayerPillButton(
       key: const Key('player.favourite'),
-      tooltip: favourite ? 'Favourite' : 'Add to favourites',
+      tooltip: favourite
+          ? 'Favourite: change my categories'
+          : 'Add to favourites',
       selected: favourite,
       icon: Icons.star_border,
       selectedIcon: Icons.star,
@@ -849,17 +899,24 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// pause; its slot is kept for a record button.
   List<Widget> _leadingActions(ExternalPlaybackState state, bool starting) => [
     if (_request.fixedLength)
-      IconButton(
-        tooltip: state.paused ? 'Resume' : 'Pause',
-        icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
-        onPressed: starting ? null : _player.togglePause,
+      PlayerTooltip(
+        message: state.paused
+            ? 'Resume (Space or click the video)'
+            : 'Pause (Space or click the video)',
+        child: IconButton(
+          key: const Key('player.pause'),
+          icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
+          onPressed: starting ? null : _player.togglePause,
+        ),
       ),
     if (_nextEpisode != null)
-      IconButton(
-        key: const Key('player.nextEpisodeButton'),
-        tooltip: 'Next episode (n)',
-        icon: const Icon(Icons.skip_next),
-        onPressed: starting ? null : _playNext,
+      PlayerTooltip(
+        message: _nextTooltip,
+        child: IconButton(
+          key: const Key('player.nextEpisodeButton'),
+          icon: const Icon(Icons.skip_next),
+          onPressed: starting ? null : _playNext,
+        ),
       ),
   ];
 
@@ -924,7 +981,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               if (live != null) ...[
                 PlayerPillButton(
                   key: const Key('player.zap'),
-                  tooltip: 'Channels (c)',
+                  tooltip: 'Channels: switch channel (c)',
                   selected: _panel == _Panel.zap,
                   icon: Icons.list_alt,
                   onPressed: starting ? null : () => _setPanel(_Panel.zap),
@@ -934,19 +991,27 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                 const SizedBox(width: 4),
               ],
               _buildTracksButton(!starting),
-              IconButton(
-                tooltip: _fullscreen
+              PlayerTooltip(
+                message: _fullscreen
                     ? 'Leave fullscreen (f, Esc or double-click)'
                     : 'Fullscreen (f or double-click, Esc to leave)',
-                icon: Icon(
-                  _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                child: IconButton(
+                  key: const Key('player.fullscreen'),
+                  icon: Icon(
+                    _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                  ),
+                  onPressed: starting
+                      ? null
+                      : () => _setFullscreen(!_fullscreen),
                 ),
-                onPressed: starting ? null : () => _setFullscreen(!_fullscreen),
               ),
-              IconButton(
-                tooltip: 'Stop',
-                icon: const Icon(Icons.stop),
-                onPressed: () => Navigator.of(context).pop(),
+              PlayerTooltip(
+                message: _stopTooltip,
+                child: IconButton(
+                  key: const Key('player.stop'),
+                  icon: const Icon(Icons.stop),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
               ),
               const SizedBox(width: 12),
               const PlayerClock(),
@@ -1035,15 +1100,21 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               ],
               const SizedBox(height: 16),
               failed
-                  ? FilledButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back),
-                      label: Text(live != null ? 'Back to channels' : 'Back'),
+                  ? PlayerTooltip(
+                      message: live != null ? 'Back to channels' : 'Go back',
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back),
+                        label: Text(live != null ? 'Back to channels' : 'Back'),
+                      ),
                     )
-                  : FilledButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.stop),
-                      label: const Text('Stop'),
+                  : PlayerTooltip(
+                      message: _stopTooltip,
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.stop),
+                        label: const Text('Stop'),
+                      ),
                     ),
             ],
           ),
@@ -1072,17 +1143,23 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              key: const Key('player.nextEpisode'),
-              autofocus: true,
-              onPressed: _playNext,
-              icon: const Icon(Icons.skip_next),
-              label: const Text('Play next episode'),
+            PlayerTooltip(
+              message: _nextTooltip,
+              child: FilledButton.icon(
+                key: const Key('player.nextEpisode'),
+                autofocus: true,
+                onPressed: _playNext,
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Play next episode'),
+              ),
             ),
             const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Back to series'),
+            PlayerTooltip(
+              message: 'Back to the series',
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Back to series'),
+              ),
             ),
           ],
         ),

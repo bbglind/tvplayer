@@ -241,7 +241,7 @@ void main() {
       );
       await tester.pump();
       await tester.tap(
-        find.byTooltip('Subtitles and audio (s: next subtitles)'),
+        findPlayerTooltip('Subtitles and audio (s: next subtitles)'),
       );
       await tester.pump();
       expect(find.byKey(const Key('player.tracks')), findsOneWidget);
@@ -294,7 +294,7 @@ void main() {
         duration: const Duration(minutes: 90),
       );
       await tester.pump();
-      await tester.tap(find.byTooltip('Stop'));
+      await tester.tap(findPlayerTooltip('Stop and go back'));
       await tester.pumpAndSettle();
       final progress = watch.data.movie(7)!;
       expect(progress.position, const Duration(minutes: 50));

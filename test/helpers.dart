@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/epg_repository.dart';
@@ -13,6 +14,7 @@ import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
 import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/ui/player/player_hint.dart';
 import 'package:tvplayer/ui/shell/snack_bar_dismisser.dart';
 import 'package:tvplayer/ui/theme/app_theme.dart';
 import 'package:tvplayer/ui/theme/input_mode.dart';
@@ -421,3 +423,10 @@ Widget testApp({
     ),
   );
 }
+
+/// Finds the player control whose [PlayerTooltip] says [message].
+Finder findPlayerTooltip(Pattern message) => find.byWidgetPredicate(
+  (w) =>
+      w is PlayerTooltip &&
+      (message is RegExp ? message.hasMatch(w.message) : w.message == message),
+);

@@ -7,6 +7,7 @@ import '../../format.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import 'player_hint.dart';
 
 /// A secondary pill icon button of the player (subtitles, favourite,
 /// channels).
@@ -27,17 +28,19 @@ class PlayerPillButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    style: IconButton.styleFrom(
-      backgroundColor: AppColors.hover,
-      disabledBackgroundColor: AppColors.surface,
-      shape: const StadiumBorder(),
+  Widget build(BuildContext context) => PlayerTooltip(
+    message: tooltip,
+    child: IconButton(
+      style: IconButton.styleFrom(
+        backgroundColor: AppColors.hover,
+        disabledBackgroundColor: AppColors.surface,
+        shape: const StadiumBorder(),
+      ),
+      isSelected: selected,
+      icon: Icon(icon),
+      selectedIcon: selectedIcon == null ? null : Icon(selectedIcon),
+      onPressed: onPressed,
     ),
-    isSelected: selected,
-    icon: Icon(icon),
-    selectedIcon: selectedIcon == null ? null : Icon(selectedIcon),
-    onPressed: onPressed,
   );
 }
 
@@ -61,6 +64,8 @@ class VolumeControl extends StatefulWidget {
 
   static const sliderWidth = 120.0;
 
+  static const tooltip = 'Volume (↑ / ↓, or the mouse wheel on the video)';
+
   @override
   State<VolumeControl> createState() => _VolumeControlState();
 }
@@ -75,32 +80,37 @@ class _VolumeControlState extends State<VolumeControl> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          key: const Key('player.mute'),
-          tooltip: widget.muted ? 'Unmute (m)' : 'Mute (m)',
-          icon: Icon(silent ? Icons.volume_off : Icons.volume_up),
-          onPressed: widget.onToggleMute,
+        PlayerTooltip(
+          message: widget.muted ? 'Unmute (m)' : 'Mute (m)',
+          child: IconButton(
+            key: const Key('player.mute'),
+            icon: Icon(silent ? Icons.volume_off : Icons.volume_up),
+            onPressed: widget.onToggleMute,
+          ),
         ),
-        SizedBox(
-          width: VolumeControl.sliderWidth,
-          child: Slider(
-            key: const Key('player.volume'),
-            value: value,
-            max: 100,
-            semanticFormatterCallback: (v) => 'Volume ${v.round()}%',
-            onChangeStart: (v) {
-              widget.onDragging?.call(true);
-              setState(() => _drag = v);
-            },
-            onChanged: (v) {
-              setState(() => _drag = v);
-              widget.onChanged(v);
-            },
-            onChangeEnd: (v) {
-              widget.onDragging?.call(false);
-              widget.onChanged(v);
-              setState(() => _drag = null);
-            },
+        PlayerTooltip(
+          message: VolumeControl.tooltip,
+          child: SizedBox(
+            width: VolumeControl.sliderWidth,
+            child: Slider(
+              key: const Key('player.volume'),
+              value: value,
+              max: 100,
+              semanticFormatterCallback: (v) => 'Volume ${v.round()}%',
+              onChangeStart: (v) {
+                widget.onDragging?.call(true);
+                setState(() => _drag = v);
+              },
+              onChanged: (v) {
+                setState(() => _drag = v);
+                widget.onChanged(v);
+              },
+              onChangeEnd: (v) {
+                widget.onDragging?.call(false);
+                widget.onChanged(v);
+                setState(() => _drag = null);
+              },
+            ),
           ),
         ),
       ],
@@ -129,6 +139,8 @@ class PlayerSeekBar extends StatefulWidget {
   final ValueChanged<Duration> onSeek;
   final ValueChanged<bool>? onDragging;
 
+  static const tooltip = 'Seek (← / →: 10 s)';
+
   @override
   State<PlayerSeekBar> createState() => _PlayerSeekBarState();
 }
@@ -156,20 +168,23 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
       children: [
         Text(formatDuration(shown), key: const Key('mpv.position')),
         Expanded(
-          child: Slider(
-            key: const Key('player.seek'),
-            value: value,
-            max: max,
-            onChangeStart: (v) {
-              widget.onDragging?.call(true);
-              setState(() => _drag = v);
-            },
-            onChanged: (v) => setState(() => _drag = v),
-            onChangeEnd: (v) {
-              widget.onDragging?.call(false);
-              widget.onSeek(Duration(milliseconds: v.round()));
-              setState(() => _drag = null);
-            },
+          child: PlayerTooltip(
+            message: PlayerSeekBar.tooltip,
+            child: Slider(
+              key: const Key('player.seek'),
+              value: value,
+              max: max,
+              onChangeStart: (v) {
+                widget.onDragging?.call(true);
+                setState(() => _drag = v);
+              },
+              onChanged: (v) => setState(() => _drag = v),
+              onChangeEnd: (v) {
+                widget.onDragging?.call(false);
+                widget.onSeek(Duration(milliseconds: v.round()));
+                setState(() => _drag = null);
+              },
+            ),
           ),
         ),
         EndTime(
@@ -200,10 +215,10 @@ class EndTime extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    return PlayerTooltip(
       message: showRemaining
-          ? 'Double-click to show the duration'
-          : 'Double-click to show the time left',
+          ? 'Show the duration (double-click or Enter)'
+          : 'Show the time left (double-click or Enter)',
       child: FocusRing(
         radius: AppRadius.small,
         child: Focus(

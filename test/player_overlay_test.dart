@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:tvplayer/player/playback_request.dart';
 import 'package:tvplayer/player/video_pointer.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/player/open_channel.dart';
+import 'package:tvplayer/ui/player/player_hint.dart';
 import 'package:tvplayer/ui/theme/widgets.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -231,7 +233,7 @@ void main() {
       await settleClick(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       expect(player.pauseToggles, 0);
-      expect(find.byTooltip('Pause'), findsNothing);
+      expect(find.byKey(const Key('player.pause')), findsNothing);
       expect(find.byKey(const Key('player.seek')), findsNothing);
     });
   });
@@ -482,7 +484,7 @@ void main() {
       await tester.pump();
       final button = find.byKey(const Key('player.nextEpisodeButton'));
       expect(button, findsOneWidget);
-      expect(find.byTooltip('Next episode (n)'), findsOneWidget);
+      expect(findPlayerTooltip('Play the next episode (n)'), findsOneWidget);
 
       await tester.tap(button);
       await tester.pump();
@@ -539,9 +541,9 @@ void main() {
       await tester.pump();
       final screen = Offset.zero & const Size(1600, 900);
       expect(embed.rects.last, screen, reason: 'the video fills the screen');
-      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(findPlayerTooltip('Stop and go back'), findsOneWidget);
       // The bar is laid out over the bottom of the video.
-      final stop = tester.getRect(find.byTooltip('Stop'));
+      final stop = tester.getRect(findPlayerTooltip('Stop and go back'));
       expect(stop.bottom, lessThanOrEqualTo(screen.bottom));
       expect(stop.top, greaterThan(screen.center.dy));
 
@@ -556,7 +558,7 @@ void main() {
       expect(overlay.width, 1600);
 
       await tester.pump(const Duration(seconds: 3));
-      expect(find.byTooltip('Stop'), findsNothing);
+      expect(findPlayerTooltip('Stop and go back'), findsNothing);
       expect(embed.cursorCalls.last, isFalse);
       expect(player.overlays, isEmpty);
       expect(embed.rects.last, screen, reason: 'the video never shrinks');
@@ -564,12 +566,12 @@ void main() {
       embed.pointer(const VideoPointerMove(Offset(10, 10)));
       await tester.pump();
       await tester.pump();
-      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(findPlayerTooltip('Stop and go back'), findsOneWidget);
       expect(embed.cursorCalls.last, isTrue);
       await tester.pump(const Duration(seconds: 2));
       embed.pointer(const VideoPointerMove(Offset(20, 10)));
       await tester.pump(const Duration(seconds: 2));
-      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(findPlayerTooltip('Stop and go back'), findsOneWidget);
 
       // Clicks on the controls reach them, not the video.
       final mute = tester.getCenter(find.byKey(const Key('player.mute')));
@@ -598,14 +600,14 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
       await tester.pump();
       await tester.pump(const Duration(seconds: 5));
-      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(findPlayerTooltip('Stop and go back'), findsOneWidget);
       expect(find.byKey(const Key('zap.channels')), findsOneWidget);
       // Live: the info strip is part of the overlay.
       expect(find.text('About show 0'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
-      expect(find.byTooltip('Stop'), findsNothing);
+      expect(findPlayerTooltip('Stop and go back'), findsNothing);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
     });
@@ -656,5 +658,278 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
+  });
+
+  group('tooltips', () {
+    const window = Rect.fromLTWH(0, 0, 1600, 900);
+    final hint = find.byKey(const Key('player.hint'));
+
+    String? hintText(WidgetTester tester) => hint.evaluate().isEmpty
+        ? null
+        : tester
+              .widget<Text>(
+                find.descendant(of: hint, matching: find.byType(Text)),
+              )
+              .data;
+
+    Future<TestGesture> mouse(WidgetTester tester) async {
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: const Offset(800, 5));
+      addTearDown(gesture.removePointer);
+      return gesture;
+    }
+
+    /// Hovers every bar control (and the back arrow) and checks its hint
+    /// shows below the bar, under the control and clear of the video.
+    Future<Set<String>> hoverBar(
+      WidgetTester tester,
+      TestGesture gesture,
+    ) async {
+      final video = tester.getRect(find.byKey(const Key('mpv.video')));
+      final rects = embed.rects.length;
+      final controls = find.byWidgetPredicate(
+        (w) => w is PlayerTooltip && !w.side,
+      );
+      final messages = <String>{};
+      for (final element in controls.evaluate().toList()) {
+        final message = (element.widget as PlayerTooltip).message;
+        final target = tester.getRect(find.byWidget(element.widget));
+        await gesture.moveTo(target.center);
+        await tester.pump();
+        expect(hintText(tester), message);
+        final pill = tester.getRect(hint);
+        expect(pill.overlaps(video), isFalse, reason: message);
+        expect(window.contains(pill.topLeft), isTrue, reason: message);
+        expect(window.contains(pill.bottomRight), isTrue, reason: message);
+        expect(pill.left, lessThanOrEqualTo(target.center.dx));
+        expect(pill.right, greaterThanOrEqualTo(target.center.dx));
+        messages.add(message);
+      }
+      await gesture.moveTo(video.center);
+      await tester.pump();
+      expect(hint, findsNothing);
+      expect(
+        tester.getRect(find.byKey(const Key('mpv.video'))),
+        video,
+        reason: 'hints never resize the video',
+      );
+      expect(embed.rects.length, rects);
+      return messages;
+    }
+
+    /// Hovers [target] in a side panel and checks its tooltip stays clear
+    /// of the video.
+    Future<void> hoverSide(
+      WidgetTester tester,
+      TestGesture gesture,
+      Finder target,
+      String message,
+    ) async {
+      final video = tester.getRect(find.byKey(const Key('mpv.video')));
+      await gesture.moveTo(tester.getCenter(target));
+      await tester.pump(const Duration(seconds: 1));
+      final tooltip = tester.getRect(find.text(message).last);
+      expect(tooltip.overlaps(video), isFalse, reason: message);
+      expect(tooltip.right, lessThanOrEqualTo(window.right), reason: message);
+      await gesture.moveTo(video.center);
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('windowed movie: every bar control has a hint below the bar, '
+        'at text scale 1.4', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await open(tester, const MoviePlayback(_movie));
+      emit();
+      await tester.pump();
+      final gesture = await mouse(tester);
+      expect(await hoverBar(tester, gesture), {
+        'Back (stops playback)',
+        'Pause (Space or click the video)',
+        'Seek (← / →: 10 s)',
+        'Show the time left (double-click or Enter)',
+        'Mute (m)',
+        'Volume (↑ / ↓, or the mouse wheel on the video)',
+        'Subtitles and audio (s: next subtitles)',
+        'Fullscreen (f or double-click, Esc to leave)',
+        'Stop and go back',
+      });
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('windowed episode: Next episode, and the next-episode card '
+        'keeps its tooltips beside the video', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await open(tester, EpisodePlayback(_info, _info.episodes[0]));
+      emit(position: const Duration(minutes: 39, seconds: 40));
+      await tester.pump();
+      final gesture = await mouse(tester);
+      expect(
+        await hoverBar(tester, gesture),
+        contains('Play the next episode (n)'),
+      );
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('player.playNow')),
+        'Play the next episode now (n)',
+      );
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('player.cancelNext')),
+        'Cancel and play to the end (Esc)',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('windowed live TV: bar hints, and the panels keep their '
+        'tooltips beside the video', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await open(
+        tester,
+        LivePlayback(_catalog.channels[0]),
+        favourites: _favourites(),
+      );
+      emit();
+      await tester.pump();
+      final gesture = await mouse(tester);
+      expect(await hoverBar(tester, gesture), {
+        'Back (stops playback)',
+        'Mute (m)',
+        'Volume (↑ / ↓, or the mouse wheel on the video)',
+        'Channels: switch channel (c)',
+        'Favourite: change my categories',
+        'Subtitles and audio (s: next subtitles)',
+        'Fullscreen (f or double-click, Esc to leave)',
+        'Stop and go back',
+      });
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.pump();
+      await hoverSide(
+        tester,
+        gesture,
+        find.byTooltip('Close (Esc)'),
+        'Close (Esc)',
+      );
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('zap.tab.live0')),
+        'Show the channels in News',
+      );
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('zap.channel.1')),
+        'Watch Channel 1',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('player.favourite')));
+      await tester.pump();
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('player.favourite.News')),
+        'Remove from News',
+      );
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('player.favourite.create')),
+        'Create the category and add this channel',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.tap(findPlayerTooltip(RegExp('^Subtitles')));
+      await tester.pump();
+      await hoverSide(
+        tester,
+        gesture,
+        find.byKey(const Key('player.sub.off')),
+        'Turn subtitles off',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('keyboard focus shows the hint', (tester) async {
+      await open(tester, const MoviePlayback(_movie));
+      emit();
+      await tester.pump();
+      expect(hint, findsNothing);
+      for (var i = 0; i < 20 && hintText(tester) == null; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      final focused = FocusManager.instance.primaryFocus!.context!;
+      final owner = focused.findAncestorWidgetOfExactType<PlayerTooltip>();
+      expect(hintText(tester), owner!.message);
+    });
+
+    testWidgets('fullscreen: hints show in the bar drawn by mpv, also for '
+        'panels, and go with the controls', (tester) async {
+      await open(
+        tester,
+        LivePlayback(_catalog.channels[0]),
+        favourites: _favourites(),
+      );
+      emit();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.pump();
+      final mute = tester.getCenter(find.byKey(const Key('player.mute')));
+      embed.pointer(VideoPointerMove(mute));
+      await tester.pump();
+      await tester.pump();
+      expect(hintText(tester), 'Mute (m)');
+      final pill = tester.getRect(hint);
+      expect(pill.bottom, lessThanOrEqualTo(window.bottom));
+      expect(
+        pill.top,
+        greaterThan(
+          tester.getRect(find.byKey(const Key('player.mute'))).bottom,
+        ),
+      );
+
+      // Hidden controls take the hint with them.
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.byKey(const Key('player.mute')), findsNothing);
+      expect(hint, findsNothing);
+      embed.pointer(const VideoPointerMove(Offset(10, 10)));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('player.mute')), findsOneWidget);
+      expect(hintText(tester), isNull);
+
+      // Panel controls use the hint line too: their tooltips can't be
+      // drawn by mpv.
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.pump();
+      final close = tester.getCenter(findPlayerTooltip('Close (Esc)'));
+      embed.pointer(VideoPointerMove(close));
+      await tester.pump();
+      await tester.pump();
+      expect(hintText(tester), 'Close (Esc)');
+
+      // Closing the panel takes its hint away (a frame later: the tree
+      // is locked while it goes).
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('zap.channels')), findsNothing);
+      expect(hintText(tester), isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(embed.fullscreenCalls, [true, false]);
+      expect(hintText(tester), isNull);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

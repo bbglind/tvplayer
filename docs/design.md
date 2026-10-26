@@ -124,9 +124,22 @@ weights 400, 500, 600, 700.
   mute button + volume slider (0–100 %, about 120 wide), the Channels and
   favourite pills (live TV), the Subtitles pill, fullscreen, stop, and the
   clock (HH:MM, `textSecondary`). The end time switches between the
-  duration and the time left ("-12:34") on double click or Enter.
+  duration and the time left ("-12:34") on double click or Enter. Below
+  the controls, part of the bar, is the hint line (see Player hints).
+- **Player hints** (standing rule): every control in the player has a
+  tooltip that says what it does and names its shortcut key, if it has
+  one ("Mute (m)"); generic keys (Enter/Space on a focused control) aren't
+  named. Tooltips are never drawn over the embedded video, which Flutter
+  can't draw over: the tooltips of the bar (and the back arrow) show in
+  the hint line, a strip of the bar below the controls, as a `card` pill
+  (radius 6, 13, `textPrimary`) under the control, kept inside the bar,
+  on hover and on keyboard focus. Its height (scaled with the text) is
+  always kept, so the video never changes size. Windowed, the tooltips of
+  the side panels and the next-episode card stay inside the panel column;
+  in fullscreen they use the hint line too, which mpv shows with the bar
+  and which hides with it.
 - **Player layout**: windowed, the video keeps its area; the controls bar
-  and now/next (live TV: titles plus the short descriptions, two lines for
+  (with its hint line) and now/next (live TV: titles plus the short descriptions, two lines for
   now, one for next where it fits) sit below it and panels beside it. The
   video area is never resized for transient UI. In fullscreen the video
   fills the screen and the controls, panels and the next-episode card are
@@ -227,9 +240,13 @@ English for now.
   shows a hint about the star.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".
-- Player tooltips name their keys: "Channels (c)", "Mute (m)",
-  "Subtitles and audio (s: next subtitles)", "Fullscreen (f or
-  double-click, Esc to leave)". Keys: Space pause, ←/→ seek 10 s, ↑/↓
+- Player tooltips name their keys: "Pause (Space or click the video)",
+  "Play the next episode (n)", "Seek (← / →: 10 s)", "Mute (m)", "Volume
+  (↑ / ↓, or the mouse wheel on the video)", "Channels: switch channel
+  (c)", "Subtitles and audio (s: next subtitles)", "Fullscreen (f or
+  double-click, Esc to leave)", "Close (Esc)", "Cancel and play to the
+  end (Esc)". Stop and the back arrow: "Stop and go back", "Back (stops
+  playback)". Keys: Space pause, ←/→ seek 10 s, ↑/↓
   volume, f fullscreen, Esc (cancel the countdown, close a panel, leave
   fullscreen), s subtitles, m mute, c channels, n next episode.
 - Episodes with a next one get a "Next episode (n)" button after

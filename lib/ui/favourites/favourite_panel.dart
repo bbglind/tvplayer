@@ -5,6 +5,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../player/player_hint.dart';
 import '../theme/widgets.dart';
 import 'category_icons.dart';
 
@@ -77,39 +78,48 @@ class _FavouritePanelState extends ConsumerState<FavouritePanel> {
                 ),
               ),
               if (widget.onClose != null)
-                IconButton(
-                  tooltip: 'Close',
-                  icon: const Icon(Icons.close),
-                  onPressed: widget.onClose,
+                PlayerTooltip(
+                  message: 'Close (Esc)',
+                  side: true,
+                  child: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: widget.onClose,
+                  ),
                 ),
             ],
           ),
           for (final c in favourites.categoriesOf(widget.item.kind))
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
-              child: FocusRing(
-                radius: AppRadius.small,
-                inset: true,
-                child: CheckboxListTile(
-                  key: Key('player.favourite.${c.name}'),
-                  dense: true,
-                  value: member.contains(c.id),
-                  controlAffinity: ListTileControlAffinity.leading,
-                  secondary: Icon(
-                    categoryIcon(c.icon),
-                    size: 18,
-                    color: AppColors.textMuted,
-                  ),
-                  title: Text(
-                    c.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onChanged: (v) => notifier.setMember(
-                    c.id,
-                    widget.item,
-                    name: widget.name,
-                    member: v ?? false,
+              child: PlayerTooltip(
+                message: member.contains(c.id)
+                    ? 'Remove from ${c.name}'
+                    : 'Add to ${c.name}',
+                side: true,
+                child: FocusRing(
+                  radius: AppRadius.small,
+                  inset: true,
+                  child: CheckboxListTile(
+                    key: Key('player.favourite.${c.name}'),
+                    dense: true,
+                    value: member.contains(c.id),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    secondary: Icon(
+                      categoryIcon(c.icon),
+                      size: 18,
+                      color: AppColors.textMuted,
+                    ),
+                    title: Text(
+                      c.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onChanged: (v) => notifier.setMember(
+                      c.id,
+                      widget.item,
+                      name: widget.name,
+                      member: v ?? false,
+                    ),
                   ),
                 ),
               ),
@@ -119,22 +129,29 @@ class _FavouritePanelState extends ConsumerState<FavouritePanel> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    key: const Key('player.favourite.newName'),
-                    controller: _name,
-                    maxLength: maxFavouriteNameLength,
-                    decoration: const InputDecoration(
-                      hintText: 'New category',
-                      counterText: '',
+                  child: PlayerTooltip(
+                    message: 'Name of a new category',
+                    side: true,
+                    child: TextField(
+                      key: const Key('player.favourite.newName'),
+                      controller: _name,
+                      maxLength: maxFavouriteNameLength,
+                      decoration: const InputDecoration(
+                        hintText: 'New category',
+                        counterText: '',
+                      ),
+                      onSubmitted: (_) => _create(),
                     ),
-                    onSubmitted: (_) => _create(),
                   ),
                 ),
-                IconButton(
-                  key: const Key('player.favourite.create'),
-                  tooltip: 'Create and add',
-                  icon: const Icon(Icons.add),
-                  onPressed: _create,
+                PlayerTooltip(
+                  message: 'Create the category and add this channel',
+                  side: true,
+                  child: IconButton(
+                    key: const Key('player.favourite.create'),
+                    icon: const Icon(Icons.add),
+                    onPressed: _create,
+                  ),
                 ),
               ],
             ),

@@ -69,7 +69,7 @@ void main() {
       final video = tester.getRect(find.byKey(const Key('mpv.video')));
       expect(embed.rects.last, video);
       // Controls sit below the video, not on it.
-      final controls = tester.getRect(find.byTooltip('Stop'));
+      final controls = tester.getRect(findPlayerTooltip('Stop and go back'));
       expect(controls.top, greaterThanOrEqualTo(video.bottom));
 
       play();
@@ -78,8 +78,8 @@ void main() {
       expect(find.byKey(const Key('player.seek')), findsNothing);
       expect(find.byKey(const Key('mpv.position')), findsNothing);
       expect(find.byKey(const Key('mpv.drops')), findsNothing);
-      expect(find.byTooltip('Pause'), findsNothing);
-      expect(find.byTooltip(RegExp('^Fullscreen')), findsOneWidget);
+      expect(find.byKey(const Key('player.pause')), findsNothing);
+      expect(findPlayerTooltip(RegExp('^Fullscreen')), findsOneWidget);
       expect(find.byKey(const Key('player.clock')), findsOneWidget);
       // The guide's programme progress stays under the video.
       expect(find.byType(NowNextBar), findsOneWidget);
@@ -148,14 +148,14 @@ void main() {
       play();
       await tester.pump();
 
-      await tester.tap(find.byTooltip(RegExp('^Fullscreen')));
+      await tester.tap(findPlayerTooltip(RegExp('^Fullscreen')));
       await tester.pumpAndSettle();
       expect(embed.fullscreenCalls, [true]);
       expect(find.byType(AppBar), findsNothing);
       // The controls show over the video for a while, then hide.
-      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(findPlayerTooltip('Stop and go back'), findsOneWidget);
       await tester.pump(const Duration(seconds: 3));
-      expect(find.byTooltip('Stop'), findsNothing);
+      expect(findPlayerTooltip('Stop and go back'), findsNothing);
       final screen =
           Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio;
       expect(embed.rects.last, screen);
@@ -173,7 +173,7 @@ void main() {
       // The window manager leaving fullscreen brings the controls back.
       embed.windowManagerFullscreen(false);
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Stop'), findsOneWidget);
+      expect(findPlayerTooltip('Stop and go back'), findsOneWidget);
     });
 
     testWidgets('leaving stops mpv, hides the area and ends fullscreen', (
@@ -187,7 +187,7 @@ void main() {
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Stop'));
+      await tester.tap(findPlayerTooltip('Stop and go back'));
       await tester.pumpAndSettle();
       expect(find.byType(MpvPlayerScreen), findsNothing);
       expect(player.stopped, [player.state.session]);

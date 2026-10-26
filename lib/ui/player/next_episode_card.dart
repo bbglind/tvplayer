@@ -4,6 +4,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../format.dart';
 import '../theme/app_colors.dart';
 import '../theme/widgets.dart';
+import 'player_hint.dart';
 import 'player_shortcuts.dart';
 
 /// "Next episode in N s" with the next episode's code and title, and
@@ -58,17 +59,25 @@ class NextEpisodeCard extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  FilledButton.icon(
-                    key: const Key('player.playNow'),
-                    focusNode: playNowFocus,
-                    onPressed: onPlayNow,
-                    icon: const Icon(Icons.skip_next),
-                    label: const Text('Play now'),
+                  PlayerTooltip(
+                    message: 'Play the next episode now (n)',
+                    side: true,
+                    child: FilledButton.icon(
+                      key: const Key('player.playNow'),
+                      focusNode: playNowFocus,
+                      onPressed: onPlayNow,
+                      icon: const Icon(Icons.skip_next),
+                      label: const Text('Play now'),
+                    ),
                   ),
-                  OutlinedButton(
-                    key: const Key('player.cancelNext'),
-                    onPressed: onCancel,
-                    child: const Text('Cancel'),
+                  PlayerTooltip(
+                    message: 'Cancel and play to the end (Esc)',
+                    side: true,
+                    child: OutlinedButton(
+                      key: const Key('player.cancelNext'),
+                      onPressed: onCancel,
+                      child: const Text('Cancel'),
+                    ),
                   ),
                 ],
               ),

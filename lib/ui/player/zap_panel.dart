@@ -10,6 +10,7 @@ import '../favourites/category_icons.dart';
 import '../live/live_tv_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/widgets.dart';
+import 'player_hint.dart';
 import 'player_shortcuts.dart';
 
 /// "Channels": my Live TV categories as tabs, each listing its channels
@@ -62,10 +63,13 @@ class _ZapPanelState extends ConsumerState<ZapPanel> {
           ),
         ),
         if (widget.onClose != null)
-          IconButton(
-            tooltip: 'Close',
-            icon: const Icon(Icons.close),
-            onPressed: widget.onClose,
+          PlayerTooltip(
+            message: 'Close (Esc)',
+            side: true,
+            child: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: widget.onClose,
+            ),
           ),
       ],
     );
@@ -103,13 +107,17 @@ class _ZapPanelState extends ConsumerState<ZapPanel> {
                   for (final c in categories)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: ToolbarChip(
-                        key: Key('zap.tab.${c.id}'),
-                        label: c.name,
-                        icon: categoryIcon(c.icon),
-                        selected: c.id == tab.id,
-                        maxLabelWidth: 180,
-                        onPressed: () => setState(() => _tab = c.id),
+                      child: PlayerTooltip(
+                        message: 'Show the channels in ${c.name}',
+                        side: true,
+                        child: ToolbarChip(
+                          key: Key('zap.tab.${c.id}'),
+                          label: c.name,
+                          icon: categoryIcon(c.icon),
+                          selected: c.id == tab.id,
+                          maxLabelWidth: 180,
+                          onPressed: () => setState(() => _tab = c.id),
+                        ),
                       ),
                     ),
                 ],
@@ -211,30 +219,34 @@ class _ChannelListState extends State<_ChannelList> {
         final current = channel.id == widget.current.id;
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: AppTile(
-            key: Key('zap.channel.${channel.id}'),
-            selected: current,
-            focusNode: i == _focused ? _focus : null,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            onTap: () => widget.onSelect(channel),
-            child: Row(
-              children: [
-                ChannelLogo(channel.logoUrl),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TruncatedText(
-                        channel.name,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      NowNextLine(channel: channel),
-                    ],
+          child: PlayerTooltip(
+            message: 'Watch ${channel.name}',
+            side: true,
+            child: AppTile(
+              key: Key('zap.channel.${channel.id}'),
+              selected: current,
+              focusNode: i == _focused ? _focus : null,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              onTap: () => widget.onSelect(channel),
+              child: Row(
+                children: [
+                  ChannelLogo(channel.logoUrl),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TruncatedText(
+                          channel.name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        NowNextLine(channel: channel),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
