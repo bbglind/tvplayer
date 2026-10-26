@@ -339,7 +339,10 @@ class _SearchFieldState extends State<SearchField> {
     if (widget.debounce == Duration.zero) {
       widget.onChanged(text);
     } else {
-      _timer = Timer(widget.debounce, () => widget.onChanged(text));
+      _timer = Timer(widget.debounce, () {
+        // Cleared or changed from outside meanwhile (e.g. a category click).
+        if (widget.controller.text == text) widget.onChanged(text);
+      });
     }
   }
 
@@ -572,6 +575,40 @@ class ResizeHandle extends StatelessWidget {
         onHorizontalDragUpdate: (d) => onUpdate(d.delta.dx),
         onHorizontalDragEnd: (_) => onEnd(),
         onHorizontalDragCancel: onEnd,
+      ),
+    );
+  }
+}
+
+/// A channel [number] (or nothing) in a column as wide as five digits at
+/// the current text scale, followed by [gap], so numbers never wrap and
+/// the names after them line up.
+class ChannelNumber extends StatelessWidget {
+  const ChannelNumber(this.number, {super.key, this.style, this.gap = 8});
+
+  final int? number;
+  final TextStyle? style;
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style.merge(this.style);
+    final painter = TextPainter(
+      text: TextSpan(text: '88888', style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width.ceilToDouble() + gap;
+    painter.dispose();
+    return SizedBox(
+      width: width,
+      child: Text(
+        number == null ? '' : '$number',
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.clip,
+        style: this.style,
       ),
     );
   }

@@ -70,6 +70,56 @@ void main() {
     expect(find.text('0 channels'), findsOneWidget);
   });
 
+  testWidgets('clicking a category while searching clears the search', (
+    tester,
+  ) async {
+    await _pump(tester, FakeLiveSource(syntheticCatalog()));
+    final search = find.byKey(const Key('live.search'));
+    await tester.enterText(search, 'channel 1234');
+    await tester.pumpAndSettle();
+    expect(find.text('Channel 1234'), findsOneWidget);
+
+    await tester.tap(find.text('Category 3'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(of: search, matching: find.byType(TextField)),
+          )
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(find.text('Channel 1234'), findsNothing);
+    expect(find.text('Channel 0003'), findsOneWidget);
+    expect(find.text('Channel 0013'), findsOneWidget);
+    expect(find.byKey(const Key('live.onlyIn')), findsNothing);
+  });
+
+  testWidgets('a search still waiting for its debounce is dropped by a '
+      'category click', (tester) async {
+    await tester.pumpWidget(
+      testApp(
+        overrides: [
+          liveSourceProvider.overrideWithValue(
+            FakeLiveSource(syntheticCatalog()),
+          ),
+        ],
+        searchDebounce: const Duration(milliseconds: 300),
+        child: const Scaffold(body: LiveTvScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('live.search')),
+      'channel 1234',
+    );
+    await tester.tap(find.text('Category 3'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    expect(find.text('Channel 1234'), findsNothing);
+    expect(find.text('Channel 0003'), findsOneWidget);
+  });
+
   testWidgets('search ignores spaces, case and accents', (tester) async {
     await _pump(
       tester,
@@ -109,7 +159,13 @@ void main() {
     expect(onlyIn, findsNothing);
 
     // Channel 1234 is in Category 4, but the search still finds it.
+    await tester.enterText(find.byKey(const Key('live.search')), '');
     await tester.tap(find.text('Category 2'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('live.search')),
+      'channel 1234',
+    );
     await tester.pumpAndSettle();
     expect(find.text('Channel 1234'), findsOneWidget);
     expect(find.text('Only in Category 2'), findsOneWidget);

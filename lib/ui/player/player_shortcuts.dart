@@ -40,6 +40,7 @@ bool _focusInPanel() {
 /// - s: next subtitle track (or off)
 /// - m: mute on/off
 /// - c: the channel list (live TV)
+/// - n: the next episode
 ///
 /// A null callback leaves its key alone (e.g. no seeking on live TV), and
 /// no key is handled while a text field has focus; arrows and space are
@@ -57,6 +58,7 @@ class PlayerShortcuts extends StatelessWidget {
     this.onCycleSubtitles,
     this.onToggleMute,
     this.onZap,
+    this.onNextEpisode,
     this.onActivity,
     this.focusNode,
   });
@@ -77,6 +79,7 @@ class PlayerShortcuts extends StatelessWidget {
   final VoidCallback? onCycleSubtitles;
   final VoidCallback? onToggleMute;
   final VoidCallback? onZap;
+  final VoidCallback? onNextEpisode;
   final VoidCallback? onActivity;
 
   /// The node that has focus while no control has it.
@@ -102,6 +105,7 @@ class PlayerShortcuts extends StatelessWidget {
       LogicalKeyboardKey.keyS when !repeat => onCycleSubtitles,
       LogicalKeyboardKey.keyM when !repeat => onToggleMute,
       LogicalKeyboardKey.keyC when !repeat => onZap,
+      LogicalKeyboardKey.keyN when !repeat => onNextEpisode,
       _ => null,
     };
     if (action == null) return KeyEventResult.ignored;

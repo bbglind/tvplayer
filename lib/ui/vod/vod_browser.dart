@@ -99,6 +99,14 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
 
   bool get _searching => !SearchQuery(widget.filter.query).isEmpty;
 
+  /// Shows [category] as if the search had been cleared first.
+  void _selectCategory(CategorySelection category) {
+    _search.clear();
+    widget.notifier
+      ..setQuery('')
+      ..selectCategory(category);
+  }
+
   /// Whether the search covers the whole section rather than the selected
   /// category.
   bool get _searchAll => _searching && !widget.filter.searchInCategory;
@@ -304,7 +312,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
         allCount: catalog.countExcluding,
         countIn: catalog.countIn,
         selected: _selection,
-        onSelect: widget.notifier.selectCategory,
+        onSelect: _selectCategory,
       ),
       content: _buildMain(context, catalog),
     );

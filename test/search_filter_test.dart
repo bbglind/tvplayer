@@ -432,6 +432,30 @@ void main() {
       expect(_grid(tester, 'movies'), ['Ébène Nights (2019) (FR)']);
     });
 
+    testWidgets('clicking a category while searching clears the search', (
+      tester,
+    ) async {
+      await _pump(tester, const MoviesScreen());
+      final search = find.byKey(const Key('movies.search'));
+      await tester.enterText(search, 'HARBOUR');
+      await tester.pumpAndSettle();
+      expect(_grid(tester, 'movies'), hasLength(2));
+
+      await tester.tap(find.text('Kids'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(of: search, matching: find.byType(TextField)),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(find.byKey(const Key('movies.onlyIn')), findsNothing);
+      expect(find.text('2 movies'), findsOneWidget);
+    });
+
     testWidgets('search, sort and filters apply together', (tester) async {
       await _pump(tester, const MoviesScreen());
       await tester.enterText(find.byKey(const Key('movies.search')), 'harbour');
@@ -614,8 +638,9 @@ void main() {
         textScale: 1.4,
         player: player,
       );
-      await tester.enterText(find.byKey(const Key('series.search')), 'harbour');
       await tester.tap(find.text('Shows'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('series.search')), 'harbour');
       await tester.pumpAndSettle();
       await _tapKey(tester, 'series.genre');
       await _tapKey(tester, 'series.genre.Mystery');

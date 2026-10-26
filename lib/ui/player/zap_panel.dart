@@ -226,10 +226,8 @@ class _ChannelListState extends State<_ChannelList> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
+                      TruncatedText(
                         channel.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       NowNextLine(channel: channel),

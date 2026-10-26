@@ -6,7 +6,7 @@ import '../../state/providers.dart';
 import '../favourites/favourite_menu.dart';
 
 /// How long the "Undo" of a removal stays offered.
-const removeUndoDuration = Duration(seconds: 5);
+const removeUndoDuration = Duration(seconds: 6);
 
 /// "Remove from Continue watching" for [movie] or [series]: clears a
 /// movie's resume position, or takes a series out until it is watched
@@ -44,6 +44,8 @@ ItemMenuAction removeFromContinueAction(
           SnackBar(
             key: const Key('continue.removed'),
             duration: removeUndoDuration,
+            // With an action a snack bar stays until dismissed by default.
+            persist: false,
             content: Text('Removed “$name” from Continue watching'),
             action: SnackBarAction(label: 'Undo', onPressed: undo),
           ),

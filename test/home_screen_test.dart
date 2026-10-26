@@ -157,8 +157,14 @@ Future<_Setup> _pump(
   return s;
 }
 
-String _featuredTitle(WidgetTester tester) =>
-    tester.widget<Text>(find.byKey(const Key('home.featured.title'))).data!;
+String _featuredTitle(WidgetTester tester) => tester
+    .widget<Text>(
+      find.descendant(
+        of: find.byKey(const Key('home.featured.title')),
+        matching: find.byType(Text),
+      ),
+    )
+    .data!;
 
 Finder _row(String id) => find.byKey(Key('home.row.$id'));
 
@@ -431,6 +437,51 @@ void main() {
         resumePosition(setup.watch.data.movie(1)),
         const Duration(minutes: 30),
       );
+    });
+
+    testWidgets('the Undo snack bar closes after 6 s', (tester) async {
+      await _pump(tester, setup: _Setup(watch: started()));
+      await removeVia(
+        tester,
+        find.byKey(const ValueKey('home.continue.movie.1')),
+      );
+      final bar = find.byKey(const Key('continue.removed'));
+      expect(bar, findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      expect(bar, findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+    });
+
+    testWidgets('the Undo snack bar closes when another page opens', (
+      tester,
+    ) async {
+      await _pump(tester, setup: _Setup(watch: started()));
+      final bar = find.byKey(const Key('continue.removed'));
+      await removeVia(
+        tester,
+        find.byKey(const ValueKey('home.continue.movie.1')),
+      );
+      expect(bar, findsOneWidget);
+      // A page opened over Home.
+      await tester.tap(
+        find.byKey(const Key('home.row.continueWatching.seeAll')),
+      );
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+
+      // Back on Home, then another section of the sidebar.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await removeVia(
+        tester,
+        find.byKey(const ValueKey('home.continue.series.10')),
+      );
+      expect(bar, findsOneWidget);
+      await tester.tap(find.text('Live TV'));
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
     });
 
     testWidgets('removing a series keeps its watched episodes; Undo brings '

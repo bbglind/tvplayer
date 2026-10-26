@@ -96,12 +96,7 @@ class _RecentChannelCardState extends ConsumerState<RecentChannelCard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            channel.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.titleMedium,
-                          ),
+                          TruncatedText(channel.name, style: text.titleMedium),
                           Text(
                             'Watched ${formatAgo(widget.watchedAt, now)}',
                             maxLines: 1,

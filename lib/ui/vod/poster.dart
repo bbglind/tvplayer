@@ -275,10 +275,9 @@ class _PosterCardState extends State<PosterCard> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
+            TruncatedText(
               widget.title,
               maxLines: 2,
-              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleSmall,
             ),
             if (widget.subtitle case final s?)

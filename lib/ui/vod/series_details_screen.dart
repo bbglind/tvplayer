@@ -402,12 +402,10 @@ class _EpisodeTile extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
+                          child: TruncatedText(
                             '${episode.episodeNumber}. '
                             '${meta?.title ?? episode.title}',
                             style: theme.textTheme.titleMedium,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (watched) ...[
@@ -428,10 +426,10 @@ class _EpisodeTile extends StatelessWidget {
                       ),
                     if (plot != null) ...[
                       const SizedBox(height: 4),
-                      Text(
+                      TruncatedText(
                         plot,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
+                        key: const Key('episode.plot'),
+                        maxLines: 2,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
                         ),

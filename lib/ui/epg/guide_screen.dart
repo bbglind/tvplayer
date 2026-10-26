@@ -761,10 +761,7 @@ class _ChannelCell extends ConsumerWidget {
             child: Row(
               children: [
                 if (channel.number case final number?)
-                  SizedBox(
-                    width: 40,
-                    child: Text('$number', style: theme.textTheme.bodySmall),
-                  ),
+                  ChannelNumber(number, style: theme.textTheme.bodySmall),
                 Expanded(
                   child: TruncatedText(
                     keepLastWordAttached(channel.name),

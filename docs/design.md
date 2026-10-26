@@ -204,7 +204,7 @@ English for now.
   position; a series leaves the list but its episodes keep their watched
   marks, and it comes back when an episode is played or marked again.
   No confirmation: a snack bar "Removed “<name>” from Continue watching"
-  offers "Undo" for 5 s.
+  offers "Undo" for 6 s; it also closes when another page opens.
 - The favourites menu saves each checkbox at once; "Done", Esc or a click
   outside closes it. The genre menu works the same way.
 - The search field of Live TV, Movies and Series searches the whole
@@ -231,7 +231,9 @@ English for now.
   "Subtitles and audio (s: next subtitles)", "Fullscreen (f or
   double-click, Esc to leave)". Keys: Space pause, ←/→ seek 10 s, ↑/↓
   volume, f fullscreen, Esc (cancel the countdown, close a panel, leave
-  fullscreen), s subtitles, m mute, c channels.
+  fullscreen), s subtitles, m mute, c channels, n next episode.
+- Episodes with a next one get a "Next episode (n)" button after
+  play/pause; it marks the current episode watched and plays the next.
 - "Play next episode" (Settings › Player): Off, 15, 20, 30 (default), 45,
   60, 90 or 120 s before the end. The card reads "Next episode in 12 s";
   after a season finale it is the next season's first episode, after the

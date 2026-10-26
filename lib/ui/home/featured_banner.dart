@@ -369,11 +369,10 @@ class _Info extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        TruncatedText(
           view.title,
           key: const Key('home.featured.title'),
           maxLines: 2,
-          overflow: TextOverflow.ellipsis,
           style: text.displayMedium,
         ),
         if (view.facts.isNotEmpty) ...[

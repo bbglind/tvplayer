@@ -13,6 +13,7 @@ import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
 import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/ui/shell/snack_bar_dismisser.dart';
 import 'package:tvplayer/ui/theme/app_theme.dart';
 import 'package:tvplayer/ui/theme/input_mode.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -376,7 +377,7 @@ const activeAccountJson = {
 /// settings, the guide and catalogue caches, the watch history, favourites,
 /// posters and the device time zone (`Europe/Stockholm`) are always faked;
 /// pass [settings], [epg], [vod], [watch] or [favourites] to inspect them. [now] fixes the
-/// clock.
+/// clock. Searches report at once unless [searchDebounce] is given.
 Widget testApp({
   required List<Override> overrides,
   required Widget child,
@@ -387,6 +388,7 @@ Widget testApp({
   WatchStore? watch,
   FavouritesStore? favourites,
   DateTime? now,
+  Duration searchDebounce = Duration.zero,
 }) {
   final watchStore = watch ?? MemoryWatchStore();
   final favouritesStore = favourites ?? MemoryFavouritesStore();
@@ -405,7 +407,7 @@ Widget testApp({
       posterLoaderProvider.overrideWithValue(FakePosterLoader()),
       // Background isolates don't finish inside fake-async widget tests.
       backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),
-      searchDebounceProvider.overrideWithValue(Duration.zero),
+      searchDebounceProvider.overrideWithValue(searchDebounce),
       deviceTimeZoneProvider.overrideWithValue('Europe/Stockholm'),
       if (now != null) clockProvider.overrideWith(() => FixedClock(now)),
       ...overrides,
@@ -413,6 +415,7 @@ Widget testApp({
     retry: (_, _) => null,
     child: MaterialApp(
       theme: AppTheme.dark(),
+      navigatorObservers: [SnackBarDismisser()],
       builder: (context, child) => InputModeScope(child: child!),
       home: child,
     ),

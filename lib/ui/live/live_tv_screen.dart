@@ -41,6 +41,13 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     super.dispose();
   }
 
+  /// Shows [category] as if the search had been cleared first.
+  void _selectCategory(CategorySelection category) {
+    _search.clear();
+    ref.read(channelQueryProvider.notifier).set('');
+    ref.read(selectedCategoryProvider.notifier).select(category);
+  }
+
   @override
   Widget build(BuildContext context) {
     final catalog = ref.watch(liveCatalogProvider);
@@ -83,7 +90,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
             data: (catalog) => CategoryLayout(
               section: 'live',
               headerAction: const CategoryEditButton(section: 'live'),
-              list: _CategoryList(catalog: catalog),
+              list: _CategoryList(catalog: catalog, onSelect: _selectCategory),
               content: _ChannelPane(catalog: catalog),
             ),
           ),
@@ -130,9 +137,10 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _CategoryList extends ConsumerWidget {
-  const _CategoryList({required this.catalog});
+  const _CategoryList({required this.catalog, required this.onSelect});
 
   final LiveCatalog catalog;
+  final ValueChanged<CategorySelection> onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -144,7 +152,7 @@ class _CategoryList extends ConsumerWidget {
       allCount: catalog.countExcluding,
       countIn: catalog.countIn,
       selected: ref.watch(liveSelectionProvider),
-      onSelect: ref.read(selectedCategoryProvider.notifier).select,
+      onSelect: onSelect,
     );
   }
 }
@@ -382,12 +390,9 @@ class _ChannelContent extends StatelessWidget {
     final logo = logoUrl;
     return Row(
       children: [
-        SizedBox(
-          width: 36,
-          child: Text(
-            number == null ? '' : '$number',
-            style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-          ),
+        ChannelNumber(
+          number,
+          style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         ChannelLogo(logo),
         const SizedBox(width: 14),
@@ -396,10 +401,8 @@ class _ChannelContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
+              TruncatedText(
                 title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: dimmed
                     ? text.titleMedium?.copyWith(color: AppColors.textSecondary)
                     : text.titleMedium,

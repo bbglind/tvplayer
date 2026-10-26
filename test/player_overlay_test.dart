@@ -474,6 +474,53 @@ void main() {
       expect(find.byKey(const Key('player.nextCard')), findsNothing);
     });
 
+    testWidgets('the Next episode button and n play the next episode here', (
+      tester,
+    ) async {
+      await open(tester, EpisodePlayback(_info, _info.episodes[0]));
+      emit(position: const Duration(minutes: 10));
+      await tester.pump();
+      final button = find.byKey(const Key('player.nextEpisodeButton'));
+      expect(button, findsOneWidget);
+      expect(find.byTooltip('Next episode (n)'), findsOneWidget);
+
+      await tester.tap(button);
+      await tester.pump();
+      expect(player.opened, hasLength(2));
+      expect(player.opened.last.title, 'Test Show · S01E02 · Episode 1-2');
+      expect(watch.data.episode('101')!.watched, isTrue);
+
+      emit(position: const Duration(minutes: 5));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pump();
+      expect(player.opened, hasLength(3));
+      expect(player.opened.last.title, 'Test Show · S02E01 · Episode 2-1');
+
+      // The last episode has none; n does nothing.
+      emit();
+      await tester.pump();
+      expect(button, findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pump();
+      expect(player.opened, hasLength(3));
+    });
+
+    testWidgets('movies and live TV have no Next episode button', (
+      tester,
+    ) async {
+      await open(tester, const MoviePlayback(_movie));
+      emit();
+      await tester.pump();
+      expect(find.byKey(const Key('player.nextEpisodeButton')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+
+      await open(tester, LivePlayback(_catalog.channels[0]));
+      emit();
+      await tester.pump();
+      expect(find.byKey(const Key('player.nextEpisodeButton')), findsNothing);
+    });
+
     testWidgets('the last episode has no countdown', (tester) async {
       await open(tester, EpisodePlayback(_info, _info.episodes[2]));
       emit(position: const Duration(minutes: 39, seconds: 40));
@@ -590,5 +637,24 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('player.nextCard')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the episode control bar fits a small window at text scale '
+      '1.4, windowed and fullscreen', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await open(tester, EpisodePlayback(_info, _info.episodes[0]));
+    tester.view.physicalSize = const Size(900, 600);
+    emit(position: const Duration(minutes: 10), volume: 60);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('player.nextEpisodeButton')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.pump();
+    expect(find.byKey(const Key('player.nextEpisodeButton')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
   });
 }

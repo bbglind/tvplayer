@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/vod/movies_screen.dart';
+import 'package:tvplayer/ui/vod/poster.dart';
 import 'package:tvplayer/ui/vod/series_screen.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -434,6 +435,8 @@ void main() {
       );
       expect(find.text('1. Episode 2-1'), findsOneWidget);
       expect(find.text('1. Episode 1-1'), findsNothing);
+      // The episode's plot, under its title, in up to 2 lines.
+      expect(find.text('Plot of 2-1.'), findsOneWidget);
       expect(find.text('Resume S02E01 from 10:00'), findsOneWidget);
       final inProgress = find.byKey(const ValueKey('episode.201'));
       expect(
@@ -508,5 +511,34 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Season 1 · 0/3'), findsOneWidget);
     });
+  });
+
+  testWidgets('a cut-off title shows in full on hover; a short one has no '
+      'tooltip', (tester) async {
+    const long =
+        'A Very Long Movie Title That Cannot Possibly Fit On Two Lines '
+        'Of A Narrow Poster Card';
+    Finder tooltip(String text) =>
+        find.byWidgetPredicate((w) => w is Tooltip && w.message == text);
+    await tester.pumpWidget(
+      testApp(
+        overrides: const [],
+        child: Scaffold(
+          body: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final title in [long, 'Short'])
+                SizedBox(
+                  width: 150,
+                  child: PosterCard(title: title, imageUrl: null, onTap: () {}),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tooltip(long), findsOneWidget);
+    expect(tooltip('Short'), findsNothing);
   });
 }

@@ -45,11 +45,10 @@ class NextEpisodeCard extends StatelessWidget {
                 style: theme.textTheme.titleMedium,
               ),
               const SizedBox(height: 4),
-              Text(
+              TruncatedText(
                 '${formatEpisodeCode(next.season, next.episodeNumber)} · '
                 '${next.title}',
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                 ),

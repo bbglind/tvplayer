@@ -641,6 +641,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       onEscape: _onEscape,
       onCycleSubtitles: playing ? _cycleSubtitles : null,
       onZap: live && _showVideo ? () => _setPanel(_Panel.zap) : null,
+      onNextEpisode: _nextEpisode != null ? _playNext : null,
       onActivity: _controls.activity,
       child: Scaffold(
         backgroundColor: _showVideo ? AppColors.scrim : null,
@@ -844,13 +845,21 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   }
 
   /// The actions at the start of the bar: play/pause for movies and
-  /// episodes. Live TV can't pause; its slot is kept for a record button.
+  /// episodes, then the next episode when there is one. Live TV can't
+  /// pause; its slot is kept for a record button.
   List<Widget> _leadingActions(ExternalPlaybackState state, bool starting) => [
     if (_request.fixedLength)
       IconButton(
         tooltip: state.paused ? 'Resume' : 'Pause',
         icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
         onPressed: starting ? null : _player.togglePause,
+      ),
+    if (_nextEpisode != null)
+      IconButton(
+        key: const Key('player.nextEpisodeButton'),
+        tooltip: 'Next episode (n)',
+        icon: const Icon(Icons.skip_next),
+        onPressed: starting ? null : _playNext,
       ),
   ];
 

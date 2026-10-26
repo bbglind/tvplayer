@@ -75,6 +75,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     final settings =
         ref.watch(appSettingsProvider).value ?? const AppSettings();
     final section = ref.watch(appSectionProvider);
+    // A message (and its "Undo") stays with the page it was shown on.
+    ref.listen(
+      appSectionProvider,
+      (_, _) => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+    );
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {

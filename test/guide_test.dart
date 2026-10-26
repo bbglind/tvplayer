@@ -201,6 +201,38 @@ void main() {
     });
   });
 
+  testWidgets('channel numbers up to 5 digits stay on one line at text '
+      'scale 1.0 to 1.4', (tester) async {
+    source = FakeLiveSource(
+      LiveCatalog(
+        categories: const [Category(id: 'c', name: 'Sweden')],
+        channels: const [
+          LiveStream(id: '1', name: 'One', categoryIds: ['c'], number: 7),
+          LiveStream(id: '2', name: 'Two', categoryIds: ['c'], number: 3786),
+          LiveStream(id: '3', name: 'Three', categoryIds: ['c'], number: 37861),
+        ],
+      ),
+      hasGuide: true,
+    );
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    for (final scale in [1.0, 1.4]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      for (final screen in const [LiveTvScreen(), GuideScreen()]) {
+        await pump(tester, screen);
+        await tester.pumpAndSettle();
+        final line = tester.getSize(find.text('7')).height;
+        for (final number in ['3786', '37861']) {
+          expect(
+            tester.getSize(find.text(number)).height,
+            line,
+            reason: '$number in ${screen.runtimeType} at $scale',
+          );
+        }
+        await tester.pumpWidget(const SizedBox());
+      }
+    }
+  });
+
   group('loading and refreshing', () {
     testWidgets('a stale cache is shown, then refreshed in the background', (
       tester,

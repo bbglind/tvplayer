@@ -7,6 +7,7 @@ import 'data/provider_storage.dart';
 import 'state/providers.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
+import 'ui/shell/snack_bar_dismisser.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/input_mode.dart';
 
@@ -26,6 +27,8 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
     },
   );
 
+  final _snackBarDismisser = SnackBarDismisser();
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +46,7 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
     return MaterialApp(
       title: 'tvplayer',
       theme: AppTheme.dark(),
+      navigatorObservers: [_snackBarDismisser],
       builder: (context, child) => InputModeScope(child: child!),
       home: const RootGate(),
     );
