@@ -97,6 +97,18 @@ final class EpgGuide {
     return result;
   }
 
+  /// Whether the guide as a whole reaches [time]: at least half of its
+  /// channels have programmes ending after it. False for an empty guide.
+  bool reaches(DateTime time) {
+    final ends = _ends ??= [for (final list in _programs.values) list.last.stop]
+      ..sort();
+    if (ends.isEmpty) return false;
+    // Sorted, so the ends from this index on are the later half (rounded up).
+    return ends[ends.length ~/ 2].isAfter(time);
+  }
+
+  List<DateTime>? _ends;
+
   /// The guide channel id for a playlist channel with [epgChannelId] and
   /// [name], or null when the guide has nothing for it.
   String? resolve({String? epgChannelId, String? name}) =>

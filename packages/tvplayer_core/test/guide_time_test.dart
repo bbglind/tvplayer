@@ -167,4 +167,48 @@ void main() {
       expect(shifted.formatLocalHm(DateTime.utc(2026, 7, 15, 18)), '20:00');
     });
   });
+  group('tonight', () {
+    // Stockholm local time on 2026-10-26 (CET, +01:00).
+    DateTime local(int day, int hour, [int minute = 0]) =>
+        DateTime.utc(2026, 10, day, hour - 1, minute);
+
+    test('20:00 the same day until 23:00', () {
+      for (final now in [local(26, 14), local(26, 22, 59), local(27, 0, 30)]) {
+        final t = stockholm.tonight(now);
+        expect(stockholm.local(t.at).hour, 20);
+        expect(stockholm.local(t.at).day, stockholm.local(now).day);
+        expect(t.tomorrow, isFalse);
+      }
+    });
+
+    test('tomorrow evening from 23:00', () {
+      for (final now in [local(26, 23), local(26, 23, 30)]) {
+        final t = stockholm.tonight(now);
+        expect(t.at, DateTime.utc(2026, 10, 27, 19));
+        expect(t.tomorrow, isTrue);
+      }
+    });
+
+    test('on the day summer time ends', () {
+      // 02:45 CEST: tonight's 20:00 is already CET.
+      final t = stockholm.tonight(DateTime.utc(2026, 10, 25, 0, 45));
+      expect(t.at, DateTime.utc(2026, 10, 25, 19));
+    });
+
+    test('in another zone', () {
+      final newYork = GuideTime.named('America/New_York');
+      // 14:00 EDT (-04:00).
+      final t = newYork.tonight(DateTime.utc(2026, 10, 26, 18));
+      expect(t.at, DateTime.utc(2026, 10, 27, 0));
+      expect(t.tomorrow, isFalse);
+    });
+
+    test('the shift does not move it', () {
+      final shifted = GuideTime.named('Europe/Stockholm', shiftHours: 2);
+      expect(
+        shifted.tonight(local(26, 14)).at,
+        stockholm.tonight(local(26, 14)).at,
+      );
+    });
+  });
 }

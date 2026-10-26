@@ -92,6 +92,27 @@ final class GuideTime {
         .toUtc();
   }
 
+  /// The hour "Tonight" jumps to.
+  static const eveningHour = 20;
+
+  /// From this hour on, "Tonight" means tomorrow evening.
+  static const lateHour = 23;
+
+  /// [eveningHour] this evening in the display zone, as a UTC instant, or
+  /// tomorrow's from [lateHour] on ([tomorrow] is then true).
+  ({DateTime at, bool tomorrow}) tonight(DateTime now) {
+    final l = local(now);
+    final tomorrow = l.hour >= lateHour;
+    final at = tz.TZDateTime(
+      location,
+      l.year,
+      l.month,
+      l.day + (tomorrow ? 1 : 0),
+      eveningHour,
+    ).toUtc();
+    return (at: at, tomorrow: tomorrow);
+  }
+
   /// `HH:mm` of the real moment [time] in the display zone.
   String formatLocalHm(DateTime time) => _hm(local(time));
 

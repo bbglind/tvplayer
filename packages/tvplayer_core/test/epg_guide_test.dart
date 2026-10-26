@@ -168,6 +168,39 @@ void main() {
     });
   });
 
+  group('reaches', () {
+    // Channels whose guides end at the given hours.
+    EpgGuide endingAt(List<int> hours) => EpgGuide(
+      programs: {
+        for (final (i, h) in hours.indexed) 'c$i': [_p('c$i', 'P', h - 1, h)],
+      },
+      fetchedAt: _fetched,
+    );
+    final at = DateTime.utc(2026, 1, 1, 20);
+
+    test('an empty guide reaches nothing', () {
+      expect(EpgGuide.empty(fetchedAt: _fetched).reaches(at), isFalse);
+    });
+
+    test('when all channels end after the time', () {
+      expect(endingAt([21, 22, 23]).reaches(at), isTrue);
+    });
+
+    test('not when only one of three channels does', () {
+      expect(endingAt([15, 16, 23]).reaches(at), isFalse);
+    });
+
+    test('half of the channels is enough', () {
+      expect(endingAt([15, 16, 21, 22]).reaches(at), isTrue);
+      expect(endingAt([15, 16, 17, 22]).reaches(at), isFalse);
+    });
+
+    test('a guide ending exactly at the time does not reach it', () {
+      expect(endingAt([20]).reaches(at), isFalse);
+      expect(endingAt([21]).reaches(at), isTrue);
+    });
+  });
+
   test('sorts, drops duplicates and trims overlaps', () {
     final guide = EpgGuide(
       programs: {
