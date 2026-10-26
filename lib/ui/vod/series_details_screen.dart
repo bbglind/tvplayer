@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -410,105 +411,156 @@ class _EpisodeTile extends StatelessWidget {
       opacity: watched ? 0.55 : 1,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(40, 0, 40, 8),
-        child: AppTile(
-          onTap: onPlay,
-          padding: const EdgeInsets.all(10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 160,
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRadius.small),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Poster(
-                          url:
-                              meta?.stillUrl ??
-                              episode.coverUrl ??
-                              fallbackImage,
-                          placeholder: Icons.tv,
-                        ),
-                        if (fraction != null)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: WatchProgressBar(fraction),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+        // The same menu as the ⋮ button: right click, long press (touch),
+        // or the Menu key / Shift+F10 on the focused row.
+        child: Builder(
+          builder: (context) => CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.contextMenu): () =>
+                  _openMenu(context, null, watched),
+              const SingleActivator(LogicalKeyboardKey.f10, shift: true): () =>
+                  _openMenu(context, null, watched),
+            },
+            child: GestureDetector(
+              key: const Key('episode.row'),
+              onSecondaryTapUp: (d) =>
+                  _openMenu(context, d.globalPosition, watched),
+              onLongPressStart: (d) =>
+                  _openMenu(context, d.globalPosition, watched),
+              child: _buildTile(
+                context,
+                theme,
+                watched: watched,
+                fraction: fraction,
+                duration: duration,
+                plot: plot,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: TruncatedText(
-                            '${episode.episodeNumber}. $title',
-                            key: const Key('episode.title'),
-                            style: theme.textTheme.titleMedium,
-                            tooltip: title == episode.title
-                                ? null
-                                : episode.title,
-                          ),
-                        ),
-                        if (watched) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.check_circle,
-                            key: const Key('episode.watched'),
-                            size: 18,
-                            color: AppColors.success,
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (duration != null)
-                      Text(
-                        formatRuntime(duration),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    if (plot != null) ...[
-                      const SizedBox(height: 4),
-                      TruncatedText(
-                        plot,
-                        key: const Key('episode.plot'),
-                        maxLines: 2,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              PopupMenuButton<bool>(
-                tooltip: 'Episode options',
-                onSelected: onMark,
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: !watched,
-                    child: Text(
-                      watched ? 'Mark as unwatched' : 'Mark as watched',
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  /// "Mark as watched" or "Mark as unwatched".
+  static List<PopupMenuEntry<bool>> _menuItems(bool watched) => [
+    PopupMenuItem(
+      value: !watched,
+      child: Text(watched ? 'Mark as unwatched' : 'Mark as watched'),
+    ),
+  ];
+
+  /// Opens the episode menu at [position] (global), or at the row's top
+  /// right when opened from the keyboard.
+  Future<void> _openMenu(
+    BuildContext context,
+    Offset? position,
+    bool watched,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final row = context.findRenderObject()! as RenderBox;
+    final at = position ?? row.localToGlobal(row.size.topRight(Offset.zero));
+    final local = overlay.globalToLocal(at);
+    final value = await showMenu<bool>(
+      context: context,
+      position: RelativeRect.fromRect(
+        local & Size.zero,
+        Offset.zero & overlay.size,
+      ),
+      items: _menuItems(watched),
+    );
+    if (value != null) onMark(value);
+  }
+
+  Widget _buildTile(
+    BuildContext context,
+    ThemeData theme, {
+    required bool watched,
+    required double? fraction,
+    required Duration? duration,
+    required String? plot,
+  }) => AppTile(
+    onTap: onPlay,
+    padding: const EdgeInsets.all(10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 160,
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.small),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Poster(
+                    url: meta?.stillUrl ?? episode.coverUrl ?? fallbackImage,
+                    placeholder: Icons.tv,
+                  ),
+                  if (fraction != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: WatchProgressBar(fraction),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: TruncatedText(
+                      '${episode.episodeNumber}. $title',
+                      key: const Key('episode.title'),
+                      style: theme.textTheme.titleMedium,
+                      tooltip: title == episode.title ? null : episode.title,
+                    ),
+                  ),
+                  if (watched) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.check_circle,
+                      key: const Key('episode.watched'),
+                      size: 18,
+                      color: AppColors.success,
+                    ),
+                  ],
+                ],
+              ),
+              if (duration != null)
+                Text(formatRuntime(duration), style: theme.textTheme.bodySmall),
+              if (plot != null) ...[
+                const SizedBox(height: 4),
+                TruncatedText(
+                  plot,
+                  key: const Key('episode.plot'),
+                  maxLines: 2,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        PopupMenuButton<bool>(
+          tooltip: 'Episode options',
+          onSelected: onMark,
+          itemBuilder: (context) => _menuItems(watched),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ErrorView extends StatelessWidget {

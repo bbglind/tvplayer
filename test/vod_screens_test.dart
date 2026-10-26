@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/vod/movies_screen.dart';
@@ -494,6 +495,52 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Season 1 · 0/3'), findsOneWidget);
     });
+  });
+
+  testWidgets('right click, long press and the Menu key open the episode '
+      'menu', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final watch = MemoryWatchStore();
+    await _pump(tester, child: const SeriesScreen(), watch: watch);
+    await tester.tap(find.byKey(const ValueKey(0)));
+    await tester.pumpAndSettle();
+    Finder row(String id) => find.descendant(
+      of: find.byKey(ValueKey('episode.$id')),
+      matching: find.byKey(const Key('episode.row')),
+    );
+
+    await tester.tap(row('101'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Mark as watched'));
+    await tester.pumpAndSettle();
+    expect(watch.data.episode('101')!.watched, isTrue);
+
+    await tester.longPress(row('101'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark as unwatched'));
+    await tester.pumpAndSettle();
+    expect(watch.data.episode('101')!.watched, isFalse);
+
+    // No player opened by either.
+    expect(find.byKey(const Key('series.scroll')), findsOneWidget);
+
+    Focus.of(
+      tester.element(
+        // Inside the row's InkWell, so its focus node is the row's.
+        find.descendant(
+          of: row('102'),
+          matching: find.byKey(const Key('episode.title')),
+        ),
+      ),
+    ).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark as watched'));
+    await tester.pumpAndSettle();
+    expect(watch.data.episode('102')!.watched, isTrue);
   });
 
   testWidgets('a cut-off title shows in full on hover; a short one has no '
