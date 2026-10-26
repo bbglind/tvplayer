@@ -29,6 +29,7 @@ export 'src/models/series.dart';
 export 'src/playlist/missing_items.dart';
 export 'src/playlist/playlist_status.dart';
 export 'src/playlist/refresh_schedule.dart';
+export 'src/text/provider_titles.dart';
 export 'src/text/search_text.dart';
 export 'src/text/title_parser.dart';
 export 'src/tracks/language.dart';

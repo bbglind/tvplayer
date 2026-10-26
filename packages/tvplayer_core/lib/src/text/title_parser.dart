@@ -18,7 +18,9 @@ final class ParsedTitle {
     this.country,
   });
 
-  factory ParsedTitle.parse(String raw) {
+  /// Splits [raw]. With [tag] false a leading tag is not looked for, e.g.
+  /// when it was already removed.
+  factory ParsedTitle.parse(String raw, {bool tag = true}) {
     var start = 0;
     var end = raw.length;
     while (start < end && _isSpace(raw.codeUnitAt(start))) {
@@ -27,10 +29,10 @@ final class ParsedTitle {
     while (end > start && _isSpace(raw.codeUnitAt(end - 1))) {
       end--;
     }
-    String? tag;
-    final tagLength = _tagLength(raw, start, end);
+    String? leading;
+    final tagLength = tag ? _tagLength(raw, start, end) : 0;
     if (tagLength > 0) {
-      tag = raw.substring(start, start + tagLength);
+      leading = raw.substring(start, start + tagLength);
       start += tagLength + 3;
       while (start < end && _isSpace(raw.codeUnitAt(start))) {
         start++;
@@ -65,7 +67,7 @@ final class ParsedTitle {
     return ParsedTitle(
       raw: raw,
       title: raw.substring(start, end),
-      tag: tag,
+      tag: leading,
       year: year,
       country: country,
     );
@@ -111,6 +113,65 @@ final class ParsedTitle {
       }
     }
     return start == 0 && end == name.length ? name : name.substring(start, end);
+  }
+
+  /// The leading tag of [name] and where the rest starts, or null.
+  ///
+  /// Strict (the default): the tag is followed by exactly `" - "`, as in
+  /// [ParsedTitle.parse]. [loose] also accepts the separators providers
+  /// get wrong now and then: extra spaces around the dash, no space after
+  /// it (`"SC -Title"`) or a colon (`"TOP: Title"`). Only use that for
+  /// tags known to be tags, since `"CSI: Vegas"` looks the same.
+  static ({String tag, int rest})? leadingTag(
+    String name, {
+    bool loose = false,
+  }) {
+    var start = 0;
+    var end = name.length;
+    while (start < end && _isSpace(name.codeUnitAt(start))) {
+      start++;
+    }
+    while (end > start && _isSpace(name.codeUnitAt(end - 1))) {
+      end--;
+    }
+    final strict = _tagLength(name, start, end);
+    if (strict > 0) {
+      var rest = start + strict + 3;
+      while (rest < end && _isSpace(name.codeUnitAt(rest))) {
+        rest++;
+      }
+      return (tag: name.substring(start, start + strict), rest: rest);
+    }
+    if (!loose) return null;
+    // The tag word, then spaces and "-", or ":".
+    var i = start;
+    var letters = false;
+    while (i < end && i - start <= 10) {
+      final c = name.codeUnitAt(i);
+      if (c >= 0x41 && c <= 0x5a) {
+        letters = true;
+      } else if (!_isTagSymbol(c)) {
+        break;
+      }
+      i++;
+    }
+    final length = i - start;
+    if (!letters || length < 2 || length > 10) return null;
+    var j = start + length;
+    if (j < end && name.codeUnitAt(j) == 0x3a) {
+      j++;
+    } else {
+      while (j < end && _isSpace(name.codeUnitAt(j))) {
+        j++;
+      }
+      if (j >= end || name.codeUnitAt(j) != 0x2d) return null;
+      j++;
+    }
+    while (j < end && _isSpace(name.codeUnitAt(j))) {
+      j++;
+    }
+    if (j >= end) return null;
+    return (tag: name.substring(start, start + length), rest: j);
   }
 
   /// Length of the provider tag at [start], or 0 when there is none: up to

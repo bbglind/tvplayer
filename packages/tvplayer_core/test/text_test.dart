@@ -130,6 +130,139 @@ void main() {
     });
   });
 
+  group('ProviderTags', () {
+    // A made-up catalogue where nearly every name carries a tag.
+    final catalogue = [
+      for (var i = 0; i < 5; i++) ...[
+        'EN - Film $i (2020)',
+        'NF-DO - Show $i (2021) (GB)',
+        '4K-SC - Story $i (2022)',
+      ],
+      'XY - Only Once (2019)',
+      'EN - EN - Echo Chamber (1972)',
+      'NF - Rare But Known',
+    ];
+    final tags = ProviderTags.fromNames(catalogue);
+
+    test('recurring tags are labels, the rest stays in the title', () {
+      final d = tags.display('NF-DO - Quiet Orchard (2025) (GB)');
+      expect(d.label, 'NF-DO');
+      expect(d.title, 'Quiet Orchard');
+      expect(d.year, 2025);
+      expect(d.country, 'GB');
+      expect(d.shortened, isTrue);
+      // Seen once: not a tag.
+      expect(tags.display('XY - Only Once (2019)').title, 'XY - Only Once');
+      expect(tags.display('XY - Only Once (2019)').label, isNull);
+    });
+
+    test('tags made of known parts are accepted', () {
+      // NF and 4K, DO and SC are parts of recurring tags.
+      expect(tags.accepts('4K-NF'), isTrue);
+      expect(tags.accepts('EN-DO'), isTrue);
+      expect(tags.accepts('4K-HDR'), isFalse);
+      expect(tags.display('4K-NF - Glass Tide').label, '4K-NF');
+    });
+
+    test('only one tag is removed; title parts stay', () {
+      final d = tags.display('EN - EN - Echo Chamber (1972)');
+      expect(d.label, 'EN');
+      expect(d.title, 'EN - Echo Chamber');
+      expect(tags.display('EN - CSI - Lantern Bay').title, 'CSI - Lantern Bay');
+      expect(tags.display('007 - Silver Gun (1983)').title, '007 - Silver Gun');
+    });
+
+    test('loose separators only for known tags', () {
+      expect(tags.display('EN  -  Wide Gap').title, 'Wide Gap');
+      expect(tags.display('4K-SC -Tight Gap').title, 'Tight Gap');
+      expect(tags.display('EN: Colon Case').title, 'Colon Case');
+      expect(tags.display('CSI: Lantern Bay').title, 'CSI: Lantern Bay');
+      expect(tags.display('XY  -  Unknown').label, isNull);
+    });
+
+    test('a catalogue without tags keeps "CSI - …" titles whole', () {
+      final plain = ProviderTags.fromNames([
+        'CSI - Lantern Bay',
+        'CSI - Copper Coast',
+        'CSI - North Pier',
+        for (var i = 0; i < 20; i++) 'Plain Film $i (2010)',
+      ]);
+      expect(plain.isEmpty, isTrue);
+      final d = plain.display('CSI - Lantern Bay (2021)');
+      expect(d.title, 'CSI - Lantern Bay');
+      expect(d.label, isNull);
+      expect(d.year, 2021);
+    });
+
+    test('empty knows no tags', () {
+      final d = ProviderTags.empty.display('EN - Glass Tide (2020)');
+      expect(d.title, 'EN - Glass Tide');
+      expect(d.label, isNull);
+      expect(ProviderTags.fromNames(const []).isEmpty, isTrue);
+    });
+
+    test('withoutTag keeps year and country', () {
+      expect(tags.withoutTag('EN - Film 1 (2020)'), 'Film 1 (2020)');
+      expect(tags.withoutTag('XY - Only Once'), 'XY - Only Once');
+      expect(tags.display('Plain').shortened, isFalse);
+    });
+  });
+
+  group('episodeDisplayTitle', () {
+    final tags = ProviderTags.fromNames([
+      for (var i = 0; i < 5; i++) 'NF-DO - Show $i (2025) (GB)',
+    ]);
+    const series = Series(
+      seriesId: 1,
+      name: 'NF-DO - Quiet Orchard (2025) (GB)',
+    );
+    String title(String t, {int number = 1, String? override}) =>
+        episodeDisplayTitle(
+          series,
+          Episode(id: '1', season: 1, episodeNumber: number, title: t),
+          tags,
+          title: override,
+        );
+
+    test('the name after the episode code', () {
+      expect(
+        title('NF-DO - Quiet Orchard (2025) (GB) - S01E01 - Episode 1'),
+        'Episode 1',
+      );
+      expect(title('Quiet Orchard - S01E02 - The Well', number: 2), 'The Well');
+      expect(title('S1 E3: Night Rain', number: 3), 'Night Rain');
+      expect(title('s02e04 - Lower Case', number: 4), 'Lower Case');
+    });
+
+    test('the name before a trailing code', () {
+      expect(title('Quiet Orchard - First Frost - S01E05'), 'First Frost');
+    });
+
+    test('a leading series name without a code', () {
+      expect(title('Quiet Orchard (2025) - Harvest'), 'Harvest');
+      expect(title('NF-DO - Quiet Orchard: Harvest'), 'Harvest');
+      // Not a whole word: kept.
+      expect(title('Quiet Orchards of Home'), 'Quiet Orchards of Home');
+      expect(title('Just a Name'), 'Just a Name');
+    });
+
+    test('falls back to the episode number', () {
+      expect(
+        title('NF-DO - Quiet Orchard (2025) (GB) - S01E07', number: 7),
+        'Episode 7',
+      );
+      expect(title('Quiet Orchard', number: 8), 'Episode 8');
+      expect(title('', number: 9), 'Episode 9');
+    });
+
+    test('a metadata title replaces the provider title', () {
+      expect(
+        title('Quiet Orchard - S01E01', override: 'S01E01 - From Metadata'),
+        'From Metadata',
+      );
+    });
+  });
+
   group('search', () {
     bool matches(String query, String name) =>
         SearchQuery(query).matches(SearchKey(name));
