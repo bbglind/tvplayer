@@ -487,6 +487,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       _position = null;
       _duration = null;
       _pickedFor = null;
+      _clearPause();
       // mpv keeps a chosen track for the next file of the same channel.
       if (!reuse) _manualTracks = false;
       _lastSave = DateTime.now();
@@ -543,17 +544,19 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// Plays the channel live in the running mpv.
   void _goLive() {
     final channel = _channel;
-    if (channel == null || _request is LivePlayback) return;
+    if (channel == null || _request is LivePlayback && _pausedAt == null) {
+      return;
+    }
     ref.read(watchProvider.notifier).recordChannel(channel);
     _switchTo(LivePlayback(channel), reuse: true);
   }
 
   /// Plays the channel's archive from the real moment [from] in the
   /// running mpv.
-  void _replayFrom(DateTime from) {
+  void _replayFrom(DateTime from, {String? zone}) {
     final channel = _channel;
     if (channel == null) return;
-    final zone = switch (_request) {
+    zone ??= switch (_request) {
       ReplayPlayback(:final serverZone) => serverZone,
       _ => ref.read(serverTimeZoneProvider).value,
     };
@@ -622,11 +625,60 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   }
 
   void _onVideoClick() {
-    // Live TV can't pause; a click only brings the controls.
+    // Live TV without archive can't pause; a click only brings the
+    // controls.
     if (_request.fixedLength && _playing) {
       unawaited(_player.togglePause());
+    } else if (_canPauseLive && _playing) {
+      _toggleLivePause();
     }
     _controls.activity();
+  }
+
+  /// Live TV paused: the moment it resumes from (see
+  /// [ReplayTiming.liveDelay]); null while it plays.
+  DateTime? _pausedAt;
+
+  /// Counts "Behind live" up while paused.
+  Timer? _pauseTicker;
+
+  /// Whether live TV can pause: on channels with an archive, which it
+  /// resumes from.
+  bool get _canPauseLive => switch (_request) {
+    LivePlayback(:final channel) => channel.hasReplay,
+    _ => false,
+  };
+
+  void _toggleLivePause() =>
+      _pausedAt == null ? _pauseLive() : unawaited(_resumeLive());
+
+  /// Stops the live stream and keeps its last picture.
+  void _pauseLive() {
+    if (!_canPauseLive || _pausedAt != null) return;
+    final session = _player.freezeFrame();
+    if (session == null) return;
+    setState(() {
+      _session = session;
+      _pausedAt = _now().subtract(ReplayTiming.liveDelay);
+    });
+    _pauseTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Plays on from the moment of the pause, from the archive.
+  Future<void> _resumeLive() async {
+    final from = _pausedAt;
+    if (from == null) return;
+    final zone = await ref.read(serverTimeZoneProvider.future);
+    if (!mounted || _pausedAt != from) return;
+    _replayFrom(from, zone: zone);
+  }
+
+  void _clearPause() {
+    _pauseTicker?.cancel();
+    _pauseTicker = null;
+    _pausedAt = null;
   }
 
   /// Pointer input on the video area (mpv's window). In fullscreen,
@@ -727,6 +779,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   @override
   void dispose() {
+    _pauseTicker?.cancel();
     _player.removeListener(_onChange);
     for (final s in _subscriptions) {
       s.cancel();
@@ -770,6 +823,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   Widget build(BuildContext context) {
     final showStats =
         ref.watch(appSettingsProvider).value?.showPlaybackStats ?? false;
+    // Asked early, so resuming a pause doesn't wait for the provider.
+    if (_canPauseLive) ref.watch(serverTimeZoneProvider);
     final Widget body;
     if (_url == null) {
       body = const Center(child: Text('No provider configured'));
@@ -790,7 +845,13 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final replay = _request is ReplayPlayback;
     return PlayerShortcuts(
       focusNode: _shortcutsFocus,
-      onTogglePause: playing && !live ? _player.togglePause : null,
+      onTogglePause: !playing
+          ? null
+          : _canPauseLive
+          ? _toggleLivePause
+          : !live
+          ? _player.togglePause
+          : null,
       onSeek: !playing || !_request.fixedLength
           ? null
           : replay
@@ -807,7 +868,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ? () => _setPanel(_Panel.zap)
           : null,
       onNextEpisode: _nextEpisode != null ? _playNext : null,
-      onGoLive: replay && _showVideo ? _goLive : null,
+      onGoLive: (replay || _pausedAt != null) && _showVideo ? _goLive : null,
       onActivity: _controls.activity,
       child: PlayerHintScope(
         controller: _hintsShown ? _hints : null,
@@ -1096,6 +1157,17 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// episodes, then the next episode when there is one. Live TV can't
   /// pause; its slot is kept for a record button.
   List<Widget> _leadingActions(ExternalPlaybackState state, bool starting) => [
+    if (_canPauseLive)
+      PlayerTooltip(
+        message: _pausedAt != null
+            ? 'Resume (Space or click the video)'
+            : 'Pause live TV (Space or click the video)',
+        child: IconButton(
+          key: const Key('player.livePause'),
+          icon: Icon(_pausedAt != null ? Icons.play_arrow : Icons.pause),
+          onPressed: starting ? null : _toggleLivePause,
+        ),
+      ),
     if (_request.fixedLength)
       PlayerTooltip(
         message: state.paused
@@ -1160,9 +1232,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                         onSeek: (p) => unawaited(_player.seek(p)),
                         onDragging: (v) => _controls.hold(#seek, v),
                       )
-                    : const SizedBox.shrink(),
+                    : _buildLivePaused(),
               ),
-              if (replay) ...[
+              if (replay || _pausedAt != null) ...[
                 const SizedBox(width: 8),
                 PlayerTooltip(
                   message:
@@ -1232,6 +1304,21 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// "Paused · Behind live 0:45" while live TV is paused.
+  Widget _buildLivePaused() {
+    final pausedAt = _pausedAt;
+    if (pausedAt == null) return const SizedBox.shrink();
+    return Text(
+      'Paused · Behind live '
+      '${formatBehindLive(behindLive(pausedAt, _now()))}',
+      key: const Key('live.paused'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: AppColors.textSecondary),
     );
   }
 

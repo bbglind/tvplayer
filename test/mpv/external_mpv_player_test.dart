@@ -482,4 +482,33 @@ void main() {
       expect(s.error, isNot(contains('pass')));
     });
   });
+
+  group('freezeFrame', () {
+    test('saves the frame and shows it in place of the stream', () async {
+      final first = player.open(_url, title: 'News');
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      final mpv = started.single;
+      final before = mpv.commands.length;
+      final session = player.freezeFrame();
+      expect(session, first + 1);
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      final commands = mpv.commands.skip(before).toList();
+      final shot = commands.first;
+      expect(shot.first, 'screenshot-to-file');
+      final path = shot[1]! as String;
+      expect(path, endsWith('/paused.jpg'));
+      expect(shot[2], 'video');
+      expect(commands.skip(1), [
+        ['set_property', 'start', 'none'],
+        ['set_property', 'keep-open', 'yes'],
+        ['set_property', 'image-display-duration', 'inf'],
+        ['loadfile', path, 'replace'],
+      ]);
+      expect(started, hasLength(1));
+    });
+
+    test('nothing to freeze without mpv', () {
+      expect(player.freezeFrame(), isNull);
+    });
+  });
 }

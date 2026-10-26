@@ -81,6 +81,22 @@ class FakeExternalPlayer extends ExternalMpvPlayer {
     return session;
   }
 
+  /// [freezeFrame] calls.
+  var freezes = 0;
+
+  @override
+  int? freezeFrame() {
+    freezes++;
+    final session = state.session + 1;
+    state = ExternalPlaybackState(
+      session: session,
+      status: ExternalPlayerStatus.playing,
+      volume: state.volume,
+      muted: state.muted,
+    );
+    return session;
+  }
+
   /// Every URL loaded, by [open] or [reload], in order.
   final loads = <Uri>[];
 

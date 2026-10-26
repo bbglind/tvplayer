@@ -265,6 +265,61 @@ class ExternalMpvPlayer extends ChangeNotifier {
     }
   }
 
+  /// Keeps the picture while the stream closes, for pausing live TV: mpv
+  /// saves the frame showing to an image in its private directory and
+  /// shows that in place of the stream (a black picture when it has no
+  /// frame), so no stream stays open. Returns the new session id; [open]s
+  /// nothing and returns null when no mpv runs.
+  int? freezeFrame() {
+    final run = _run;
+    final ipc = run?.ipc;
+    final dir = run?.socketDir;
+    if (run == null || run.closed || run.exited || ipc == null || dir == null) {
+      return null;
+    }
+    final session = _state.session + 1;
+    state = ExternalPlaybackState(
+      session: session,
+      status: ExternalPlayerStatus.starting,
+      volume: _state.volume,
+      muted: _state.muted,
+    );
+    unawaited(_freeze(run, ipc, '${dir.path}/paused.jpg', session));
+    return session;
+  }
+
+  Future<void> _freeze(
+    _MpvRun run,
+    MpvIpc ipc,
+    String path,
+    int session,
+  ) async {
+    try {
+      var still = path;
+      try {
+        await ipc.command(['screenshot-to-file', path, 'video']);
+      } on MpvIpcException {
+        // No frame yet: a black picture.
+        still = _blackPicture;
+      }
+      await _setLoadOptions(ipc, null, true);
+      await ipc.command(['set_property', 'image-display-duration', 'inf']);
+      await ipc.command(['loadfile', still, 'replace']);
+      if (_isCurrent(run) &&
+          _state.session == session &&
+          _state.status == ExternalPlayerStatus.starting) {
+        state = _state.copyWith(status: ExternalPlayerStatus.playing);
+      }
+    } on MpvIpcException {
+      if (!run.exited && _state.session == session) {
+        _fail(run, 'Lost connection to mpv.');
+      }
+    }
+  }
+
+  /// A still black picture from ffmpeg's lavfi, for [freezeFrame].
+  static const _blackPicture = 'av://lavfi:color=c=black:s=16x16:d=1';
+
   /// Options for the next file loaded: where to start, and whether to hold
   /// the last frame at its end.
   static Future<void> _setLoadOptions(

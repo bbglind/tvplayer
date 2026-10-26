@@ -920,4 +920,72 @@ void main() {
       });
     }
   });
+
+  group('pause live TV', () {
+    Future<void> openLive(WidgetTester tester, LiveStream channel) async {
+      await pump(tester, _Launcher(LivePlayback(channel)));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      player.emit(
+        player.state.copyWith(status: ExternalPlayerStatus.playing, volume: 80),
+      );
+      await tester.pump();
+    }
+
+    void setClock(WidgetTester tester, DateTime t) =>
+        (ProviderScope.containerOf(
+          tester.element(find.byType(_Launcher, skipOffstage: false)),
+        ).read(clockProvider.notifier) as FixedClock).set(t);
+
+    testWidgets('Space pauses (the stream closes, the picture stays) and '
+        'resumes from the archive, 15 s before the pause', (tester) async {
+      await openLive(tester, _catalog.channels[0]);
+      expect(
+        findPlayerTooltip('Pause live TV (Space or click the video)'),
+        findsOneWidget,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(player.freezes, 1);
+      expect(find.text('Paused · Behind live 0:15'), findsOneWidget);
+      expect(
+        findPlayerTooltip('Resume (Space or click the video)'),
+        findsOneWidget,
+      );
+
+      setClock(tester, _now.add(const Duration(seconds: 30)));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Paused · Behind live 0:45'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump();
+      final resume = player.reloaded.single;
+      // Paused at 17:59:45 UTC: from 18:59 in the provider's zone, +45 s.
+      expect(resume.url.path, '/timeshift/user/pass/3/2026-10-26:18-59/1.ts');
+      expect(resume.start, const Duration(seconds: 45));
+      expect(resume.keepOpen, isTrue);
+      expect(player.opened, hasLength(1));
+      expect(find.byKey(const Key('replay.badge')), findsOneWidget);
+    });
+
+    testWidgets('paused: LIVE goes back to the live stream', (tester) async {
+      await openLive(tester, _catalog.channels[0]);
+      await tester.tap(find.byKey(const Key('player.livePause')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('player.goLive')));
+      await tester.pump();
+      expect(player.reloaded.single.url.path, '/live/user/pass/1.ts');
+      expect(find.byKey(const Key('live.paused')), findsNothing);
+    });
+
+    testWidgets('without archive: no pause', (tester) async {
+      await openLive(tester, _catalog.channels[1]);
+      expect(find.byKey(const Key('player.livePause')), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(player.freezes, 0);
+    });
+  });
 }
