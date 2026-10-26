@@ -196,7 +196,10 @@ weights 400, 500, 600, 700.
   snack bar "Couldn't refresh movies. The previous data is kept." with
   "Details" (opens Settings); like every snack bar with an action it closes
   by itself after 6 s and when another page opens. Never a dialog, and
-  nothing while something plays.
+  nothing while something plays. The parts failing in one run share one
+  snack bar ("channels, movies and the TV guide"); each part is reported
+  at most once while the app is open, whatever failed before it started
+  or by hand.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).

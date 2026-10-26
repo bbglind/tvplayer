@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:tvplayer/app.dart';
 import 'package:tvplayer/data/errors.dart';
 import 'package:tvplayer/format.dart';
 import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/ui/home/home_screen.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
@@ -622,6 +624,99 @@ void main() {
         find.textContaining("The provider's server had a problem (HTTP 502)."),
         findsOneWidget,
       );
+    });
+
+    testWidgets('at app start, once per part per session, after a failure '
+        'recorded earlier', (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const offline = XtreamException(
+        'Network error (x)',
+        kind: ProviderFailure.network,
+      );
+      // An earlier "Refresh all" without network, recorded on disk.
+      var earlier = PlaylistStatus.empty.withAutoRefresh(AutoRefresh.onStart);
+      for (final p in PlaylistPart.values) {
+        earlier = earlier.withPart(
+          p,
+          PartStatus(
+            updatedAt: _ago(const Duration(days: 1)),
+            failedAt: _ago(const Duration(minutes: 20)),
+            error: describeRefreshError(offline),
+          ),
+        );
+      }
+      final live = FakeLiveSource(
+        syntheticCatalog(count: 3),
+        hasGuide: true,
+        failTimes: 1 << 20,
+      );
+      final vod = FakeVodRepository()
+        ..movies[providerKey(_config)] = syntheticMovies(
+          count: 3,
+          fetchedAt: _ago(const Duration(days: 1)),
+        )
+        ..series[providerKey(_config)] = syntheticSeries(
+          count: 3,
+          fetchedAt: _ago(const Duration(days: 1)),
+        );
+      // As the app starts: the saved provider, then the app on Home.
+      await tester.pumpWidget(
+        testApp(
+          providerStorage: FakeProviderStorage(_config),
+          overrides: [
+            liveSourceProvider.overrideWithValue(live),
+            vodSourceProvider.overrideWithValue(
+              FakeVodSource()..failure = offline,
+            ),
+            useExternalMpvProvider.overrideWithValue(true),
+            externalMpvProvider.overrideWithValue(FakeExternalPlayer()),
+            embedMpvProvider.overrideWithValue(false),
+          ],
+          vod: vod,
+          epg: FakeEpgRepository(failure: offline),
+          playlistStatus: MemoryPlaylistStatusStore(earlier),
+          now: _now,
+          child: const RootGate(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // One notice for the whole run, on Home.
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(bar, findsOneWidget);
+      expect(
+        find.text(
+          "Couldn't refresh channels, movies, series and the TV guide. "
+          'The previous data is kept.',
+        ),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 5));
+      expect(bar, findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+
+      // Failing again later in the same session: Settings only.
+      final container = _container(tester);
+      (container.read(clockProvider.notifier) as FixedClock).set(
+        _now.add(const Duration(hours: 2)),
+      );
+      await container
+          .read(playlistStatusProvider.notifier)
+          .setAutoRefresh(AutoRefresh.every6Hours);
+      await tester.pump(PlaylistRefreshController.checkInterval);
+      await tester.pumpAndSettle();
+      expect(
+        container
+            .read(playlistStatusProvider)
+            .part(PlaylistPart.movies)
+            .failedAt,
+        _now.add(const Duration(hours: 2)),
+      );
+      expect(bar, findsNothing);
     });
   });
 }

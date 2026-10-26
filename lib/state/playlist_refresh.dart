@@ -182,10 +182,19 @@ class PlaylistRefreshController extends Notifier<PlaylistRefreshState> {
 
   bool _checking = false;
 
+  /// Parts whose automatic refresh failure was shown since the app started
+  /// (for [_reportedFor]). Earlier failures, saved or by hand, don't count.
+  final _reported = <PlaylistPart>{};
+  String? _reportedFor;
+
   @override
   PlaylistRefreshState build() {
-    ref.watch(providerKeyProvider);
+    final key = ref.watch(providerKeyProvider);
     ref.watch(liveSourceProvider);
+    if (key != _reportedFor) {
+      _reported.clear();
+      _reportedFor = key;
+    }
     // A new provider: nothing of the old one's run is waiting any more.
     for (final c in _pending.values) {
       c.complete(null);
@@ -303,13 +312,15 @@ class PlaylistRefreshController extends Notifier<PlaylistRefreshState> {
       if (due.isEmpty) return;
       final results = await Future.wait([for (final p in due) refresh(p)]);
       if (!ref.mounted) return;
-      // Only news: a part that keeps failing isn't reported every time.
+      // Once per part while the app is open: a part that keeps failing
+      // isn't reported every time.
       final failed = [
         for (final (i, error) in results.indexed)
-          if (error != null && !status.part(due[i]).failed) due[i],
+          if (error != null && !_reported.contains(due[i])) due[i],
       ];
       // No notice over the player: Settings still shows what failed.
       if (failed.isNotEmpty && !ref.read(playbackActiveProvider)) {
+        _reported.addAll(failed);
         ref
             .read(autoRefreshFailureProvider.notifier)
             .report(AutoRefreshFailure(failed));
