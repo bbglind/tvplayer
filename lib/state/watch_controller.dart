@@ -85,7 +85,7 @@ class WatchController extends Notifier<WatchData> {
   void markMovie(Movie movie, {required bool watched}) => _update(
     markWatched(
       state,
-      [(key: movieKey(movie.streamId), seriesId: null, duration: null)],
+      [movieTarget(movie.streamId)],
       watched: watched,
       now: _now,
     ),

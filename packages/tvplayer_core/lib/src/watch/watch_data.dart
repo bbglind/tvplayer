@@ -10,6 +10,9 @@ String movieKey(int streamId) => 'movie:$streamId';
 /// Key of an episode's [WatchProgress] in [WatchData.items].
 String episodeKey(String episodeId) => 'episode:$episodeId';
 
+/// Key of a series in [WatchData.played].
+String seriesKey(int seriesId) => 'series:$seriesId';
+
 /// How far one movie or episode was watched.
 final class WatchProgress {
   const WatchProgress({
@@ -18,6 +21,8 @@ final class WatchProgress {
     this.duration,
     this.watched = false,
     this.seriesId,
+    this.season,
+    this.episode,
   });
 
   /// Where playback stopped.
@@ -36,6 +41,12 @@ final class WatchProgress {
   /// For episodes: the series they belong to.
   final int? seriesId;
 
+  /// For episodes: their season and episode number, to match them with
+  /// the same episode of another variant of the series. Missing in
+  /// records written before they were kept.
+  final int? season;
+  final int? episode;
+
   /// Watched fraction (0–1), when the duration is known.
   double? get fraction {
     final d = duration;
@@ -48,6 +59,8 @@ final class WatchProgress {
     'dur': ?duration?.inMilliseconds,
     if (watched) 'watched': true,
     'series': ?seriesId,
+    's': ?season,
+    'e': ?episode,
   };
 
   static WatchProgress fromJson(Object? json, DateTime updatedAt) {
@@ -58,9 +71,22 @@ final class WatchProgress {
       duration: dur == null ? null : Duration(milliseconds: dur),
       watched: readBool(map['watched']),
       seriesId: readInt(map['series']),
+      season: readInt(map['s']),
+      episode: readInt(map['e']),
       updatedAt: updatedAt,
     );
   }
+
+  /// This progress with [season] and [episode] set, same time.
+  WatchProgress numbered(int season, int episode) => WatchProgress(
+    position: position,
+    duration: duration,
+    watched: watched,
+    seriesId: seriesId,
+    season: season,
+    episode: episode,
+    updatedAt: updatedAt,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -69,11 +95,20 @@ final class WatchProgress {
       other.duration == duration &&
       other.watched == watched &&
       other.updatedAt == updatedAt &&
-      other.seriesId == seriesId;
+      other.seriesId == seriesId &&
+      other.season == season &&
+      other.episode == episode;
 
   @override
-  int get hashCode =>
-      Object.hash(position, duration, watched, updatedAt, seriesId);
+  int get hashCode => Object.hash(
+    position,
+    duration,
+    watched,
+    updatedAt,
+    seriesId,
+    season,
+    episode,
+  );
 
   @override
   String toString() =>
@@ -218,6 +253,7 @@ final class WatchData {
     this.seriesTracks = const {},
     this.channels = const {},
     this.continueRemovals = const {},
+    this.played = const {},
   });
 
   /// Progress by [movieKey] / [episodeKey].
@@ -237,6 +273,10 @@ final class WatchData {
   /// series id.
   final Map<int, ContinueRemoval> continueRemovals;
 
+  /// When playback of a movie ([movieKey]) or an episode of a series
+  /// ([seriesKey]) last started, to mark the source played last.
+  final Map<String, DateTime> played;
+
   static const empty = WatchData();
 
   WatchProgress? movie(int streamId) => items[movieKey(streamId)];
@@ -249,12 +289,14 @@ final class WatchData {
     Map<int, SeriesTracks>? seriesTracks,
     Map<String, ChannelVisit>? channels,
     Map<int, ContinueRemoval>? continueRemovals,
+    Map<String, DateTime>? played,
   }) => WatchData(
     items: items ?? this.items,
     series: series ?? this.series,
     seriesTracks: seriesTracks ?? this.seriesTracks,
     channels: channels ?? this.channels,
     continueRemovals: continueRemovals ?? this.continueRemovals,
+    played: played ?? this.played,
   );
 
   /// This data with [progress] added, replacing records with the same key.
@@ -293,6 +335,7 @@ final class WatchData {
         other.continueRemovals,
         (r) => r.updatedAt,
       ),
+      played: newest(played, other.played, (t) => t),
     );
   }
 
@@ -325,6 +368,8 @@ final class WatchData {
             value.updatedAt,
             value.removed ? const <String, Object?>{} : {'undone': true},
           ),
+        for (final MapEntry(:key, :value) in played.entries)
+          record('played:$key', value, const <String, Object?>{}),
       ],
     };
   }
@@ -336,6 +381,7 @@ final class WatchData {
     final tracks = <int, SeriesTracks>{};
     final channels = <String, ChannelVisit>{};
     final removals = <int, ContinueRemoval>{};
+    final played = <String, DateTime>{};
     for (final r in readList(readMap(json)?['records'])) {
       final record = readMap(r);
       final key = readString(record?['k']);
@@ -366,6 +412,9 @@ final class WatchData {
             time,
             removed: !readBool(readMap(value)?['undone']),
           );
+        case 'played'
+            when id.startsWith('movie:') || id.startsWith('series:'):
+          played[id] = time;
       }
     }
     return WatchData(
@@ -374,6 +423,7 @@ final class WatchData {
       seriesTracks: tracks,
       channels: channels,
       continueRemovals: removals,
+      played: played,
     );
   }
 }

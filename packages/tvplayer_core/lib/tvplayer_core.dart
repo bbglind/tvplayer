@@ -37,6 +37,7 @@ export 'src/tracks/media_track.dart';
 export 'src/tracks/track_picker.dart';
 export 'src/util/provider_failure.dart';
 export 'src/util/provider_key.dart';
+export 'src/vod/variants.dart';
 export 'src/vod/vod_catalog.dart';
 export 'src/vod/vod_query.dart';
 export 'src/vod/vod_source.dart';

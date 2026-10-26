@@ -64,6 +64,7 @@ WatchData _play(WatchData data, (int, int) episode, int minutes, DateTime at) {
 }
 
 void main() {
+  _groupMain();
   group('progress', () {
     test('becomes watched at 90 % and stays watched', () {
       const duration = Duration(minutes: 100);
@@ -128,7 +129,7 @@ void main() {
           updatedAt: _t0,
         ),
       });
-      final target = (key: key, seriesId: null, duration: null);
+      final target = movieTarget(201);
       data = markWatched(data, [target], watched: true, now: _at(1));
       expect(data.movie(201)!.watched, isTrue);
       expect(data.movie(201)!.duration, const Duration(minutes: 90));
@@ -583,6 +584,264 @@ void _continueRemovalTests() {
       expect(read.continueRemovals, data.continueRemovals);
       expect(read.continueRemovals[7], ContinueRemoval(_at(1)));
       expect(read.continueRemovals[8], ContinueRemoval(_at(3), removed: false));
+    });
+  });
+}
+
+/// A series variant: episodes of seasons 1 and 2 (with [extra] more in
+/// season 2) and a special, with ids starting at [base].
+SeriesInfo _variant(int seriesId, int base, {int extra = 0}) => SeriesInfo(
+  series: Series(seriesId: seriesId, name: 'Variant $seriesId'),
+  seasons: const [],
+  episodes: [
+    Episode(id: '${base + 1}', season: 0, episodeNumber: 1, title: 'Special'),
+    for (var n = 1; n <= 3; n++)
+      Episode(
+        id: '${base + 10 + n}',
+        season: 1,
+        episodeNumber: n,
+        title: 'S1E$n',
+      ),
+    for (var n = 1; n <= 2 + extra; n++)
+      Episode(
+        id: '${base + 20 + n}',
+        season: 2,
+        episodeNumber: n,
+        title: 'S2E$n',
+      ),
+    // No episode number: never matched.
+    Episode(id: '${base + 99}', season: 2, episodeNumber: 0, title: 'Extra'),
+  ],
+);
+
+WatchData _playIn(
+  WatchData data,
+  SeriesInfo info,
+  Episode e, {
+  required int minutes,
+  required DateTime at,
+}) => data.withItems({
+  episodeKey(e.id): updatedProgress(
+    data.episode(e.id),
+    position: Duration(minutes: minutes),
+    duration: const Duration(minutes: 40),
+    now: at,
+    seriesId: info.series.seriesId,
+    season: e.season,
+    episode: e.episodeNumber,
+  ),
+});
+
+Episode _episodeOf(SeriesInfo info, int season, int number) => info.episodes
+    .firstWhere((e) => e.season == season && e.episodeNumber == number);
+
+void _groupMain() {
+  // NF (series 1) and EN (series 2) are variants; EN has one more episode.
+  final nf = _variant(1, 1000);
+  final en = _variant(2, 2000, extra: 1);
+
+  group('series variants', () {
+    test('episodes match by season and episode number', () {
+      var data = WatchData.empty;
+      data = _playIn(data, nf, _episodeOf(nf, 1, 1), minutes: 39, at: _at(1));
+      data = _playIn(data, nf, _episodeOf(nf, 1, 2), minutes: 12, at: _at(2));
+      final view = EpisodeGroupView(data, 2, [1]);
+      expect(view.progress(_episodeOf(en, 1, 1))!.watched, isTrue);
+      final e2 = view.progress(_episodeOf(en, 1, 2))!;
+      expect(e2.position, const Duration(minutes: 12));
+      expect(resumePosition(e2), const Duration(minutes: 12));
+      expect(view.sourceOf(_episodeOf(en, 1, 2)), 1);
+      expect(view.progress(_episodeOf(en, 1, 3)), isNull);
+      // Without the group: nothing.
+      expect(data.episode(_episodeOf(en, 1, 1).id), isNull);
+    });
+
+    test('the newest position wins; watched anywhere stays watched', () {
+      var data = WatchData.empty;
+      data = _playIn(data, nf, _episodeOf(nf, 1, 1), minutes: 39, at: _at(1));
+      data = _playIn(data, en, _episodeOf(en, 1, 1), minutes: 5, at: _at(2));
+      final view = EpisodeGroupView(data, 2, [1]);
+      final p = view.progress(_episodeOf(en, 1, 1))!;
+      expect(p.watched, isTrue);
+      expect(p.position, const Duration(minutes: 5));
+      expect(view.sourceOf(_episodeOf(en, 1, 1)), isNull);
+    });
+
+    test('unmatched episodes keep their own state', () {
+      var data = WatchData.empty;
+      data = _playIn(data, nf, _episodeOf(nf, 2, 0), minutes: 39, at: _at(1));
+      data = _playIn(data, nf, _episodeOf(nf, 0, 1), minutes: 39, at: _at(2));
+      // A record from before season and episode were kept.
+      data = data.withItems({
+        episodeKey('1013'): WatchProgress(
+          position: const Duration(minutes: 39),
+          duration: const Duration(minutes: 40),
+          watched: true,
+          seriesId: 1,
+          updatedAt: _at(3),
+        ),
+      });
+      final view = EpisodeGroupView(data, 2, [1]);
+      expect(view.progress(_episodeOf(en, 2, 0)), isNull);
+      // Specials match only on the same numbers.
+      expect(view.progress(_episodeOf(en, 0, 1))!.watched, isTrue);
+      expect(view.progress(_episodeOf(en, 1, 3)), isNull);
+      // Until the NF page fills them in.
+      data = refreshSeries(data, nf);
+      expect(data.episode('1013')!.season, 1);
+      expect(data.episode('1013')!.episode, 3);
+      expect(
+        EpisodeGroupView(data, 2, [1]).progress(_episodeOf(en, 1, 3))!.watched,
+        isTrue,
+      );
+    });
+
+    test('variants with different episode counts', () {
+      var data = WatchData.empty;
+      for (final e in nf.episodes.where((e) => e.season > 0)) {
+        data = _playIn(data, nf, e, minutes: 39, at: _at(e.episodeNumber));
+      }
+      final view = EpisodeGroupView(data, 2, [1]);
+      expect(seasonProgress(en, 1, data, group: view).label, '3/3');
+      expect(seasonProgress(en, 2, data, group: view).label, '2/4');
+      // EN's extra episode is next.
+      expect(upNext(en, data, group: view)!.id, _episodeOf(en, 2, 3).id);
+      final summary = summarizeSeries(en, data, group: view)!;
+      expect(summary.watchedEpisodes, 5);
+      expect(summary.totalEpisodes, 7);
+    });
+
+    test('next up continues from another variant', () {
+      var data = WatchData.empty;
+      data = _playIn(data, nf, _episodeOf(nf, 1, 1), minutes: 39, at: _at(1));
+      data = _playIn(data, nf, _episodeOf(nf, 1, 2), minutes: 39, at: _at(2));
+      final view = EpisodeGroupView(data, 2, [1]);
+      expect(upNext(en, data), isNull);
+      expect(upNext(en, data, group: view)!.id, _episodeOf(en, 1, 3).id);
+      expect(initialSeason(en, data, group: view), 1);
+      data = refreshSeries(data, en, variants: [1]);
+      expect(data.series[2]!.nextEpisodeId, _episodeOf(en, 1, 3).id);
+      expect(data.series[2]!.updatedAt, _at(2));
+    });
+
+    test('marking a season marks it in every variant, also unwatched', () {
+      var data = WatchData.empty;
+      data = _playIn(data, nf, _episodeOf(nf, 1, 1), minutes: 39, at: _at(1));
+      data = _playIn(data, nf, _episodeOf(nf, 1, 2), minutes: 20, at: _at(2));
+      var view = EpisodeGroupView(data, 2, [1]);
+      final season = en.episodesForSeason(1);
+      data = markWatched(
+        data,
+        groupEpisodeTargets(en, season, view),
+        watched: true,
+        now: _at(3),
+      );
+      expect(data.episode(_episodeOf(nf, 1, 2).id)!.watched, isTrue);
+      view = EpisodeGroupView(data, 1, [2]);
+      expect(seasonProgress(nf, 1, data, group: view).label, '3/3');
+
+      data = markWatched(
+        data,
+        groupEpisodeTargets(en, season, EpisodeGroupView(data, 2, [1])),
+        watched: false,
+        now: _at(4),
+      );
+      view = EpisodeGroupView(data, 1, [2]);
+      expect(seasonProgress(nf, 1, data, group: view).label, '0/3');
+      expect(data.episode(_episodeOf(nf, 1, 1).id)!.watched, isFalse);
+      // The marked records keep their numbers.
+      expect(data.episode(_episodeOf(en, 1, 3).id)!.episode, 3);
+    });
+
+    test('continue watching shows one card per group', () {
+      var data = WatchData.empty;
+      data = _playIn(data, nf, _episodeOf(nf, 1, 1), minutes: 10, at: _at(1));
+      data = refreshSeries(data, nf);
+      data = _playIn(data, en, _episodeOf(en, 1, 1), minutes: 12, at: _at(2));
+      data = refreshSeries(data, en);
+      final third = _variant(3, 3000);
+      data = _playIn(
+        data,
+        third,
+        _episodeOf(third, 1, 1),
+        minutes: 5,
+        at: _at(0),
+      );
+      data = refreshSeries(data, third);
+      List<int> groupOf(int id) => id == 3 ? [3] : [1, 2];
+      expect(continueSeries(data).map((e) => e.$1), [2, 1, 3]);
+      expect(continueSeriesGroups(data, groupOf).map((e) => e.$1), [2, 3]);
+      // Removing every variant removes the card.
+      for (final id in [1, 2]) {
+        data = removeContinueSeries(data, id, _at(5));
+      }
+      expect(continueSeriesGroups(data, groupOf).map((e) => e.$1), [3]);
+    });
+  });
+
+  group('movie variants', () {
+    WatchData started(WatchData data, int id, int minutes, int at) =>
+        data.withItems({
+          movieKey(id): updatedProgress(
+            data.movie(id),
+            position: Duration(minutes: minutes),
+            duration: const Duration(minutes: 90),
+            now: _at(at),
+          ),
+        });
+
+    test('the group takes the newest position; watched if any is', () {
+      var data = started(WatchData.empty, 1, 30, 1);
+      data = started(data, 2, 50, 2);
+      final g = movieGroupProgress(data, [1, 2, 3])!;
+      expect(g.from, 2);
+      expect(g.progress.position, const Duration(minutes: 50));
+      expect(g.progress.watched, isFalse);
+      data = started(data, 3, 89, 0);
+      expect(movieGroupProgress(data, [1, 2, 3])!.progress.watched, isTrue);
+      expect(movieGroupProgress(data, [4]), isNull);
+    });
+
+    test('continue watching: one per group, none when one is watched', () {
+      var data = started(WatchData.empty, 1, 30, 1);
+      data = started(data, 2, 50, 2);
+      data = started(data, 5, 10, 3);
+      List<int> groupOf(int id) => id == 5 ? [5] : [1, 2, 3];
+      expect(continueMovieGroups(data, groupOf).map((e) => e.$1), [5, 2]);
+      data = markWatched(data, [movieTarget(3)], watched: true, now: _at(4));
+      expect(continueMovieGroups(data, groupOf).map((e) => e.$1), [5]);
+    });
+  });
+
+  group('last played', () {
+    test('the newest start wins; round-trips and merges', () {
+      var data = recordPlayed(WatchData.empty, movieKey(1), _at(1));
+      data = recordPlayed(data, movieKey(2), _at(2));
+      data = recordPlayed(data, seriesKey(7), _at(3));
+      expect(lastPlayed(data, [movieKey(1), movieKey(2)]), movieKey(2));
+      expect(lastPlayed(data, [movieKey(3)]), isNull);
+      final back = WatchData.fromJson(data.toJson());
+      expect(back.played, data.played);
+      final other = recordPlayed(WatchData.empty, movieKey(1), _at(9));
+      expect(
+        lastPlayed(back.merge(other), [movieKey(1), movieKey(2)]),
+        movieKey(1),
+      );
+    });
+
+    test('episode numbers round-trip; old records have none', () {
+      final p = WatchProgress(
+        position: Duration.zero,
+        updatedAt: _t0,
+        seriesId: 1,
+        season: 2,
+        episode: 3,
+      );
+      final back = WatchProgress.fromJson(p.toJson(), _t0);
+      expect(back, p);
+      final old = WatchProgress.fromJson({'pos': 1, 'series': 1}, _t0);
+      expect(old.season, isNull);
+      expect(old.episode, isNull);
     });
   });
 }
