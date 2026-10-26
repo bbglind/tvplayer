@@ -108,6 +108,21 @@ weights 400, 500, 600, 700.
 - **Poster**: 2:3, radius 12, placeholder `card`. Badges top-left
   ("New episode": accent bg; LIVE: live bg; both with `onAccent` text).
   Watched/downloaded marker: small ✓ badge in success colour.
+- **Provider label**: movie, series and episode titles drop the provider's
+  tag, year and country (`NF-DO - Show (2025) (GB)` → "Show"); the tag
+  shows as-is (never translated) in a small label before the title: pill
+  radius 4, `hover` bg, `textPrimary`, 11/700 (13 on page and hero titles),
+  letter spacing ~0.08em. Hover or keyboard focus shows the provider's full
+  name (in the player: in the hint line). Only tags that recur in the
+  catalogue count, so titles like "CSI - Vegas" stay whole. Episode rows
+  show "N. <the episode's own name>", else "N. Episode N".
+- **Other sources** (movie and series details, below the details or the
+  episodes): the other variants of the same title from the provider (same
+  TMDB id, else title and year) as a row of normal posters with their
+  label. The one played last has an accent history icon ("Last played");
+  sources sharing a label show the provider's date ("Added 24 Apr 2026",
+  series "Updated …"), also in the details' meta line. Left out when there
+  are none.
 - **Thumbnail** (continue watching, episodes): 16:9, radius 12.
 - **LIVE badge**: `live` background, `onAccent` text, 10–12 px, 700,
   uppercase, radius 4–6.
@@ -163,7 +178,7 @@ weights 400, 500, 600, 700.
   my categories; otherwise an outline star that shows only on hover or
   focus. At the right end of channel rows; at the top left of posters, on a
   translucent `scrim` tile.
-- **Context menu**: channels, movies and series open one on right click,
+- **Context menu**: channels, movies, series and episodes open one on right click,
   long press (touch) and Menu key / Shift+F10. Menus and dialogs can't be
   drawn over the embedded mpv video: next to it, use a side panel (like the
   track panel) instead.
@@ -227,6 +242,9 @@ English for now.
 | Playlist | The provider's channels, movies, series and TV guide, as downloaded |
 | Refresh all | Downloads every part of the playlist again, one after another |
 | Automatic refresh | The setting: Off, On app start, Every 6 hours, Daily (default) |
+| Provider label | The provider's own tag of a title (`NF`, `4K-SC`), shown as-is |
+| Other sources | The other variants of the same movie or series in the provider's catalogue |
+| Last played | The source of a title that was played most recently |
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).
@@ -236,6 +254,11 @@ English for now.
   category. Under one of my categories it shows all of them except those
   in hidden categories, with the ones in the selected category first. With
   none, the row and its heading are left out.
+- A movie or series and its other sources count as one: watched when
+  watched in any of them, resumed from the newest position ("Resume from
+  12:34 (from NF)" when that was another source), marked watched or
+  unwatched together (episodes matched by season and episode number), and
+  shown once in "Continue watching" (the source watched last).
 - "Remove from Continue watching" (context menu of its cards on Home, the
   Continue watching page and in Movies/Series) clears a movie's resume
   position; a series leaves the list but its episodes keep their watched
