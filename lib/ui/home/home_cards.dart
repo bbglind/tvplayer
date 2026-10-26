@@ -12,6 +12,7 @@ import '../epg/now_next.dart';
 import '../favourites/category_icons.dart';
 import '../favourites/favourite_menu.dart';
 import '../live/live_tv_screen.dart';
+import '../live/replay_mark.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/widgets.dart';
@@ -96,7 +97,7 @@ class _RecentChannelCardState extends ConsumerState<RecentChannelCard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          TruncatedText(channel.name, style: text.titleMedium),
+                          ChannelName(channel, style: text.titleMedium),
                           Text(
                             'Watched ${formatAgo(widget.watchedAt, now)}',
                             maxLines: 1,

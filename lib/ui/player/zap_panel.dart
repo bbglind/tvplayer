@@ -8,6 +8,7 @@ import '../../state/providers.dart';
 import '../epg/now_next.dart';
 import '../favourites/category_icons.dart';
 import '../live/live_tv_screen.dart';
+import '../live/replay_mark.dart';
 import '../theme/app_colors.dart';
 import '../theme/widgets.dart';
 import 'player_hint.dart';
@@ -220,7 +221,10 @@ class _ChannelListState extends State<_ChannelList> {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: PlayerTooltip(
-            message: 'Watch ${channel.name}',
+            message: [
+              'Watch ${channelDisplayName(channel)}',
+              if (channel.hasReplay) replayDescription(channel.archiveDays),
+            ].join(' · '),
             side: true,
             child: AppTile(
               key: Key('zap.channel.${channel.id}'),
@@ -237,9 +241,11 @@ class _ChannelListState extends State<_ChannelList> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TruncatedText(
-                          channel.name,
+                        ChannelName(
+                          channel,
                           style: Theme.of(context).textTheme.titleMedium,
+                          // Over the video: the row's hint says it.
+                          markTooltip: false,
                         ),
                         NowNextLine(channel: channel),
                       ],

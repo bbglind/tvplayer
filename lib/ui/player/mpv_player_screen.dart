@@ -22,6 +22,7 @@ import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
 import '../favourites/favourite_menu.dart';
 import '../favourites/favourite_panel.dart';
+import '../live/replay_mark.dart';
 import '../theme/app_colors.dart';
 import '../vod/provider_title.dart';
 import 'next_episode_card.dart';
@@ -864,7 +865,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   Widget _buildTitle() {
     final tags = ref.watch(providerTagsProvider);
     return switch (_request) {
-      LivePlayback(:final channel) => Text(channel.name),
+      LivePlayback(:final channel) => Text(channelDisplayName(channel)),
       MoviePlayback(:final movie) => ProviderTitle(movie.name, player: true),
       EpisodePlayback(:final info, :final episode) => ProviderTitle(
         info.series.name,

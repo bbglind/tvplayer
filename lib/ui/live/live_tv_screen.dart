@@ -18,6 +18,7 @@ import '../vod/poster.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import 'replay_mark.dart';
 import 'separator_header.dart';
 
 /// The page title and channel search on top; categories on the left and
@@ -349,6 +350,7 @@ class _ChannelRowState extends State<ChannelRow> {
                     number: channel.number,
                     logoUrl: channel.logoUrl,
                     title: channel.name,
+                    channel: channel,
                     below: NowNextLine(channel: channel),
                   ),
                 ),
@@ -373,19 +375,22 @@ class _ChannelRowState extends State<ChannelRow> {
   }
 }
 
-/// Number, logo tile, [title] and the line [below] it.
+/// Number, logo tile, [title] (with its replay mark when it is a
+/// [channel]) and the line [below] it.
 class _ChannelContent extends StatelessWidget {
   const _ChannelContent({
     required this.number,
     required this.logoUrl,
     required this.title,
     required this.below,
+    this.channel,
     this.dimmed = false,
   });
 
   final int? number;
   final String? logoUrl;
   final String title;
+  final LiveStream? channel;
   final Widget below;
   final bool dimmed;
 
@@ -406,12 +411,17 @@ class _ChannelContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TruncatedText(
-                title,
-                style: dimmed
-                    ? text.titleMedium?.copyWith(color: AppColors.textSecondary)
-                    : text.titleMedium,
-              ),
+              if (channel case final channel?)
+                ChannelName(channel, style: text.titleMedium)
+              else
+                TruncatedText(
+                  title,
+                  style: dimmed
+                      ? text.titleMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        )
+                      : text.titleMedium,
+                ),
               below,
             ],
           ),

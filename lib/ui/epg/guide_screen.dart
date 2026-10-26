@@ -14,6 +14,7 @@ import '../../state/guide_controller.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../favourites/category_icons.dart';
+import '../live/replay_mark.dart';
 import '../live/separator_header.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -872,9 +873,10 @@ class _ChannelCell extends ConsumerWidget {
                 if (channel.number case final number?)
                   ChannelNumber(number, style: theme.textTheme.bodySmall),
                 Expanded(
-                  child: TruncatedText(
-                    keepLastWordAttached(channel.name),
+                  child: ChannelName(
+                    channel,
                     maxLines: 2,
+                    format: keepLastWordAttached,
                   ),
                 ),
               ],
