@@ -99,7 +99,7 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
       _ => SearchGroupStatus.loading,
     };
     final liveError = live is AsyncError && liveCatalog == null
-        ? describeProviderError(live.error!)
+        ? describeRefreshError(live.error!)
         : null;
     final generation = ++_generation;
     final previous = _last;

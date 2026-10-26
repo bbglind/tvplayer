@@ -4,18 +4,19 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/app_settings.dart';
 import '../../data/provider_storage.dart';
-import '../../state/guide_controller.dart';
 import '../../state/providers.dart';
-import '../epg/guide_screen.dart' show formatGuideDate, formatShift;
+import '../epg/guide_screen.dart' show formatShift;
 import '../setup/setup_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'category_settings_screen.dart';
 import 'language_list_editor.dart';
+import 'playlist_section.dart';
 import 'settings_section.dart';
 import 'time_zone_picker.dart';
 
-/// Provider management, TV guide settings and player options.
+/// Provider management, the playlist, TV guide settings and player
+/// options.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -113,9 +114,6 @@ class SettingsScreen extends ConsumerWidget {
     final config = ref.watch(savedProviderProvider).value;
     final settings =
         ref.watch(appSettingsProvider).value ?? const AppSettings();
-    final time = ref.watch(guideTimeProvider);
-    final guideState = ref.watch(guideProvider);
-    final guide = guideState.guide;
     final favourites = ref.watch(favouritesProvider);
     return ListView(
       padding: AppSpacing.page,
@@ -166,6 +164,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+        const PlaylistSection(),
         SettingsSection(
           title: 'TV guide',
           children: [
@@ -210,29 +209,6 @@ class SettingsScreen extends ConsumerWidget {
                   ref,
                   settings.copyWith(guideShiftHours: h),
                 ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.update),
-              title: const Text('Guide data'),
-              subtitle: Text(switch (guideState) {
-                GuideState(supported: false) =>
-                  'Not available for this provider',
-                GuideState(loading: true) => 'Updating…',
-                _ when guide == null =>
-                  guideState.error ?? 'Not downloaded yet',
-                _ =>
-                  'Updated ${formatGuideDate(time, guide.fetchedAt)} '
-                      '${time.formatLocalHm(guide.fetchedAt)}, '
-                      '${guide.programCount} programmes'
-                      '${guideState.error == null ? '' : ' · last update failed'}',
-              }),
-              trailing: IconButton(
-                tooltip: 'Refresh TV guide',
-                icon: const Icon(Icons.refresh),
-                onPressed: guideState.supported && !guideState.loading
-                    ? ref.read(guideProvider.notifier).refresh
-                    : null,
               ),
             ),
           ],

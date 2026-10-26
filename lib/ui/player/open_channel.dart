@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../player/playback_request.dart';
+import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import 'mpv_player_screen.dart';
 import 'player_screen.dart';
@@ -14,12 +15,20 @@ void openChannel(BuildContext context, WidgetRef ref, LiveStream channel) {
   openPlayback(context, ref, LivePlayback(channel));
 }
 
-/// Opens the player for [request].
+/// Opens the player for [request]. Automatic playlist refresh waits until
+/// it is closed.
 Future<void> openPlayback(
   BuildContext context,
   WidgetRef ref,
   PlaybackRequest request,
-) => Navigator.of(context).push(playbackRoute(ref, request));
+) async {
+  final playback = ref.read(playbackActiveProvider.notifier)..begin();
+  try {
+    await Navigator.of(context).push(playbackRoute(ref, request));
+  } finally {
+    playback.end();
+  }
+}
 
 /// The player route for [request]: mpv on Linux, media_kit elsewhere.
 Route<void> playbackRoute(WidgetRef ref, PlaybackRequest request) =>

@@ -7,6 +7,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/errors.dart';
 import '../../format.dart';
 import '../../state/category_selection.dart';
+import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
 import '../favourites/favourite_menu.dart';
@@ -67,7 +68,11 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
             IconButton(
               tooltip: 'Reload channels',
               icon: const Icon(Icons.refresh),
-              onPressed: () => ref.invalidate(liveCatalogProvider),
+              onPressed:
+                  ref.watch(playlistRefreshProvider).running ==
+                      PlaylistPart.channels
+                  ? null
+                  : () => refreshPlaylistPart(ref, PlaylistPart.channels),
             ),
             if (ref.watch(guideProvider) case final guide when guide.supported)
               IconButton(
@@ -75,7 +80,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
                 icon: const Icon(Icons.event_repeat),
                 onPressed: guide.loading
                     ? null
-                    : ref.read(guideProvider.notifier).refresh,
+                    : () => refreshPlaylistPart(ref, PlaylistPart.guide),
               ),
           ],
         ),
@@ -84,8 +89,8 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
             skipLoadingOnRefresh: false,
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) => _ErrorView(
-              message: describeProviderError(error),
-              onRetry: () => ref.invalidate(liveCatalogProvider),
+              message: describeRefreshError(error),
+              onRetry: () => refreshPlaylistPart(ref, PlaylistPart.channels),
             ),
             data: (catalog) => CategoryLayout(
               section: 'live',

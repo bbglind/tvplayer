@@ -15,14 +15,20 @@ import '../models/movie.dart';
 import '../models/provider_config.dart';
 import '../models/series.dart';
 import '../util/json.dart';
+import '../util/provider_failure.dart';
 
 /// Error talking to an Xtream panel. Messages never contain the host,
 /// credentials or request URLs.
 class XtreamException implements Exception {
-  const XtreamException(this.message, {this.statusCode});
+  const XtreamException(this.message, {this.statusCode, ProviderFailure? kind})
+    : _kind = kind;
 
   final String message;
   final int? statusCode;
+  final ProviderFailure? _kind;
+
+  /// What went wrong; from [statusCode] unless given.
+  ProviderFailure get kind => _kind ?? ProviderFailure.forStatus(statusCode);
 
   @override
   String toString() => statusCode == null
@@ -32,7 +38,8 @@ class XtreamException implements Exception {
 
 /// The panel rejected the username or password.
 class XtreamAuthException extends XtreamException {
-  const XtreamAuthException([super.message = 'Authentication failed']);
+  const XtreamAuthException([super.message = 'Authentication failed'])
+    : super(kind: ProviderFailure.auth);
 }
 
 /// Client for the Xtream Codes `player_api.php` API.
@@ -241,11 +248,20 @@ class XtreamClient {
           .send(http.Request('GET', xmltvUrl()))
           .timeout(timeout);
     } on TimeoutException {
-      throw const XtreamException('Request timed out ($what)');
+      throw const XtreamException(
+        'Request timed out ($what)',
+        kind: ProviderFailure.timeout,
+      );
     } on http.ClientException catch (e) {
-      throw XtreamException('Network error ($what): ${_redact(e.message)}');
+      throw XtreamException(
+        'Network error ($what): ${_redact(e.message)}',
+        kind: ProviderFailure.network,
+      );
     } catch (e) {
-      throw XtreamException('Network error ($what): ${e.runtimeType}');
+      throw XtreamException(
+        'Network error ($what): ${e.runtimeType}',
+        kind: ProviderFailure.network,
+      );
     }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
@@ -268,14 +284,21 @@ class XtreamClient {
       await sink.close().catchError((_) {});
       if (await target.exists()) await target.delete();
       throw switch (e) {
-        TimeoutException() => const XtreamException('Download stalled ($what)'),
+        TimeoutException() => const XtreamException(
+          'Download stalled ($what)',
+          kind: ProviderFailure.timeout,
+        ),
         http.ClientException(:final message) => XtreamException(
           'Network error ($what): ${_redact(message)}',
+          kind: ProviderFailure.network,
         ),
         FileSystemException(:final message) => XtreamException(
           'Could not save the guide: $message',
         ),
-        _ => XtreamException('Download failed ($what): ${e.runtimeType}'),
+        _ => XtreamException(
+          'Download failed ($what): ${e.runtimeType}',
+          kind: ProviderFailure.network,
+        ),
       };
     }
   }
@@ -352,12 +375,21 @@ class XtreamClient {
     try {
       response = await _http.get(uri).timeout(timeout);
     } on TimeoutException {
-      throw XtreamException('Request timed out ($what)');
+      throw XtreamException(
+        'Request timed out ($what)',
+        kind: ProviderFailure.timeout,
+      );
     } on http.ClientException catch (e) {
       // ClientException.toString() includes the URL, so only use the message.
-      throw XtreamException('Network error ($what): ${_redact(e.message)}');
+      throw XtreamException(
+        'Network error ($what): ${_redact(e.message)}',
+        kind: ProviderFailure.network,
+      );
     } catch (e) {
-      throw XtreamException('Network error ($what): ${e.runtimeType}');
+      throw XtreamException(
+        'Network error ($what): ${e.runtimeType}',
+        kind: ProviderFailure.network,
+      );
     }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
@@ -384,7 +416,10 @@ class XtreamClient {
     } on FormatException {
       // FormatException.toString() includes the body, which may echo the
       // credentials back; don't propagate it.
-      throw XtreamException('Invalid JSON response ($what)');
+      throw XtreamException(
+        'Invalid JSON response ($what)',
+        kind: ProviderFailure.invalidData,
+      );
     }
   }
 

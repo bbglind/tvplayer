@@ -295,12 +295,14 @@ class M3uLiveSource implements LiveSource {
   static const ungroupedId = '';
 
   final M3uClient _client;
-  final Map<String, String> _urls = {};
+  Map<String, String> _urls = const {};
 
   @override
   Future<LiveCatalog> load() async {
     final entries = await _client.fetch();
-    _urls.clear();
+    // Swapped in whole once the playlist is read, so a failed or running
+    // refresh never changes the URL behind a channel.
+    final urls = <String, String>{};
     final stableIds = m3uStableIds(entries);
     final groups = <String>{};
     final channels = <LiveStream>[];
@@ -308,7 +310,7 @@ class M3uLiveSource implements LiveSource {
       final group = e.groupTitle ?? ungroupedId;
       groups.add(group);
       final id = '$i';
-      _urls[id] = e.url;
+      urls[id] = e.url;
       channels.add(
         LiveStream(
           id: id,
@@ -320,6 +322,7 @@ class M3uLiveSource implements LiveSource {
         ),
       );
     }
+    _urls = urls;
     return LiveCatalog(
       categories: [
         for (final g in groups)
@@ -336,7 +339,8 @@ class M3uLiveSource implements LiveSource {
     return Uri.parse(url);
   }
 
-  // A playlist's `url-tvg` guide isn't supported yet.
+  // A playlist's `url-tvg` guide isn't supported yet. A guide URL added
+  // later must be kept out of error messages, like the playlist URL.
   @override
   bool get hasGuide => false;
 

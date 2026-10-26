@@ -234,17 +234,16 @@ void main() {
   });
 
   group('loading and refreshing', () {
-    testWidgets('a stale cache is shown, then refreshed in the background', (
-      tester,
-    ) async {
+    testWidgets('a stale cache is shown, then refreshed by automatic '
+        'refresh', (tester) async {
       epg
         ..cached = _guide(
-          fetchedAt: _now.subtract(const Duration(hours: 13)),
+          fetchedAt: _now.subtract(const Duration(hours: 25)),
           suffix: ' (old)',
         )
         ..next = _guide(fetchedAt: _now, suffix: ' (new)')
         ..gate = Completer();
-      await pump(tester, const GuideScreen());
+      await pump(tester, const AutoRefreshHost(child: GuideScreen()));
       await tester.pump();
       await tester.pump();
       expect(find.text('Across The Switch (old)'), findsOneWidget);
@@ -275,9 +274,12 @@ void main() {
       tester,
     ) async {
       epg
-        ..cached = _guide(fetchedAt: _now.subtract(const Duration(days: 1)))
-        ..failure = const XtreamException('Request timed out (xmltv)');
-      await pump(tester, const GuideScreen());
+        ..cached = _guide(fetchedAt: _now.subtract(const Duration(days: 2)))
+        ..failure = const XtreamException(
+          'Request timed out (xmltv)',
+          kind: ProviderFailure.timeout,
+        );
+      await pump(tester, const AutoRefreshHost(child: GuideScreen()));
       await tester.pumpAndSettle();
       expect(find.text('Across The Switch'), findsOneWidget);
       expect(find.byIcon(Icons.warning_amber), findsOneWidget);
@@ -286,10 +288,14 @@ void main() {
     testWidgets('a failed first download offers retry', (tester) async {
       epg
         ..cached = null
-        ..failure = const XtreamException('Request timed out (xmltv)');
+        ..failure = const XtreamException(
+          'Request timed out (xmltv)',
+          kind: ProviderFailure.timeout,
+        );
       await pump(tester, const GuideScreen());
       await tester.pumpAndSettle();
-      expect(find.text('Request timed out (xmltv)'), findsOneWidget);
+      expect(find.text("The provider didn't respond in time."), findsOneWidget);
+      expect(find.textContaining('xmltv'), findsNothing);
 
       epg
         ..failure = null
@@ -958,9 +964,12 @@ void main() {
     ) async {
       await pump(tester, const SettingsScreen());
       await tester.pumpAndSettle();
+      final zone = find.byKey(const Key('settings.timeZone'));
+      await tester.scrollUntilVisible(zone, 100);
+      await tester.pumpAndSettle();
       expect(find.text('Device time zone (Europe/Stockholm)'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('settings.timeZone')));
+      await tester.tap(zone);
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('timeZone.search')),
@@ -983,7 +992,10 @@ void main() {
     testWidgets('saves the time shift', (tester) async {
       await pump(tester, const SettingsScreen());
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('settings.shift')));
+      final shift = find.byKey(const Key('settings.shift'));
+      await tester.scrollUntilVisible(shift, 100);
+      await tester.pumpAndSettle();
+      await tester.tap(shift);
       await tester.pumpAndSettle();
       await tester.tap(find.text('+2 h').last);
       await tester.pumpAndSettle();

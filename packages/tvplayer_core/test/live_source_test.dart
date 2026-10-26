@@ -96,6 +96,22 @@ void main() {
       );
       expect(catalog.channelsIn(null).length, catalog.channels.length);
     });
+
+    test('a failed reload keeps the URLs of the loaded channels', () async {
+      var fail = false;
+      final source = LiveSource.forConfig(
+        const ProviderConfig.m3u(playlistUrl: _playlistUrl),
+        httpClient: MockClient(
+          (_) async =>
+              fail ? http.Response('', 502) : _utf8(fixture('playlist.m3u')),
+        ),
+      );
+      final catalog = await source.load();
+      final channel = catalog.channelsIn('Test News').single;
+      fail = true;
+      await expectLater(source.load(), throwsA(isA<M3uException>()));
+      expect(source.streamUrl(channel).path, '/live/testuser/testpass/101.ts');
+    });
   });
 
   group('XtreamLiveSource', () {

@@ -1,8 +1,9 @@
 /// UI-independent core of tvplayer: models plus Xtream, M3U and XMLTV
 /// clients/parsers, the TV guide (matching and time zones), movie and
 /// series catalogues, metadata sources, audio/subtitle track selection and
-/// watch history, favourites and hidden categories, title parsing,
-/// search, sorting and filters. Pure Dart, no Flutter dependency.
+/// watch history, favourites and hidden categories, playlist refresh
+/// scheduling, title parsing, search, sorting and filters. Pure Dart, no
+/// Flutter dependency.
 library;
 
 export 'src/epg/channel_name.dart';
@@ -25,11 +26,15 @@ export 'src/models/m3u_entry.dart';
 export 'src/models/movie.dart';
 export 'src/models/provider_config.dart';
 export 'src/models/series.dart';
+export 'src/playlist/missing_items.dart';
+export 'src/playlist/playlist_status.dart';
+export 'src/playlist/refresh_schedule.dart';
 export 'src/text/search_text.dart';
 export 'src/text/title_parser.dart';
 export 'src/tracks/language.dart';
 export 'src/tracks/media_track.dart';
 export 'src/tracks/track_picker.dart';
+export 'src/util/provider_failure.dart';
 export 'src/util/provider_key.dart';
 export 'src/vod/vod_catalog.dart';
 export 'src/vod/vod_query.dart';

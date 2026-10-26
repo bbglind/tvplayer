@@ -221,7 +221,7 @@ void main() {
     await _pump(tester, source);
 
     expect(find.text('Could not load channels'), findsOneWidget);
-    expect(find.textContaining('Request timed out'), findsOneWidget);
+    expect(find.text("The provider didn't respond in time."), findsOneWidget);
 
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();

@@ -179,6 +179,24 @@ weights 400, 500, 600, 700.
   (icon, type overline, name, count), Continue watching thumbnails and
   Recently added posters, the last two with "See all". Rows still loading show `card`
   placeholders; empty rows are left out.
+- **Settings › Playlist** (right after Provider): a row per part
+  (Channels, Movies, Series, TV guide) with when it was last updated, in
+  local time ("Updated Today 12:40 · 4,512 channels", "Yesterday 21:05",
+  "Mon 20 Oct 14:05"), "Updating…" with a small spinner or "Waiting…"
+  during a refresh, and after a failure the reason in plain words ("The
+  provider's server had a problem (HTTP 502).", never a URL or account),
+  "The previous list is kept." and the last successful update, with an
+  error icon. Parts the provider lacks say "Not available for this
+  provider". Then "Automatic refresh" (dropdown), "No longer listed by the
+  provider" when some of my items are gone (counts; favourites open a list
+  of names), and the primary button "Refresh all" ("Refreshing 2 of 4…"
+  and disabled while it runs). The ⟳ buttons of Live TV, TV Guide, Movies
+  and Series refresh their part the same way and update the same times.
+- **Automatic refresh notice**: a failed automatic refresh only shows a
+  snack bar "Couldn't refresh movies. The previous data is kept." with
+  "Details" (opens Settings); like every snack bar with an action it closes
+  by itself after 6 s and when another page opens. Never a dialog, and
+  nothing while something plays.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).
@@ -203,6 +221,9 @@ English for now.
 | Edit home | The mode that moves and hides Home rows |
 | Channels | The player's zap panel of my Live TV categories |
 | Play next episode | The setting and countdown that start the next episode |
+| Playlist | The provider's channels, movies, series and TV guide, as downloaded |
+| Refresh all | Downloads every part of the playlist again, one after another |
+| Automatic refresh | The setting: Off, On app start, Every 6 hours, Daily (default) |
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).
@@ -251,6 +272,12 @@ English for now.
   fullscreen), s subtitles, m mute, c channels, n next episode.
 - Episodes with a next one get a "Next episode (n)" button after
   play/pause; it marks the current episode watched and plays the next.
+- "Automatic refresh" (Settings › Playlist, kept per provider): Off, On
+  app start, Every 6 hours, Daily (default). It runs only while the app is
+  open (checked every 15 min, and at start when the time has passed),
+  waits while something plays, and after a failure tries again an hour
+  later at the earliest. Off still downloads a part that has never been
+  downloaded.
 - "Play next episode" (Settings › Player): Off, 15, 20, 30 (default), 45,
   60, 90 or 120 s before the end. The card reads "Next episode in 12 s";
   after a season finale it is the next season's first episode, after the

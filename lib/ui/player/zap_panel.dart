@@ -181,7 +181,7 @@ class _ChannelListState extends State<_ChannelList> {
   final _focus = FocusNode(debugLabel: 'zap.channel');
   late final int _focused = math.max(
     0,
-    widget.channels.indexWhere((c) => c.id == widget.current.id),
+    widget.channels.indexWhere((c) => c.stableId == widget.current.stableId),
   );
 
   @override
@@ -216,7 +216,7 @@ class _ChannelListState extends State<_ChannelList> {
       addRepaintBoundaries: false,
       itemBuilder: (context, i) {
         final channel = widget.channels[i];
-        final current = channel.id == widget.current.id;
+        final current = channel.stableId == widget.current.stableId;
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: PlayerTooltip(

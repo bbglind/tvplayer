@@ -80,3 +80,28 @@ String formatRemaining(Duration position, Duration duration) {
   final left = duration - position;
   return '-${formatDuration(left.isNegative ? Duration.zero : left)}';
 }
+
+/// Short weekday names, Monday first.
+const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// Short month names, January first.
+const monthNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// When something was last updated, both times in local time: `Today
+/// 12:40`, `Yesterday 21:05`, else `Mon 20 Oct 14:05` (with the year when
+/// it isn't [now]'s).
+String formatUpdated(DateTime time, DateTime now) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final hm = '${two(time.hour)}:${two(time.minute)}';
+  final day = DateTime.utc(time.year, time.month, time.day);
+  final today = DateTime.utc(now.year, now.month, now.day);
+  final days = today.difference(day).inDays;
+  if (days == 0) return 'Today $hm';
+  if (days == 1) return 'Yesterday $hm';
+  final year = time.year == now.year ? '' : ' ${time.year}';
+  return '${weekdayNames[time.weekday - 1]} ${time.day} '
+      '${monthNames[time.month - 1]}$year $hm';
+}

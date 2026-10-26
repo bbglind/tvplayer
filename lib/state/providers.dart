@@ -12,6 +12,7 @@ import '../data/app_settings.dart';
 import '../data/connection_tester.dart';
 import '../data/device_time_zone.dart';
 import '../data/epg_repository.dart';
+import '../data/errors.dart';
 import '../data/poster_cache.dart';
 import '../data/provider_storage.dart';
 import '../data/vod_repository.dart';
@@ -20,6 +21,7 @@ import '../player/mpv/video_embed.dart';
 import 'category_selection.dart';
 import 'favourites_controller.dart';
 import 'guide_controller.dart';
+import 'playlist_refresh.dart';
 import 'vod_controller.dart';
 import 'watch_controller.dart';
 
@@ -208,6 +210,14 @@ class CategoryEditing extends Notifier<String?> {
   void toggle(String section) => state = state == section ? null : section;
 }
 
+/// Creates the playlist status store of a provider (by [providerKey]).
+/// Overridden in tests.
+final playlistStatusStoreProvider =
+    Provider<PlaylistStatusStore Function(String key)>(
+      (ref) =>
+          (key) => _FilePlaylistStatusStore(key),
+    );
+
 /// Poster and logo images, cached on disk. Overridden in tests.
 final posterLoaderProvider = Provider<PosterLoader>(
   (ref) => PosterCache(client: ref.watch(httpClientProvider)),
@@ -250,20 +260,110 @@ class _FileFavouritesStore implements FavouritesStore {
   Future<void> save(FavouritesData data) async => (await _store).save(data);
 }
 
+/// [JsonFilePlaylistStatusStore] in the app support directory, resolved
+/// lazily.
+class _FilePlaylistStatusStore implements PlaylistStatusStore {
+  _FilePlaylistStatusStore(this._key);
+
+  final String _key;
+
+  Future<PlaylistStatusStore> get _store async => JsonFilePlaylistStatusStore(
+    File(
+      '${(await getApplicationSupportDirectory()).path}/playlist/$_key.json',
+    ),
+  );
+
+  @override
+  Future<PlaylistStatus> load() async => (await _store).load();
+
+  @override
+  Future<void> save(PlaylistStatus status) async => (await _store).save(status);
+}
+
 /// Categories and channels of the active provider.
 ///
 /// This is the session cache: the catalog is fetched once and kept in memory
-/// until the provider changes or [WidgetRef.invalidate] is called (retry or
-/// refresh). It is never written to disk.
-final liveCatalogProvider = FutureProvider<LiveCatalog>((ref) async {
-  final source = ref.watch(liveSourceProvider);
-  if (source == null) throw StateError('No provider configured');
-  final catalog = await source.load();
-  catalog.attachSearchIndex(
-    await buildSearchIndex(ref.read(backgroundRunnerProvider), catalog.names),
-  );
-  return catalog;
-});
+/// until the provider changes or it is refreshed. It is never written to
+/// disk.
+final liveCatalogProvider =
+    AsyncNotifierProvider<LiveCatalogController, LiveCatalog>(
+      LiveCatalogController.new,
+    );
+
+/// Loads the channels, and on [refresh] downloads them again, keeping the
+/// current ones until the new ones are ready (or for good, when that
+/// fails). Records each download in [playlistStatusProvider].
+class LiveCatalogController extends AsyncNotifier<LiveCatalog> {
+  Future<String?>? _refreshing;
+
+  @override
+  Future<LiveCatalog> build() async {
+    final source = ref.watch(liveSourceProvider);
+    if (source == null) throw StateError('No provider configured');
+    try {
+      final catalog = await _download(source);
+      _record(null);
+      return catalog;
+    } catch (e) {
+      _record(describeRefreshError(e));
+      rethrow;
+    }
+  }
+
+  /// Records a download in [playlistStatusProvider]: a success, or the
+  /// failure [error].
+  void _record(String? error) {
+    if (!ref.mounted) return;
+    final status = ref.read(playlistStatusProvider.notifier);
+    final now = ref.read(clockProvider);
+    if (error == null) {
+      status.recordSuccess(PlaylistPart.channels, now);
+    } else {
+      status.recordFailure(PlaylistPart.channels, now, error);
+    }
+  }
+
+  Future<LiveCatalog> _download(LiveSource source) async {
+    final catalog = await source.load();
+    catalog.attachSearchIndex(
+      await buildSearchIndex(ref.read(backgroundRunnerProvider), catalog.names),
+    );
+    return catalog;
+  }
+
+  /// Downloads the channels again; the error description when that fails.
+  /// Concurrent calls share one download.
+  Future<String?> refresh() =>
+      _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
+
+  Future<String?> _refresh() async {
+    final source = ref.read(liveSourceProvider);
+    if (source == null) return null;
+    final current = state.value;
+    // With nothing loaded yet (it failed) the page shows loading again.
+    if (current == null) state = const AsyncLoading();
+    try {
+      final catalog = await _download(source);
+      checkNotEmptied(
+        before: current?.channelCount ?? 0,
+        after: catalog.channelCount,
+      );
+      if (!ref.mounted) return null;
+      state = AsyncData(catalog);
+      _record(null);
+      return null;
+    } catch (e, stack) {
+      final message = describeRefreshError(e);
+      // Only the plain description: never the URL or credentials.
+      debugPrint('Loading channels failed: $message');
+      if (!ref.mounted) return message;
+      // The current channels stay; without any, the page shows the error.
+      if (current == null) state = AsyncError(e, stack);
+      _record(message);
+      return message;
+    }
+  }
+}
 
 /// Selected live category, shared by Live TV and the TV guide. Resets when
 /// the provider changes. Read [liveSelectionProvider] for what to show.

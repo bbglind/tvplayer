@@ -12,12 +12,15 @@ abstract interface class EpgRepository {
 
   /// Downloads the guide from [source], keeps the programmes the
   /// [channels] can use and from [keepFrom] on, and caches the result.
-  /// Throws [XtreamException] on download errors.
+  /// Throws [XtreamException] on download errors, and with [rejectEmpty]
+  /// [EmptyResultException] (keeping the cache) when no programmes are
+  /// left.
   Future<EpgGuide> refresh(
     LiveSource source,
     List<LiveStream> channels, {
     required DateTime now,
     required DateTime keepFrom,
+    bool rejectEmpty = false,
   });
 
   /// Deletes the cache, e.g. when the provider changes.
@@ -61,6 +64,7 @@ class FileEpgRepository implements EpgRepository {
     List<LiveStream> channels, {
     required DateTime now,
     required DateTime keepFrom,
+    bool rejectEmpty = false,
   }) async {
     final download = await _file('epg_download.xml');
     final cachePath = (await _file(_cacheName)).path;
@@ -84,6 +88,9 @@ class FileEpgRepository implements EpgRepository {
           names: names,
           keepFrom: keepFrom,
         );
+        if (rejectEmpty && guide.programCount == 0) {
+          throw const EmptyResultException();
+        }
         final tmp = File('$cachePath.tmp');
         await tmp.writeAsString(jsonEncode(guide.toJson()));
         await tmp.rename(cachePath);

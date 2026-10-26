@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../data/errors.dart';
+import 'playlist_refresh.dart';
 import 'providers.dart';
 
 /// The TV guide as shown by the UI.
@@ -31,57 +32,67 @@ final class GuideState {
   final String? error;
 }
 
-/// Loads the cached guide, then refreshes it in the background when it is
-/// older than [maxAge] (checked every [checkInterval]) or on [refresh].
+/// Loads the cached guide, downloads one when there is none, and a fresh
+/// one on [refresh] (by hand or by automatic refresh, see
+/// `PlaylistRefreshController`). Records each download in
+/// [playlistStatusProvider].
 class GuideController extends Notifier<GuideState> {
-  static const maxAge = Duration(hours: 12);
-  static const checkInterval = Duration(hours: 1);
-
   /// How far back finished programmes are kept.
   static const keepPast = Duration(hours: 6);
 
-  Future<void>? _refreshing;
+  Future<String?>? _refreshing;
+  Completer<void> _started = Completer();
+
+  /// Completes once the cache was read (and a download started when there
+  /// was none).
+  Future<void> get started => _started.future;
 
   @override
   GuideState build() {
+    _started = Completer();
     final source = ref.watch(liveSourceProvider);
     if (source == null || !source.hasGuide) {
+      _started.complete();
       return const GuideState(supported: false);
     }
-    final timer = Timer.periodic(checkInterval, (_) => _refreshIfStale());
-    ref.onDispose(timer.cancel);
     unawaited(_start());
     return const GuideState(loading: true);
   }
 
   Future<void> _start() async {
+    final started = _started;
     EpgGuide? cached;
     try {
       cached = await ref.read(epgRepositoryProvider).loadCache();
     } catch (e) {
       debugPrint('Could not read the guide cache (${e.runtimeType})');
     }
-    if (!ref.mounted) return;
-    if (cached != null) state = GuideState(guide: cached);
-    await _refreshIfStale();
+    if (!ref.mounted) return started.complete();
+    if (cached == null) {
+      final download = refresh();
+      started.complete();
+      await download;
+      return;
+    }
+    state = GuideState(guide: cached);
+    ref
+        .read(playlistStatusProvider.notifier)
+        .seed(PlaylistPart.guide, cached.fetchedAt);
+    started.complete();
   }
 
-  Future<void> _refreshIfStale() async {
-    final guide = state.guide;
-    final now = ref.read(clockProvider);
-    if (guide != null && now.difference(guide.fetchedAt) < maxAge) return;
-    await refresh();
-  }
-
-  /// Downloads a fresh guide, keeping the current one until it is ready.
+  /// Downloads a fresh guide, keeping the current one until it is ready,
+  /// or for good when the download fails. Returns why it failed, or null.
   /// Concurrent calls share one download.
-  Future<void> refresh() =>
+  Future<String?> refresh() =>
       _refreshing ??= _download().whenComplete(() => _refreshing = null);
 
-  Future<void> _download() async {
+  Future<String?> _download() async {
     final source = ref.read(liveSourceProvider);
-    if (source == null || !source.hasGuide) return;
-    state = GuideState(guide: state.guide, loading: true);
+    if (source == null || !source.hasGuide) return null;
+    final status = ref.read(playlistStatusProvider.notifier);
+    final current = state.guide;
+    state = GuideState(guide: current, loading: true);
     try {
       final catalog = await ref.read(liveCatalogProvider.future);
       final now = ref.read(clockProvider);
@@ -92,15 +103,24 @@ class GuideController extends Notifier<GuideState> {
             catalog.channels,
             now: now,
             keepFrom: now.subtract(keepPast),
+            rejectEmpty: (current?.programCount ?? 0) > 0,
           );
-      if (!ref.mounted) return;
+      if (!ref.mounted) return null;
       state = GuideState(guide: guide);
+      status.recordSuccess(PlaylistPart.guide, guide.fetchedAt);
+      return null;
     } catch (e) {
-      if (!ref.mounted) return;
-      final message = describeProviderError(e);
-      // Only the redacted description: never the URL or credentials.
+      final message = describeRefreshError(e);
+      // Only the plain description: never the URL or credentials.
       debugPrint('Guide download failed: $message');
+      if (!ref.mounted) return message;
       state = GuideState(guide: state.guide, error: message);
+      status.recordFailure(
+        PlaylistPart.guide,
+        ref.read(clockProvider),
+        message,
+      );
+      return message;
     }
   }
 }

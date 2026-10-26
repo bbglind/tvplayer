@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
+import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../home/continue_actions.dart';
 import 'poster.dart';
@@ -67,7 +68,7 @@ class SeriesScreen extends ConsumerWidget {
       notifier: ref.read(seriesFilterProvider.notifier),
       categoryOf: (item) => item.categoryId,
       itemRef: seriesItemRef,
-      onRefresh: ref.read(seriesCatalogProvider.notifier).refresh,
+      onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.series),
       continueWatching: [
         if (catalog != null)
           for (final (id, progress) in continueSeries(watch))

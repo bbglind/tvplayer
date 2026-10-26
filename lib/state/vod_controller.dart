@@ -6,6 +6,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../data/errors.dart';
 import 'category_selection.dart';
+import 'playlist_refresh.dart';
 import 'providers.dart';
 
 /// A movie or series catalogue as shown by the UI.
@@ -32,17 +33,18 @@ final class VodState<T extends Object> {
   final String? error;
 }
 
-/// Shows the cached catalogue at once, then downloads a fresh one in the
-/// background when it is older than [maxAge] (checked every
-/// [checkInterval]) or on [refresh].
+/// Shows the cached catalogue at once, downloads one when there is none,
+/// and a fresh one on [refresh] (by hand or by automatic refresh, see
+/// `PlaylistRefreshController`). Records each download in
+/// [playlistStatusProvider].
 abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
-  static const maxAge = Duration(hours: 12);
-  static const checkInterval = Duration(hours: 1);
-
-  Future<void>? _refreshing;
+  Future<String?>? _refreshing;
+  Completer<void> _started = Completer();
 
   /// What is loaded, for log messages ("movies", "series").
   String get what;
+
+  PlaylistPart get part;
 
   Future<VodCatalog<T>?> loadCache(String key);
 
@@ -50,18 +52,25 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
 
   Future<void> saveCache(String key, VodCatalog<T> catalog);
 
+  /// Completes once the cache was read (and a download started when there
+  /// was none).
+  Future<void> get started => _started.future;
+
   @override
   VodState<T> build() {
+    _started = Completer();
     final source = ref.watch(vodSourceProvider);
     final key = ref.watch(providerKeyProvider);
-    if (source == null || key == null) return VodState<T>(supported: false);
-    final timer = Timer.periodic(checkInterval, (_) => _refreshIfStale());
-    ref.onDispose(timer.cancel);
+    if (source == null || key == null) {
+      _started.complete();
+      return VodState<T>(supported: false);
+    }
     unawaited(_start(key));
     return VodState<T>(loading: true);
   }
 
   Future<void> _start(String key) async {
+    final started = _started;
     VodCatalog<T>? cached;
     try {
       cached = await loadCache(key);
@@ -69,16 +78,16 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
       debugPrint('Could not read the $what cache (${e.runtimeType})');
     }
     if (cached != null) await _prepareSearch(cached);
-    if (!ref.mounted) return;
-    if (cached != null) state = VodState<T>(catalog: cached);
-    await _refreshIfStale();
-  }
-
-  Future<void> _refreshIfStale() async {
-    final catalog = state.catalog;
-    final now = ref.read(clockProvider);
-    if (catalog != null && now.difference(catalog.fetchedAt) < maxAge) return;
-    await refresh();
+    if (!ref.mounted) return started.complete();
+    if (cached == null) {
+      final download = refresh();
+      started.complete();
+      await download;
+      return;
+    }
+    state = VodState<T>(catalog: cached);
+    ref.read(playlistStatusProvider.notifier).seed(part, cached.fetchedAt);
+    started.complete();
   }
 
   /// Builds [catalog]'s search index in the background unless it has one.
@@ -90,31 +99,42 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
   }
 
   /// Downloads a fresh catalogue, keeping the current one until it is
-  /// ready. Concurrent calls share one download.
-  Future<void> refresh() =>
+  /// ready, or for good when the download fails. Returns why it failed, or
+  /// null. Concurrent calls share one download.
+  Future<String?> refresh() =>
       _refreshing ??= _download().whenComplete(() => _refreshing = null);
 
-  Future<void> _download() async {
+  Future<String?> _download() async {
     final source = ref.read(vodSourceProvider);
     final key = ref.read(providerKeyProvider);
-    if (source == null || key == null) return;
-    state = VodState<T>(catalog: state.catalog, loading: true);
+    if (source == null || key == null) return null;
+    final status = ref.read(playlistStatusProvider.notifier);
+    final current = state.catalog;
+    state = VodState<T>(catalog: current, loading: true);
     try {
       final catalog = await download(source, ref.read(clockProvider));
+      checkNotEmptied(
+        before: current?.items.length ?? 0,
+        after: catalog.items.length,
+      );
       await _prepareSearch(catalog);
-      if (!ref.mounted) return;
+      if (!ref.mounted) return null;
       state = VodState<T>(catalog: catalog);
+      status.recordSuccess(part, catalog.fetchedAt);
       try {
         await saveCache(key, catalog);
       } catch (e) {
         debugPrint('Could not save the $what cache (${e.runtimeType})');
       }
+      return null;
     } catch (e) {
-      if (!ref.mounted) return;
-      final message = describeProviderError(e);
-      // Only the redacted description: never the URL or credentials.
+      final message = describeRefreshError(e);
+      // Only the plain description: never the URL or credentials.
       debugPrint('Loading $what failed: $message');
+      if (!ref.mounted) return message;
       state = VodState<T>(catalog: state.catalog, error: message);
+      status.recordFailure(part, ref.read(clockProvider), message);
+      return message;
     }
   }
 }
@@ -122,6 +142,9 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
 class MovieCatalogController extends VodController<Movie> {
   @override
   String get what => 'movies';
+
+  @override
+  PlaylistPart get part => PlaylistPart.movies;
 
   @override
   Future<VodCatalog<Movie>?> loadCache(String key) =>
@@ -139,6 +162,9 @@ class MovieCatalogController extends VodController<Movie> {
 class SeriesCatalogController extends VodController<Series> {
   @override
   String get what => 'series';
+
+  @override
+  PlaylistPart get part => PlaylistPart.series;
 
   @override
   Future<VodCatalog<Series>?> loadCache(String key) =>

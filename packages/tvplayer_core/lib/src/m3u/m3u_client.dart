@@ -3,14 +3,20 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 
 import '../models/m3u_entry.dart';
+import '../util/provider_failure.dart';
 import 'm3u_parser.dart';
 
 /// Error fetching an M3U playlist. Messages never contain the playlist URL.
 class M3uException implements Exception {
-  const M3uException(this.message, {this.statusCode});
+  const M3uException(this.message, {this.statusCode, ProviderFailure? kind})
+    : _kind = kind;
 
   final String message;
   final int? statusCode;
+  final ProviderFailure? _kind;
+
+  /// What went wrong; from [statusCode] unless given.
+  ProviderFailure get kind => _kind ?? ProviderFailure.forStatus(statusCode);
 
   @override
   String toString() => statusCode == null
@@ -58,14 +64,23 @@ class M3uClient {
     try {
       return await _fetch().timeout(timeout);
     } on TimeoutException {
-      throw const M3uException('Request timed out');
+      throw const M3uException(
+        'Request timed out',
+        kind: ProviderFailure.timeout,
+      );
     } on M3uException {
       rethrow;
     } on http.ClientException catch (e) {
       // ClientException.toString() includes the URL, so only use the message.
-      throw M3uException('Network error: ${_redact(e.message)}');
+      throw M3uException(
+        'Network error: ${_redact(e.message)}',
+        kind: ProviderFailure.network,
+      );
     } catch (e) {
-      throw M3uException('Network error: ${e.runtimeType}');
+      throw M3uException(
+        'Network error: ${e.runtimeType}',
+        kind: ProviderFailure.network,
+      );
     }
   }
 
@@ -87,7 +102,10 @@ class M3uClient {
     // The parser is lenient (it accepts any non-directive line as a URL), so
     // an HTML error page would still "parse"; require at least one real URL.
     if (!entries.any((e) => _looksLikeUrl(e.url))) {
-      throw const M3uException('Playlist is empty or not an M3U file');
+      throw const M3uException(
+        'Playlist is empty or not an M3U file',
+        kind: ProviderFailure.invalidData,
+      );
     }
     return entries;
   }

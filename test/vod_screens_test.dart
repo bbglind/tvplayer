@@ -130,32 +130,15 @@ void main() {
       expect(repo.movies['test']!.items, hasLength(3));
     });
 
-    testWidgets('a stale cache shows at once and refreshes in the '
-        'background', (tester) async {
-      final source = FakeVodSource(movies: syntheticMovies(count: 3));
-      final repo = FakeVodRepository()
-        ..movies['test'] = syntheticMovies(
-          count: 50,
-          fetchedAt: _now.subtract(const Duration(hours: 13)),
-        );
-      await _pump(
-        tester,
-        child: const MoviesScreen(),
-        source: source,
-        vod: repo,
-      );
-      expect(source.movieLoads, 1);
-      expect(repo.movies['test']!.items, hasLength(3));
-    });
-
     testWidgets('download errors show a retry', (tester) async {
       final source = FakeVodSource()
         ..failure = const XtreamException(
           'Request timed out (get_vod_streams)',
+          kind: ProviderFailure.timeout,
         );
       await _pump(tester, child: const MoviesScreen(), source: source);
       expect(find.text('Could not load movies'), findsOneWidget);
-      expect(find.textContaining('timed out'), findsOneWidget);
+      expect(find.text("The provider didn't respond in time."), findsOneWidget);
       source.failure = null;
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();

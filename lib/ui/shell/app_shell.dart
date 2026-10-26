@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_settings.dart';
 import '../../state/navigation.dart';
+import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../epg/guide_screen.dart';
 import '../home/home_screen.dart';
 import '../live/live_tv_screen.dart';
 import '../search/search_screen.dart';
+import '../settings/playlist_section.dart';
 import '../settings/settings_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -24,6 +26,9 @@ class AppShell extends ConsumerStatefulWidget {
 
   /// Below this window width the sidebar shows icons only.
   static const compactWidth = 900.0;
+
+  /// How long a notice such as a failed automatic refresh stays.
+  static const noticeDuration = Duration(seconds: 6);
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
@@ -70,6 +75,30 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
+  /// The quiet notice of a failed automatic refresh. It closes by itself
+  /// and when another page opens, like every snack bar with an action.
+  void _showRefreshFailure(AutoRefreshFailure failure) =>
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('playlist.autoFailed'),
+            duration: AppShell.noticeDuration,
+            // With an action a snack bar stays until dismissed by default.
+            persist: false,
+            content: Text(
+              "Couldn't refresh ${playlistPartsPhrase(failure.parts)}. "
+              'The previous data is kept.',
+            ),
+            action: SnackBarAction(
+              label: 'Details',
+              onPressed: () => ref
+                  .read(appSectionProvider.notifier)
+                  .select(AppSection.settings),
+            ),
+          ),
+        );
+
   @override
   Widget build(BuildContext context) {
     final settings =
@@ -80,6 +109,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       appSectionProvider,
       (_, _) => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
     );
+    // Keeps automatic playlist refresh running while the app is open.
+    ref.listen(playlistRefreshProvider, (_, _) {});
+    ref.listen(autoRefreshFailureProvider, (_, failure) {
+      if (failure != null) _showRefreshFailure(failure);
+    });
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {

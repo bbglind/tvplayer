@@ -8,8 +8,10 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/app_settings.dart';
 import '../../data/errors.dart';
+import '../../format.dart';
 import '../../state/category_selection.dart';
 import '../../state/guide_controller.dart';
+import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../favourites/category_icons.dart';
 import '../live/separator_header.dart';
@@ -40,7 +42,7 @@ class GuideScreen extends ConsumerWidget {
           icon: Icons.error_outline,
           title: 'Could not load the TV guide',
           text: error,
-          onRetry: ref.read(guideProvider.notifier).refresh,
+          onRetry: () => refreshPlaylistPart(ref, PlaylistPart.guide),
         );
       }
       return const _Message(
@@ -54,8 +56,8 @@ class GuideScreen extends ConsumerWidget {
       error: (error, _) => _Message(
         icon: Icons.error_outline,
         title: 'Could not load channels',
-        text: describeProviderError(error),
-        onRetry: () => ref.invalidate(liveCatalogProvider),
+        text: describeRefreshError(error),
+        onRetry: () => refreshPlaylistPart(ref, PlaylistPart.channels),
       ),
       data: (catalog) {
         final channels = ref.watch(categoryChannelsProvider).value ?? const [];
@@ -161,7 +163,7 @@ class _Toolbar extends ConsumerWidget {
             icon: const Icon(Icons.refresh),
             onPressed: state.loading
                 ? null
-                : ref.read(guideProvider.notifier).refresh,
+                : () => refreshPlaylistPart(ref, PlaylistPart.guide),
           ),
         ],
       ),
@@ -172,16 +174,10 @@ class _Toolbar extends ConsumerWidget {
 /// `+2 h` / `-1 h`.
 String formatShift(int hours) => '${hours > 0 ? '+' : ''}$hours h';
 
-const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 /// `Sun 25 Oct` for the real moment [time] in the display zone.
 String formatGuideDate(GuideTime time, DateTime moment) {
   final l = time.local(moment);
-  return '${_weekdays[l.weekday - 1]} ${l.day} ${_months[l.month - 1]}';
+  return '${weekdayNames[l.weekday - 1]} ${l.day} ${monthNames[l.month - 1]}';
 }
 
 class _Message extends StatelessWidget {

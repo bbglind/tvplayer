@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
+import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../home/continue_actions.dart';
 import 'movie_details_screen.dart';
@@ -60,7 +61,7 @@ class MoviesScreen extends ConsumerWidget {
       notifier: ref.read(movieFilterProvider.notifier),
       categoryOf: (item) => item.categoryId,
       itemRef: movieItemRef,
-      onRefresh: ref.read(movieCatalogProvider.notifier).refresh,
+      onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.movies),
       continueWatching: [
         if (catalog != null)
           for (final (id, progress) in continueMovies(watch))

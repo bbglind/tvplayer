@@ -13,6 +13,7 @@ import 'package:tvplayer/data/epg_repository.dart';
 import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
 import 'package:tvplayer/data/vod_repository.dart';
+import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/player/player_hint.dart';
 import 'package:tvplayer/ui/shell/snack_bar_dismisser.dart';
@@ -79,7 +80,10 @@ class FakeLiveSource implements LiveSource {
     if (gate case final g?) await g.future;
     if (failTimes > 0) {
       failTimes--;
-      throw const XtreamException('Request timed out (get_live_streams)');
+      throw const XtreamException(
+        'Request timed out (get_live_streams)',
+        kind: ProviderFailure.timeout,
+      );
     }
     return catalog;
   }
@@ -90,6 +94,23 @@ class FakeLiveSource implements LiveSource {
 
   @override
   void close() {}
+}
+
+/// In-memory [PlaylistStatusStore].
+class MemoryPlaylistStatusStore implements PlaylistStatusStore {
+  MemoryPlaylistStatusStore([this.status = PlaylistStatus.empty]);
+
+  PlaylistStatus status;
+  int saves = 0;
+
+  @override
+  Future<PlaylistStatus> load() async => status;
+
+  @override
+  Future<void> save(PlaylistStatus status) async {
+    saves++;
+    this.status = status;
+  }
 }
 
 /// In-memory [SettingsStorage].
@@ -127,6 +148,7 @@ class FakeEpgRepository implements EpgRepository {
     List<LiveStream> channels, {
     required DateTime now,
     required DateTime keepFrom,
+    bool rejectEmpty = false,
   }) async {
     refreshes++;
     lastChannels = channels;
@@ -378,7 +400,8 @@ const activeAccountJson = {
 /// The provider storage (empty unless [providerStorage] is given),
 /// settings, the guide and catalogue caches, the watch history, favourites,
 /// posters and the device time zone (`Europe/Stockholm`) are always faked;
-/// pass [settings], [epg], [vod], [watch] or [favourites] to inspect them. [now] fixes the
+/// pass [settings], [epg], [vod], [watch], [favourites] or [playlistStatus]
+/// to inspect them. [now] fixes the
 /// clock. Searches report at once unless [searchDebounce] is given.
 Widget testApp({
   required List<Override> overrides,
@@ -389,11 +412,13 @@ Widget testApp({
   VodRepository? vod,
   WatchStore? watch,
   FavouritesStore? favourites,
+  PlaylistStatusStore? playlistStatus,
   DateTime? now,
   Duration searchDebounce = Duration.zero,
 }) {
   final watchStore = watch ?? MemoryWatchStore();
   final favouritesStore = favourites ?? MemoryFavouritesStore();
+  final statusStore = playlistStatus ?? MemoryPlaylistStatusStore();
   return ProviderScope(
     overrides: [
       providerStorageProvider.overrideWithValue(
@@ -406,6 +431,7 @@ Widget testApp({
       vodRepositoryProvider.overrideWithValue(vod ?? FakeVodRepository()),
       watchStoreProvider.overrideWithValue((_) => watchStore),
       favouritesStoreProvider.overrideWithValue((_) => favouritesStore),
+      playlistStatusStoreProvider.overrideWithValue((_) => statusStore),
       posterLoaderProvider.overrideWithValue(FakePosterLoader()),
       // Background isolates don't finish inside fake-async widget tests.
       backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),
@@ -422,6 +448,20 @@ Widget testApp({
       home: child,
     ),
   );
+}
+
+/// Shows [child] with automatic playlist refresh running, as in the app
+/// shell.
+class AutoRefreshHost extends ConsumerWidget {
+  const AutoRefreshHost({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(playlistRefreshProvider, (_, _) {});
+    return child;
+  }
 }
 
 /// Finds the player control whose [PlayerTooltip] says [message].
