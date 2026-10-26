@@ -130,10 +130,13 @@ weights 400, 500, 600, 700.
   padding 20, dividers in `hover`.
 - **TV guide**: programme cells `card`; programme on now `hover`; selected
   cell has an inset accent ring; a vertical accent line marks the current
-  time; channel column stays fixed. Its toolbar, left to right: the
-  category dropdown, the toolbar chips "Now" and "Tonight" (never accent:
-  they jump, they don't filter), then "Updated …" (cut short first when
-  space runs out) and ⟳. The top-left corner of the grid shows the date at
+  time; channel column stays fixed. The time row has a label every half
+  hour; midnight shows the date ("Tue 27 Oct", bold, `textPrimary`) with a
+  `textSecondary` line instead of a divider. A label that would run into
+  another is left out (its line stays), dates first. Its toolbar, left to
+  right: the category dropdown, the toolbar chips "Now" and "Tonight"
+  (never accent: they jump, they don't filter), then "Updated …" (cut
+  short first when space runs out) and ⟳. The top-left corner of the grid shows the date at
   the left edge. "Now" puts the current time 30 min from the left edge, as
   when the guide opens; "Tonight" puts 20:00 there (19:30 in view), from
   23:00 on 20:00 tomorrow. "Tonight" is disabled while fewer than half of

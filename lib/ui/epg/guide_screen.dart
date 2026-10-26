@@ -725,7 +725,9 @@ class _Corner extends StatelessWidget {
   }
 }
 
-/// Time labels every half hour, and a marker at the current time.
+/// Time labels every half hour, and a marker at the current time. Midnight
+/// shows the date instead, with a stronger line. A label that would run into
+/// another is left out (its line stays); dates go first.
 class _TimeHeader extends StatelessWidget {
   const _TimeHeader({
     required this.time,
@@ -743,10 +745,22 @@ class _TimeHeader extends StatelessWidget {
   final _Window window;
   final double nowX;
 
+  static const _padding = 6.0;
+
+  /// Space kept free after a label.
+  static const _gap = 8.0;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final labels = <Widget>[];
+    final scaler = MediaQuery.textScalerOf(context);
+    final dateStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    final timeStyle = theme.textTheme.titleSmall?.copyWith(
+      color: AppColors.textSecondary,
+    );
+    final ticks = <({double x, String text, bool midnight})>[];
     // [start] is on a display-zone hour; half-hour steps stay on the
     // half hour across daylight saving changes.
     var tick = start;
@@ -757,35 +771,64 @@ class _TimeHeader extends StatelessWidget {
       if (!tick.isBefore(window.from) && tick.isBefore(window.to)) {
         final local = time.local(tick);
         final midnight = local.hour == 0 && local.minute == 0;
-        labels.add(
-          Positioned(
-            left: tick.difference(start).inMinutes * GuideGrid.pixelsPerMinute,
-            top: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.only(left: 6),
-              decoration: BoxDecoration(
-                border: Border(left: BorderSide(color: theme.dividerColor)),
-              ),
-              alignment: Alignment.centerLeft,
-              child: Text(
-                midnight
-                    ? '${formatGuideDate(time, tick)} ${time.formatLocalHm(tick)}'
-                    : time.formatLocalHm(tick),
-                style: midnight
-                    ? theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      )
-                    : theme.textTheme.titleSmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-              ),
-            ),
-          ),
-        );
+        ticks.add((
+          x: tick.difference(start).inMinutes * GuideGrid.pixelsPerMinute,
+          text: midnight
+              ? formatGuideDate(time, tick)
+              : time.formatLocalHm(tick),
+          midnight: midnight,
+        ));
       }
       tick = tick.add(const Duration(minutes: 30));
     }
+    // Room each shown label takes, dates first.
+    final placed = <({double from, double to})>[];
+    final shown = List<bool>.filled(ticks.length, false);
+    for (final dates in [true, false]) {
+      for (final (i, t) in ticks.indexed) {
+        if (t.midnight != dates) continue;
+        final painter = TextPainter(
+          text: TextSpan(text: t.text, style: dates ? dateStyle : timeStyle),
+          textDirection: TextDirection.ltr,
+          textScaler: scaler,
+          maxLines: 1,
+        )..layout();
+        final span = (from: t.x, to: t.x + _padding + painter.width + _gap);
+        painter.dispose();
+        if (placed.any((p) => span.from < p.to && p.from < span.to)) continue;
+        placed.add(span);
+        shown[i] = true;
+      }
+    }
+    final labels = [
+      for (final (i, t) in ticks.indexed)
+        Positioned(
+          left: t.x,
+          top: 0,
+          bottom: 0,
+          child: Container(
+            padding: const EdgeInsets.only(left: _padding),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: t.midnight
+                      ? AppColors.textSecondary
+                      : theme.dividerColor,
+                ),
+              ),
+            ),
+            alignment: Alignment.centerLeft,
+            child: shown[i]
+                ? Text(
+                    t.text,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: t.midnight ? dateStyle : timeStyle,
+                  )
+                : const SizedBox(height: double.infinity),
+          ),
+        ),
+    ];
     return SizedBox(
       width: width,
       height: height,

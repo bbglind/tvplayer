@@ -339,7 +339,10 @@ void main() {
       expect(label('02:00'), findsNWidgets(2));
       expect(label('02:30'), findsNWidgets(2));
       expect(label('03:00'), findsOneWidget);
-      expect(find.text('Sun 25 Oct'), findsOneWidget); // Corner date.
+      expect(
+        tester.widget<Text>(find.byKey(const Key('guide.date'))).data,
+        'Sun 25 Oct',
+      );
       expect(find.text('No guide information'), findsOneWidget);
     });
 
@@ -1164,6 +1167,53 @@ void main() {
         lessThan(tester.getRect(find.textContaining('Updated')).left),
       );
     });
+
+    for (final scale in [1.0, 1.4]) {
+      testWidgets('time labels around midnight never overlap at text size '
+          '$scale', (tester) async {
+        // Wide enough that labels after midnight are built too.
+        tester.view.physicalSize = const Size(1800, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        epg = FakeEpgRepository(cached: guide(until: local(29, 0)));
+        await pump(
+          tester,
+          Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(scale)),
+              child: const GuideScreen(),
+            ),
+          ),
+          now: local(27, 14),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(tonight);
+        await tester.pumpAndSettle();
+        final header = find.byKey(const Key('guide.header'));
+        final rects =
+            tester
+                .widgetList<Text>(
+                  find.descendant(of: header, matching: find.byType(Text)),
+                )
+                .map((t) => tester.getRect(find.byWidget(t)))
+                .toList()
+              ..sort((a, b) => a.left.compareTo(b.left));
+        expect(rects.length, greaterThan(4));
+        for (var i = 1; i < rects.length; i++) {
+          expect(
+            rects[i].left,
+            greaterThanOrEqualTo(rects[i - 1].right),
+            reason: 'label $i overlaps the one before it',
+          );
+        }
+        // The day change shows the date.
+        expect(
+          find.descendant(of: header, matching: find.text('Wed 28 Oct')),
+          findsOneWidget,
+        );
+      });
+    }
   });
 
   group('separators in the Live TV list', () {
