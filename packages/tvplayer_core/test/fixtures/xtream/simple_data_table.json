@@ -1,0 +1,29 @@
+{
+  "epg_listings": [
+    {
+      "id": "11",
+      "epg_id": "1",
+      "title": "WWVzdGVyZGF5J3MgTmV3cw==",
+      "start": "2024-01-01 07:00:00",
+      "end": "2024-01-01 08:00:00",
+      "description": "UmVjb3JkZWQ=",
+      "channel_id": "test1.example",
+      "start_timestamp": "1704092400",
+      "stop_timestamp": "1704096000",
+      "now_playing": 0,
+      "has_archive": 1
+    },
+    {
+      "id": "12",
+      "epg_id": "1",
+      "title": "Tm90IFJlY29yZGVk",
+      "start": "2024-01-01 08:00:00",
+      "end": "2024-01-01 09:00:00",
+      "channel_id": "test1.example",
+      "start_timestamp": "1704096000",
+      "stop_timestamp": "1704099600",
+      "now_playing": 0,
+      "has_archive": "0"
+    }
+  ]
+}

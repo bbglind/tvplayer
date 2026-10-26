@@ -9,6 +9,7 @@ final class EpgProgram {
     required this.stop,
     this.description,
     this.category,
+    this.archived,
   });
 
   /// Parses an `epg_listings` entry of Xtream `get_short_epg`. Titles and
@@ -29,6 +30,9 @@ final class EpgProgram {
       description: readMaybeBase64(json['description']),
       start: start,
       stop: stop,
+      archived: json.containsKey('has_archive')
+          ? readBool(json['has_archive'])
+          : null,
     );
   }
 
@@ -47,6 +51,10 @@ final class EpgProgram {
   final DateTime start;
   final DateTime stop;
 
+  /// Whether the provider's archive has this programme (Xtream
+  /// `has_archive`); null when the listing doesn't say.
+  final bool? archived;
+
   Duration get duration => stop.difference(start);
 
   EpgProgram copyWith({DateTime? start, DateTime? stop}) => EpgProgram(
@@ -56,6 +64,7 @@ final class EpgProgram {
     category: category,
     start: start ?? this.start,
     stop: stop ?? this.stop,
+    archived: archived,
   );
 
   /// Whether the programme is airing at [time].

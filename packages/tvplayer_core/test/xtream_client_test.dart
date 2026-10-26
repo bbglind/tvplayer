@@ -431,11 +431,51 @@ void main() {
       );
     });
 
+    test('timeshift url: minutes, start in the server zone, stream', () {
+      final start = TimeshiftStart.at(
+        DateTime.utc(2026, 10, 26, 18, 30, 45),
+        GuideTime.findZone('Europe/Stockholm')!,
+      );
+      expect(
+        xtream.timeshiftUrl(101, start, 90).toString(),
+        'http://example.com:8080/timeshift/testuser/testpass/90/'
+        '2026-10-26:19-30/101.ts',
+      );
+    });
+
     test('xmltv url', () {
       expect(
         xtream.xmltvUrl().toString(),
         'http://example.com:8080/xmltv.php?username=testuser&password=testpass',
       );
+    });
+  });
+
+  group('archive listings', () {
+    test('get_simple_data_table with the stream id', () async {
+      panel.responses['get_simple_data_table'] = fixture(
+        'xtream/simple_data_table.json',
+      );
+      final listings = await xtream.getArchiveListings(101);
+      expect(panel.requests.single.queryParameters, {
+        'username': 'testuser',
+        'password': 'testpass',
+        'action': 'get_simple_data_table',
+        'stream_id': '101',
+      });
+      expect(listings.map((p) => p.title), [
+        "Yesterday's News",
+        'Not Recorded',
+      ]);
+      expect(listings.map((p) => p.archived), [true, false]);
+      expect(listings.first.description, 'Recorded');
+      expect(listings.first.start, DateTime.utc(2024, 1, 1, 7));
+    });
+
+    test('short EPG entries say nothing about the archive', () async {
+      panel.responses['get_short_epg'] = fixture('xtream/short_epg.json');
+      final listings = await xtream.getShortEpg(101);
+      expect(listings.map((p) => p.archived), everyElement(isNull));
     });
   });
 }

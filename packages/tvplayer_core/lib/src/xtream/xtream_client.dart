@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../live/replay.dart';
 import '../models/account_info.dart';
 import '../models/category.dart';
 import '../models/episode.dart';
@@ -199,14 +200,42 @@ class XtreamClient {
       'stream_id': '$streamId',
       if (limit != null) 'limit': '$limit',
     });
-    final listings = readMap(json)?['epg_listings'];
-    return readList(listings)
-        .map(readMap)
-        .whereType<Map<String, Object?>>()
-        .map(EpgProgram.fromXtreamJson)
-        .whereType<EpgProgram>()
-        .toList();
+    return _listings(json);
   }
+
+  /// Programmes of one live stream, past ones included, with
+  /// [EpgProgram.archived] (`get_simple_data_table`). Unlike the XMLTV
+  /// guide this reaches back over the whole archive.
+  Future<List<EpgProgram>> getArchiveListings(int streamId) async {
+    final json = await _get('get_simple_data_table', {
+      'stream_id': '$streamId',
+    });
+    return _listings(json);
+  }
+
+  static List<EpgProgram> _listings(Object? json) =>
+      readList(readMap(json)?['epg_listings'])
+          .map(readMap)
+          .whereType<Map<String, Object?>>()
+          .map(EpgProgram.fromXtreamJson)
+          .whereType<EpgProgram>()
+          .toList();
+
+  /// Playback URL of a live stream's archive (catch-up) from [start] for
+  /// [minutes]: `timeshift/<user>/<pass>/<minutes>/<start>/<id>.ts`.
+  /// Contains credentials: never log it.
+  Uri timeshiftUrl(int streamId, TimeshiftStart start, int minutes) =>
+      _baseUri.replace(
+        pathSegments: [
+          ..._baseUri.pathSegments,
+          'timeshift',
+          _username,
+          _password,
+          '$minutes',
+          start.text,
+          '$streamId.ts',
+        ],
+      );
 
   /// Playback URL of a live stream. [extension] is `ts` by default; `m3u8`
   /// is the other common choice. Contains credentials: never log it.

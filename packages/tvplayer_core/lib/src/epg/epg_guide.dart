@@ -132,21 +132,33 @@ final class EpgGuide {
       _programs[resolveStream(channel)] ?? const [];
 
   /// Programmes of [channel] that overlap `[from, to)`.
-  List<EpgProgram> between(LiveStream channel, DateTime from, DateTime to) {
-    final list = programsFor(channel);
+  List<EpgProgram> between(LiveStream channel, DateTime from, DateTime to) =>
+      overlapping(programsFor(channel), from, to);
+
+  /// The programme of [channel] airing at [at] and the next one. `now` is
+  /// null in a gap; `next` is then the first programme after [at].
+  NowNext nowAndNext(LiveStream channel, DateTime at) =>
+      nowAndNextIn(programsFor(channel), at);
+
+  /// The programmes of [list] (sorted, without overlaps) that overlap
+  /// `[from, to)`.
+  static List<EpgProgram> overlapping(
+    List<EpgProgram> list,
+    DateTime from,
+    DateTime to,
+  ) {
     final result = <EpgProgram>[];
-    for (var i = _firstEndingAfter(list, from); i < list.length; i++) {
+    for (var i = firstEndingAfter(list, from); i < list.length; i++) {
       if (!list[i].start.isBefore(to)) break;
       result.add(list[i]);
     }
     return result;
   }
 
-  /// The programme of [channel] airing at [at] and the next one. `now` is
-  /// null in a gap; `next` is then the first programme after [at].
-  NowNext nowAndNext(LiveStream channel, DateTime at) {
-    final list = programsFor(channel);
-    final i = _firstEndingAfter(list, at);
+  /// The programme of [list] (sorted, without overlaps) airing at [at] and
+  /// the next one; see [nowAndNext].
+  static NowNext nowAndNextIn(List<EpgProgram> list, DateTime at) {
+    final i = firstEndingAfter(list, at);
     if (i >= list.length) return (now: null, next: null);
     final candidate = list[i];
     if (candidate.isAiringAt(at)) {
@@ -157,7 +169,7 @@ final class EpgGuide {
 
   /// Index of the first programme whose stop is after [time] (binary search;
   /// programmes don't overlap, so stops are sorted too).
-  static int _firstEndingAfter(List<EpgProgram> list, DateTime time) {
+  static int firstEndingAfter(List<EpgProgram> list, DateTime time) {
     var lo = 0, hi = list.length;
     while (lo < hi) {
       final mid = (lo + hi) >> 1;

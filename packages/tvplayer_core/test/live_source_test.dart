@@ -146,6 +146,9 @@ void main() {
         'testpass',
         '${first.id}.ts',
       ]);
+      // tv_archive / tv_archive_duration.
+      expect(catalog.channels.map((c) => c.archiveDays), [7, 0, 0]);
+      expect(catalog.channels.map((c) => c.hasReplay), [true, false, false]);
       for (final c in catalog.categories) {
         for (final ch in catalog.channelsIn(c.id)) {
           expect(ch.categoryIds, contains(c.id));

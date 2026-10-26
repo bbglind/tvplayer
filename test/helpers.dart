@@ -93,6 +93,55 @@ class FakeLiveSource implements LiveSource {
       Uri.parse('http://192.0.2.1/live/user/pass/${stream.id}.ts');
 
   @override
+  Uri? replayUrl(LiveStream stream, TimeshiftStart start, int minutes) =>
+      Uri.parse(
+        'http://192.0.2.1/timeshift/user/pass/$minutes/${start.text}/'
+        '${stream.id}.ts',
+      );
+
+  /// Past listings by stream id, served by [archiveListings].
+  final archive = <String, List<EpgProgram>>{};
+
+  /// The stream ids [archiveListings] was asked for, in order.
+  final archiveRequests = <String>[];
+
+  /// Most [archiveListings] requests that were running at once.
+  int maxArchiveInFlight = 0;
+  int _archiveInFlight = 0;
+
+  /// Holds [archiveListings] requests until completed.
+  Completer<void>? archiveGate;
+
+  /// [archiveListings] fails while set.
+  bool failArchive = false;
+
+  @override
+  Future<List<EpgProgram>> archiveListings(LiveStream stream) async {
+    archiveRequests.add(stream.id);
+    _archiveInFlight++;
+    if (_archiveInFlight > maxArchiveInFlight) {
+      maxArchiveInFlight = _archiveInFlight;
+    }
+    try {
+      if (archiveGate case final g?) await g.future;
+      if (failArchive) {
+        throw const XtreamException(
+          'Request timed out (get_simple_data_table)',
+          kind: ProviderFailure.timeout,
+        );
+      }
+      return archive[stream.id] ?? const [];
+    } finally {
+      _archiveInFlight--;
+    }
+  }
+
+  String? serverZone = 'Europe/Stockholm';
+
+  @override
+  Future<String?> serverTimeZone() async => serverZone;
+
+  @override
   void close() {}
 }
 

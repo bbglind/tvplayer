@@ -1,14 +1,17 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
 import '../m3u/m3u_client.dart';
 import '../models/category.dart';
+import '../models/epg_program.dart';
 import '../models/live_channel.dart';
 import '../models/m3u_entry.dart';
 import '../models/provider_config.dart';
 import '../text/search_text.dart';
 import '../xtream/xtream_client.dart';
+import 'replay.dart';
 
 /// A live channel, independent of whether it came from Xtream or M3U.
 ///
@@ -21,6 +24,7 @@ final class LiveStream {
     this.logoUrl,
     this.number,
     this.epgChannelId,
+    this.archiveDays = 0,
     String? stableId,
   }) : stableId = stableId ?? id;
 
@@ -36,6 +40,13 @@ final class LiveStream {
   final String? logoUrl;
   final int? number;
   final String? epgChannelId;
+
+  /// How many days back the provider keeps programmes for replay
+  /// (catch-up); 0 when it keeps none.
+  final int archiveDays;
+
+  /// Whether past programmes of this channel can be replayed.
+  bool get hasReplay => archiveDays > 0;
 
   /// Whether this entry is a category heading rather than a channel, like
   /// `####### SWEDEN HD #######`. Providers add these to their lists; they
@@ -215,6 +226,21 @@ abstract interface class LiveSource {
   /// false.
   Future<void> downloadGuide(File target);
 
+  /// Playback URL of [stream]'s archive from [start] (see
+  /// [TimeshiftStart]) for [minutes]; null when the source has no replay.
+  /// Contains credentials: never log or show it.
+  Uri? replayUrl(LiveStream stream, TimeshiftStart start, int minutes);
+
+  /// The provider's listing of [stream]'s programmes, past ones included
+  /// (with [EpgProgram.archived]); empty when the source has none. Throws
+  /// [XtreamException] on failure.
+  Future<List<EpgProgram>> archiveListings(LiveStream stream);
+
+  /// The IANA zone the provider reads replay start times in, when it says
+  /// (`server_info.timezone`); null otherwise. Throws [XtreamException] on
+  /// failure.
+  Future<String?> serverTimeZone();
+
   void close();
 }
 
@@ -244,6 +270,7 @@ class XtreamLiveSource implements LiveSource {
             logoUrl: s.logoUrl,
             number: s.number,
             epgChannelId: s.epgChannelId,
+            archiveDays: s.hasArchive ? math.max(0, s.archiveDays ?? 0) : 0,
           ),
       ],
     );
@@ -258,6 +285,18 @@ class XtreamLiveSource implements LiveSource {
 
   @override
   Future<void> downloadGuide(File target) => _client.downloadXmltv(target);
+
+  @override
+  Uri? replayUrl(LiveStream stream, TimeshiftStart start, int minutes) =>
+      _client.timeshiftUrl(int.parse(stream.id), start, minutes);
+
+  @override
+  Future<List<EpgProgram>> archiveListings(LiveStream stream) =>
+      _client.getArchiveListings(int.parse(stream.id));
+
+  @override
+  Future<String?> serverTimeZone() async =>
+      (await _client.login()).serverTimezone;
 
   @override
   void close() => _client.close();
@@ -347,6 +386,16 @@ class M3uLiveSource implements LiveSource {
   @override
   Future<void> downloadGuide(File target) =>
       throw UnsupportedError('M3U playlists have no guide yet');
+
+  // Playlist catch-up attributes (`catchup-source`) aren't supported yet.
+  @override
+  Uri? replayUrl(LiveStream stream, TimeshiftStart start, int minutes) => null;
+
+  @override
+  Future<List<EpgProgram>> archiveListings(LiveStream stream) async => const [];
+
+  @override
+  Future<String?> serverTimeZone() async => null;
 
   @override
   void close() => _client.close();
