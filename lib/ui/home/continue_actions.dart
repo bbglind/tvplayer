@@ -31,9 +31,7 @@ ItemMenuAction removeFromContinueAction(
       if (movie != null) {
         name = plainTitle(ref, movie.name);
         final previous = watch.removeMovieFromContinue(movie.streamId);
-        undo = () {
-          if (previous != null) watch.restoreMovie(movie.streamId, previous);
-        };
+        undo = () => watch.restoreMovies(previous);
       } else {
         name = plainTitle(ref, series!.name);
         watch.removeSeriesFromContinue(series.seriesId);

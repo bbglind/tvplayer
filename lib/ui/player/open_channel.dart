@@ -16,12 +16,20 @@ void openChannel(BuildContext context, WidgetRef ref, LiveStream channel) {
 }
 
 /// Opens the player for [request]. Automatic playlist refresh waits until
-/// it is closed.
+/// it is closed. Movies and series remember it for "Last played".
 Future<void> openPlayback(
   BuildContext context,
   WidgetRef ref,
   PlaybackRequest request,
 ) async {
+  if (switch (request) {
+        MoviePlayback(:final movie) => movieKey(movie.streamId),
+        EpisodePlayback(:final info) => seriesKey(info.series.seriesId),
+        LivePlayback() => null,
+      }
+      case final key?) {
+    ref.read(watchProvider.notifier).recordPlayed(key);
+  }
   final playback = ref.read(playbackActiveProvider.notifier)..begin();
   try {
     await Navigator.of(context).push(playbackRoute(ref, request));

@@ -153,6 +153,8 @@ class PosterCard extends StatefulWidget {
     required this.imageUrl,
     required this.onTap,
     this.subtitle,
+    this.subtitleIcon,
+    this.subtitleIconTooltip,
     this.watched = false,
     this.progress,
     this.placeholder = Icons.movie_outlined,
@@ -165,6 +167,10 @@ class PosterCard extends StatefulWidget {
 
   final String title;
   final String? subtitle;
+
+  /// A small accent icon before the [subtitle], e.g. "Last played".
+  final IconData? subtitleIcon;
+  final String? subtitleIconTooltip;
   final String? imageUrl;
   final VoidCallback onTap;
   final bool watched;
@@ -282,8 +288,29 @@ class _PosterCardState extends State<PosterCard> {
               style: theme.textTheme.titleSmall,
             ),
             if (widget.subtitle case final s?)
-              Text(
-                s,
+              Text.rich(
+                TextSpan(
+                  children: [
+                    if (widget.subtitleIcon case final icon?)
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Tooltip(
+                            message: widget.subtitleIconTooltip ?? '',
+                            child: Icon(
+                              icon,
+                              key: const Key('poster.subtitleIcon'),
+                              size: 14,
+                              color: AppColors.accent,
+                              semanticLabel: widget.subtitleIconTooltip,
+                            ),
+                          ),
+                        ),
+                      ),
+                    TextSpan(text: s),
+                  ],
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall,

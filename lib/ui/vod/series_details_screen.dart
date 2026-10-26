@@ -7,11 +7,13 @@ import '../../data/errors.dart';
 import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
+import '../../state/variants.dart';
 import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import 'other_sources.dart';
 import 'poster.dart';
 import 'provider_title.dart';
 
@@ -52,8 +54,13 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
             .then<MediaMetadata?>((m) => m, onError: (Object _) => null);
   }
 
+  /// How the episodes stand across the series' other sources.
+  EpisodeGroupView get _view =>
+      ref.watch(episodeViewProvider(widget.series.seriesId));
+
   void _play(SeriesInfo info, Episode episode) {
-    final start = resumePosition(ref.read(watchProvider).episode(episode.id));
+    final view = ref.read(episodeViewProvider(widget.series.seriesId));
+    final start = resumePosition(view.progress(episode));
     openPlayback(context, ref, EpisodePlayback(info, episode, start: start));
   }
 
@@ -93,6 +100,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     MediaMetadata? meta,
   ) {
     final watch = ref.watch(watchProvider);
+    final view = _view;
     final tabs = seasonTabs(info);
     if (!identical(info, _summarized)) {
       _summarized = info;
@@ -105,7 +113,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       });
     }
     if (_season == null || !tabs.any((t) => t.number == _season)) {
-      _season = initialSeason(info, watch);
+      _season = initialSeason(info, watch, group: view);
     }
     final season = _season;
     final episodes = season == null
@@ -138,11 +146,22 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
               ),
               meta: meta?.episode(e),
               fallbackImage: meta?.posterUrl ?? widget.series.coverUrl,
-              progress: watch.episode(e.id),
+              progress: view.progress(e),
               onPlay: () => _play(info, e),
               onMark: (watched) => _mark(info, [e], watched),
             );
           },
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 36)),
+        SliverToBoxAdapter(
+          child: OtherSourcesSection(
+            inset: 40,
+            children: seriesPosters(
+              context,
+              ref,
+              seriesSources(ref, widget.series),
+            ),
+          ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
@@ -160,15 +179,25 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     final rating = meta?.rating ?? series.rating;
     final tags = ref.watch(providerTagsProvider);
     final display = tags.display(series.name);
+    final sources = seriesSources(ref, series);
+    final view = _view;
     final facts = [
       if ((meta?.year ?? series.year) case final year?) '$year',
       ?display.country,
+      ?sources.labels.dateOf(series.seriesId),
       ?(meta?.genre ?? series.genre),
       if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
     ];
-    final next = upNext(info, watch) ?? _firstEpisode(info);
-    final nextProgress = next == null ? null : watch.episode(next.id);
+    final next = upNext(info, watch, group: view) ?? _firstEpisode(info);
+    final nextProgress = next == null ? null : view.progress(next);
     final resume = resumePosition(nextProgress);
+    final from = switch (next == null || resume == null
+        ? null
+        : view.sourceOf(next)) {
+      final id? => sources.labels.describe(id),
+      null => null,
+    };
+    final lastPlayed = sources.lastPlayed == series.seriesId;
     return Padding(
       padding: AppSpacing.page.copyWith(bottom: 24),
       child: Row(
@@ -204,13 +233,12 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
                   large: true,
                   style: theme.textTheme.headlineMedium,
                 ),
-                if (facts.isNotEmpty) ...[
+                if (facts.isNotEmpty || lastPlayed) ...[
                   const SizedBox(height: 6),
-                  Text(
-                    facts.join(' · '),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textMuted,
-                    ),
+                  FactsLine(
+                    facts,
+                    lastPlayed: lastPlayed,
+                    key: const Key('series.facts'),
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -227,7 +255,8 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
                         label: Text(
                           '${resume != null ? 'Resume' : 'Play'} '
                           '${formatEpisodeCode(next.season, next.episodeNumber)}'
-                          '${resume != null ? ' from ${formatDuration(resume)}' : ''}',
+                          '${resume != null ? ' from ${formatDuration(resume)}' : ''}'
+                          '${from != null ? ' (from $from)' : ''}',
                         ),
                       ),
                     FavouriteButton(
@@ -278,7 +307,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     final selected = _season;
     final progress = selected == null
         ? null
-        : seasonProgress(info, selected, watch);
+        : seasonProgress(info, selected, watch, group: _view);
     return Padding(
       padding: const EdgeInsets.fromLTRB(36, 8, 36, 16),
       child: Row(
@@ -324,7 +353,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
   }
 
   Widget _seasonChip(SeriesInfo info, SeasonTab tab, WatchData watch) {
-    final progress = seasonProgress(info, tab.number, watch);
+    final progress = seasonProgress(info, tab.number, watch, group: _view);
     final selected = tab.number == _season;
     return FocusRing(
       radius: AppRadius.pill,

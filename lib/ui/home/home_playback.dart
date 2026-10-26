@@ -5,12 +5,16 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/errors.dart';
 import '../../player/playback_request.dart';
 import '../../state/providers.dart';
+import '../../state/variants.dart';
 import '../player/open_channel.dart';
 import '../vod/provider_title.dart';
 
 /// Plays [movie], from where it was left off if it was started.
 void playMovie(BuildContext context, WidgetRef ref, Movie movie) {
-  final start = resumePosition(ref.read(watchProvider).movie(movie.streamId));
+  // Where it, or another source of it, was left off.
+  final start = resumePosition(
+    ref.read(movieProgressProvider(movie.streamId))?.progress,
+  );
   openPlayback(context, ref, MoviePlayback(movie, start: start));
 }
 
@@ -45,8 +49,9 @@ Future<void> playSeries(
   onLoading?.call(false);
   if (!context.mounted) return;
   final watch = ref.read(watchProvider);
+  final view = ref.read(episodeViewProvider(series.seriesId));
   final episode =
-      upNext(info, watch) ??
+      upNext(info, watch, group: view) ??
       info.episodes.where((e) => e.season != 0).firstOrNull ??
       info.episodes.firstOrNull;
   if (episode == null) {
@@ -58,7 +63,7 @@ Future<void> playSeries(
     return;
   }
   ref.read(watchProvider.notifier).refreshSeriesSummary(info);
-  final start = resumePosition(watch.episode(episode.id));
+  final start = resumePosition(view.progress(episode));
   await openPlayback(
     context,
     ref,

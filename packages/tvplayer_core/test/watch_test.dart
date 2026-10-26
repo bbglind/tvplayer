@@ -771,6 +771,14 @@ void _groupMain() {
       List<int> groupOf(int id) => id == 3 ? [3] : [1, 2];
       expect(continueSeries(data).map((e) => e.$1), [2, 1, 3]);
       expect(continueSeriesGroups(data, groupOf).map((e) => e.$1), [2, 3]);
+      expect(seriesGroupProgress(data, [1, 2]), data.series[2]);
+      expect(
+        continueAll(
+          data,
+          seriesGroups: groupOf,
+        ).map((e) => (e as ContinueSeries).seriesId),
+        [2, 3],
+      );
       // Removing every variant removes the card.
       for (final id in [1, 2]) {
         data = removeContinueSeries(data, id, _at(5));

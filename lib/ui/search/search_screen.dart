@@ -278,7 +278,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return [SliverToBoxAdapter(child: message)];
     }
     final first = focusFirst ? _firstResult : null;
-    final watch = ref.watch(watchProvider);
     switch (g) {
       case _Group.live:
         final channels = results.live.items
@@ -311,7 +310,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     .indexed)
               moviePoster(
                 context,
-                watch,
                 m,
                 key: ValueKey('search.movie.${m.streamId}'),
                 focusNode: i == 0 ? first : null,
@@ -323,7 +321,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     .indexed)
               seriesPoster(
                 context,
-                watch,
                 s,
                 key: ValueKey('search.series.${s.seriesId}'),
                 focusNode: i == 0 ? first : null,
@@ -354,7 +351,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _Group g,
   ) {
     final text = Theme.of(context).textTheme;
-    final watch = ref.watch(watchProvider);
     final count = _count(results, g);
     final Widget list = switch (g) {
       _Group.live => ListView.builder(
@@ -382,7 +378,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         itemBuilder: (context, i) => g == _Group.movies
             ? moviePoster(
                 context,
-                watch,
                 results.movies.items[i],
                 key: ValueKey(
                   'search.movie.${results.movies.items[i].streamId}',
@@ -391,7 +386,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               )
             : seriesPoster(
                 context,
-                watch,
                 results.series.items[i],
                 key: ValueKey(
                   'search.series.${results.series.items[i].seriesId}',

@@ -17,6 +17,7 @@ import '../../player/pointer_forwarder.dart';
 import '../../player/video_gestures.dart';
 import '../../player/video_pointer.dart';
 import '../../state/providers.dart';
+import '../../state/variants.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
 import '../favourites/favourite_menu.dart';
@@ -430,7 +431,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     )) {
       _watch?.recordProgress(key, position: end, duration: end, info: info);
     }
-    final start = resumePosition(ref.read(watchProvider).episode(next.id));
+    final view = ref.read(episodeViewProvider(info.series.seriesId));
+    final start = resumePosition(view.progress(next));
     _switchTo(EpisodePlayback(info, next, start: start), save: false);
   }
 

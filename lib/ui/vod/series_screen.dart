@@ -7,6 +7,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../format.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
+import '../../state/variants.dart';
 import '../home/continue_actions.dart';
 import 'poster.dart';
 import 'series_details_screen.dart';
@@ -20,30 +21,39 @@ void openSeries(BuildContext context, Series series) => Navigator.of(context)
       ),
     );
 
-/// The poster of [series] in a grid: title, year, favourite star and watch
-/// state.
+/// The poster of [series] in a grid: title, year (or [subtitle]),
+/// favourite star and watch state, together with its other sources.
+/// [lastPlayed] marks the source played last.
 Widget seriesPoster(
   BuildContext context,
-  WatchData watch,
   Series series, {
   Key? key,
   FocusNode? focusNode,
-}) {
-  final progress = watch.series[series.seriesId];
-  return PosterCard(
-    key: key ?? ValueKey(series.seriesId),
-    focusNode: focusNode,
-    title: series.name,
-    favourite: seriesItemRef(series),
-    subtitle: series.year?.toString(),
-    imageUrl: series.coverUrl,
-    placeholder: Icons.tv,
-    watched: progress?.finished ?? false,
-    // Started: at least a sliver, so the bar shows.
-    progress: progress == null ? null : math.max(progress.fraction, 0.03),
-    onTap: () => openSeries(context, series),
-  );
-}
+  String? subtitle,
+  bool lastPlayed = false,
+}) => Consumer(
+  builder: (context, ref, _) {
+    final progress = seriesGroupProgress(
+      ref.watch(watchProvider),
+      ref.watch(seriesVariantsProvider).groupOf(series.seriesId),
+    );
+    return PosterCard(
+      key: key ?? ValueKey(series.seriesId),
+      focusNode: focusNode,
+      title: series.name,
+      favourite: seriesItemRef(series),
+      subtitle: subtitle ?? series.year?.toString(),
+      subtitleIcon: lastPlayed ? Icons.history : null,
+      subtitleIconTooltip: lastPlayed ? 'Last played' : null,
+      imageUrl: series.coverUrl,
+      placeholder: Icons.tv,
+      watched: progress?.finished ?? false,
+      // Started: at least a sliver, so the bar shows.
+      progress: progress == null ? null : math.max(progress.fraction, 0.03),
+      onTap: () => openSeries(context, series),
+    );
+  },
+);
 
 /// The Series tab: categories, search, sort and filters, "Continue
 /// watching" (with the next episode to watch) and a poster grid.
@@ -71,11 +81,14 @@ class SeriesScreen extends ConsumerWidget {
       onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.series),
       continueWatching: [
         if (catalog != null)
-          for (final (id, progress) in continueSeries(watch))
+          for (final (id, progress) in continueSeriesGroups(
+            watch,
+            ref.watch(seriesVariantsProvider).groupOf,
+          ))
             if (catalog.byId(id) case final series?)
               (series, _continueCard(context, ref, watch, series, progress)),
       ],
-      itemBuilder: (context, series) => seriesPoster(context, watch, series),
+      itemBuilder: (context, series) => seriesPoster(context, series),
     );
   }
 
@@ -87,7 +100,7 @@ class SeriesScreen extends ConsumerWidget {
     SeriesProgress progress,
   ) {
     final next = progress.nextEpisodeId;
-    final episode = next == null ? null : watch.episode(next);
+    final episode = _nextProgress(ref, series.seriesId, progress);
     final code =
         progress.nextSeason != null && progress.nextEpisodeNumber != null
         ? formatEpisodeCode(progress.nextSeason!, progress.nextEpisodeNumber!)
@@ -118,3 +131,11 @@ class SeriesScreen extends ConsumerWidget {
     );
   }
 }
+
+/// The progress of the next episode of [progress] across the other sources
+/// of series [seriesId].
+WatchProgress? _nextProgress(
+  WidgetRef ref,
+  int seriesId,
+  SeriesProgress progress,
+) => nextEpisodeProgress(ref.watch(episodeViewProvider(seriesId)), progress);

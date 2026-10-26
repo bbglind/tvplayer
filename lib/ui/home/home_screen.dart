@@ -206,14 +206,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case HomeRowId.recentSeries:
         final items = ref.watch(recentSeriesProvider);
         if (items.isEmpty) return empty();
-        final watch = ref.watch(watchProvider);
         return section(
           _posterRow(
             items.items.length,
             items.loading,
             (context, i) => seriesPoster(
               context,
-              watch,
               items.items[i],
               key: ValueKey('home.series.${items.items[i].seriesId}'),
             ),
@@ -223,14 +221,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case HomeRowId.recentMovies:
         final items = ref.watch(recentMoviesProvider);
         if (items.isEmpty) return empty();
-        final watch = ref.watch(watchProvider);
         return section(
           _posterRow(
             items.items.length,
             items.loading,
             (context, i) => moviePoster(
               context,
-              watch,
               items.items[i],
               key: ValueKey('home.movie.${items.items[i].streamId}'),
             ),

@@ -412,8 +412,7 @@ final class WatchData {
             time,
             removed: !readBool(readMap(value)?['undone']),
           );
-        case 'played'
-            when id.startsWith('movie:') || id.startsWith('series:'):
+        case 'played' when id.startsWith('movie:') || id.startsWith('series:'):
           played[id] = time;
       }
     }

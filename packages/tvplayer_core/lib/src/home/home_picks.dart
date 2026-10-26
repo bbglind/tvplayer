@@ -125,7 +125,10 @@ List<T> recentlyAdded<T extends Object>(
   Set<String> hidden = const {},
   int limit = 20,
 }) => catalog
-    .query(scope: VodScope.all(hidden: hidden), sort: VodSort.recent)
+    .query(
+      scope: VodScope.all(hidden: hidden),
+      sort: VodSort.recent,
+    )
     .take(limit)
     .toList();
 
@@ -157,8 +160,22 @@ final class ContinueSeries extends ContinueEntry {
 }
 
 /// Started movies ([continueMovies]) and series ([continueSeries])
-/// together, most recently watched first.
-List<ContinueEntry> continueAll(WatchData data) => [
-  for (final (id, p) in continueMovies(data)) ContinueMovie(id, p),
-  for (final (id, p) in continueSeries(data)) ContinueSeries(id, p),
+/// together, most recently watched first. With [movieGroups] and
+/// [seriesGroups] (an id and those of its variants), one per group (see
+/// [continueMovieGroups] and [continueSeriesGroups]).
+List<ContinueEntry> continueAll(
+  WatchData data, {
+  List<int> Function(int)? movieGroups,
+  List<int> Function(int)? seriesGroups,
+}) => [
+  for (final (id, p) in switch (movieGroups) {
+    final g? => continueMovieGroups(data, g),
+    null => continueMovies(data),
+  })
+    ContinueMovie(id, p),
+  for (final (id, p) in switch (seriesGroups) {
+    final g? => continueSeriesGroups(data, g),
+    null => continueSeries(data),
+  })
+    ContinueSeries(id, p),
 ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));

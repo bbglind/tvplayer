@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'providers.dart';
+import 'variants.dart';
 import 'vod_controller.dart';
 
 /// The items of a start page row, and whether more may come (a catalogue
@@ -115,7 +116,11 @@ final homeContinueProvider = Provider<HomeRowItems<ContinueItem>>((ref) {
   final hiddenMovies = favourites.hiddenIds(ContentKind.movie);
   final hiddenSeries = favourites.hiddenIds(ContentKind.series);
   final items = <ContinueItem>[
-    for (final entry in continueAll(watch))
+    for (final entry in continueAll(
+      watch,
+      movieGroups: ref.watch(movieVariantsProvider).groupOf,
+      seriesGroups: ref.watch(seriesVariantsProvider).groupOf,
+    ))
       ?switch (entry) {
         ContinueMovie(:final streamId, :final progress) => switch (movies
             .catalog
@@ -128,10 +133,14 @@ final homeContinueProvider = Provider<HomeRowItems<ContinueItem>>((ref) {
             .catalog
             ?.byId(seriesId)) {
           final s? when !hiddenSeries.contains(s.categoryId) =>
-            ContinueSeriesItem(s, progress, switch (progress.nextEpisodeId) {
-              final id? => watch.episode(id),
-              null => null,
-            }),
+            ContinueSeriesItem(
+              s,
+              progress,
+              nextEpisodeProgress(
+                ref.watch(episodeViewProvider(seriesId)),
+                progress,
+              ),
+            ),
           _ => null,
         },
       },

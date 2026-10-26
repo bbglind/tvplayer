@@ -238,9 +238,8 @@ final class EpisodeGroupView {
   List<(String, WatchProgress)> othersOf(Episode e) =>
       e.episodeNumber > 0 ? _others[(e.season, e.episodeNumber)] ?? [] : [];
 
-  static WatchProgress _newest(List<WatchProgress> records) => records.reduce(
-    (a, b) => b.updatedAt.isAfter(a.updatedAt) ? b : a,
-  );
+  static WatchProgress _newest(List<WatchProgress> records) =>
+      records.reduce((a, b) => b.updatedAt.isAfter(a.updatedAt) ? b : a);
 }
 
 /// Reads an episode's progress: across the [group] when there is one.
@@ -316,11 +315,7 @@ Episode? upNext(SeriesInfo info, WatchData data, {EpisodeGroupView? group}) {
 
 /// The season tab to show when [info] opens: the season of [upNext], or the
 /// first season.
-int? initialSeason(
-  SeriesInfo info,
-  WatchData data, {
-  EpisodeGroupView? group,
-}) {
+int? initialSeason(SeriesInfo info, WatchData data, {EpisodeGroupView? group}) {
   final next = upNext(info, data, group: group);
   if (next != null) return next.season;
   final tabs = seasonTabs(info);
@@ -426,6 +421,20 @@ List<WatchTarget> groupEpisodeTargets(
     ),
     from: newest.from,
   );
+}
+
+/// The newest [SeriesProgress] of the series [seriesIds] (a series and its
+/// variants): where the group stands, for posters.
+SeriesProgress? seriesGroupProgress(WatchData data, Iterable<int> seriesIds) {
+  SeriesProgress? newest;
+  for (final id in seriesIds) {
+    final p = data.series[id];
+    if (p != null &&
+        (newest == null || p.updatedAt.isAfter(newest.updatedAt))) {
+      newest = p;
+    }
+  }
+  return newest;
 }
 
 /// [continueMovies] with one entry per movie and its variants ([groupOf]

@@ -5,6 +5,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../format.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
+import '../../state/variants.dart';
 import '../home/continue_actions.dart';
 import 'movie_details_screen.dart';
 import 'poster.dart';
@@ -15,28 +16,34 @@ void openMovie(BuildContext context, Movie movie) => Navigator.of(context).push(
   MaterialPageRoute<void>(builder: (_) => MovieDetailsScreen(movie: movie)),
 );
 
-/// The poster of [movie] in a grid: title, year, favourite star and watch
-/// state.
+/// The poster of [movie] in a grid: title, year (or [subtitle]),
+/// favourite star and watch state, together with its other sources.
+/// [lastPlayed] marks the source played last.
 Widget moviePoster(
   BuildContext context,
-  WatchData watch,
   Movie movie, {
   Key? key,
   FocusNode? focusNode,
-}) {
-  final progress = watch.movie(movie.streamId);
-  return PosterCard(
-    key: key ?? ValueKey(movie.streamId),
-    focusNode: focusNode,
-    title: movie.name,
-    favourite: movieItemRef(movie),
-    subtitle: movie.year?.toString(),
-    imageUrl: movie.posterUrl,
-    watched: progress?.watched ?? false,
-    progress: isInProgress(progress) ? progress!.fraction : null,
-    onTap: () => openMovie(context, movie),
-  );
-}
+  String? subtitle,
+  bool lastPlayed = false,
+}) => Consumer(
+  builder: (context, ref, _) {
+    final progress = ref.watch(movieProgressProvider(movie.streamId))?.progress;
+    return PosterCard(
+      key: key ?? ValueKey(movie.streamId),
+      focusNode: focusNode,
+      title: movie.name,
+      favourite: movieItemRef(movie),
+      subtitle: subtitle ?? movie.year?.toString(),
+      subtitleIcon: lastPlayed ? Icons.history : null,
+      subtitleIconTooltip: lastPlayed ? 'Last played' : null,
+      imageUrl: movie.posterUrl,
+      watched: progress?.watched ?? false,
+      progress: isInProgress(progress) ? progress!.fraction : null,
+      onTap: () => openMovie(context, movie),
+    );
+  },
+);
 
 /// The Movies tab: categories, search, sort and filters, "Continue
 /// watching" and a poster grid.
@@ -64,7 +71,10 @@ class MoviesScreen extends ConsumerWidget {
       onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.movies),
       continueWatching: [
         if (catalog != null)
-          for (final (id, progress) in continueMovies(watch))
+          for (final (id, progress) in continueMovieGroups(
+            watch,
+            ref.watch(movieVariantsProvider).groupOf,
+          ))
             if (catalog.byId(id) case final movie?)
               (
                 movie,
@@ -82,7 +92,7 @@ class MoviesScreen extends ConsumerWidget {
                 ),
               ),
       ],
-      itemBuilder: (context, movie) => moviePoster(context, watch, movie),
+      itemBuilder: (context, movie) => moviePoster(context, movie),
     );
   }
 }
