@@ -123,6 +123,16 @@ weights 400, 500, 600, 700.
   sources sharing a label show the provider's date ("Added 24 Apr 2026",
   series "Updated …"), also in the details' meta line. Left out when there
   are none.
+- **Replay mark**: on channels whose provider keeps an archive (Xtream
+  `tv_archive`), a history icon (outline, 16, `textSecondary`) right after
+  the name in Live TV, search, the guide's channel column, the Channels
+  panel and Home; tooltip "Replay: 3 days back" (in the player: the row's
+  hint). Such a channel's name drops the provider's own mark: a last word
+  of at most 4 characters without letters or digits, and a `◉` word
+  anywhere.
+- **REPLAY badge**: like the LIVE badge, but `hover` bg and `textPrimary`
+  (the `live` colour stays LIVE's); before the player title while it
+  plays from the archive.
 - **Thumbnail** (continue watching, episodes): 16:9, radius 12.
 - **LIVE badge**: `live` background, `onAccent` text, 10–12 px, 700,
   uppercase, radius 4–6.
@@ -142,11 +152,32 @@ weights 400, 500, 600, 700.
   23:00 on 20:00 tomorrow. "Tonight" is disabled while fewer than half of
   the guide's channels have programmes past that time ("No TV guide for
   tomorrow evening yet").
+- **Replay in the TV guide**: on channels with an archive the guide
+  reaches back over it (at most 7 days). Programmes that can be replayed
+  (started, inside the archive) show the history icon (14) before their
+  time and "· Replay available" in the tooltip; ended ones that can't are
+  muted (title `textMuted`). Where the XMLTV guide stops, the visible
+  rows' past programmes come from the provider's archive listing, one
+  channel at a time, nearest the middle first; meanwhile the row says
+  "Loading past programmes…" (or "Couldn't load past programmes",
+  tried again after 5 min).
+- **Programme panel**: a click, Enter, right click, long press or the Menu
+  key on a programme opens a panel (`surface`, radius 14, padding 20):
+  title (panel title), "Channel · Mon 26 Oct 20:00–21:00", category,
+  description, then "Play" (primary, focused) and "Close" for a replayable
+  past programme; "Watch live" (primary) and "Play from start" while it is
+  on; otherwise a line why not ("No replay: this channel has no archive",
+  "No replay: older than 3 days", "No replay: not in the provider's
+  archive", "Not started yet") and "Close". On now without an archive a
+  click plays live at once. Esc closes it.
 - **Player overlay**: `scrim` background, controls in `textPrimary`, accent
   progress fill, secondary pills for Subtitles / Audio.
 - **Player controls bar**, left to right: the primary action (play/pause for
-  movies and episodes; on live TV, which can't pause, the slot is kept for
-  Record), the seek bar with position and end time (or nothing on live TV),
+  movies, episodes and replays; on live TV pause on channels with an
+  archive, else nothing; Record (group 9) follows it), the seek bar with
+  position and end time (on live TV nothing, or "Paused · Behind live
+  0:45" while paused; in a replay clock times, see Replay player), the
+  "LIVE" button in a replay or while live TV is paused,
   mute button + volume slider (0–100 %, about 120 wide), the Channels and
   favourite pills (live TV), the Subtitles pill, fullscreen, stop, and the
   clock (HH:MM, `textSecondary`). The end time switches between the
@@ -174,7 +205,19 @@ weights 400, 500, 600, 700.
   show on mouse movement or a key and hide after 3 s (with the cursor),
   but stay while a panel is open, a control has keyboard focus or a slider
   is dragged.
-- **Mouse on the video**: click = play/pause (live TV: show the controls),
+- **Replay player**: the seek bar's position is the clock time playing
+  ("20:41:12") and its end the programme's ("21:00"); while the programme
+  is still on it reaches from two hours back (or the programme's start)
+  up to now, with "Behind live 12 min" (`textSecondary`) after it.
+  Now/next and the title follow the playing position and run on into the
+  next programme. Seeking stays in the loaded archive when it can, else
+  loads it from there (a short progress bar in place of the slider);
+  close to now it goes live. At the end of what was loaded it loads on
+  without an error, or goes live within 10 s of live. Pausing live TV
+  keeps the picture, closes the stream and resumes from the archive 15 s
+  before the pause. Replays don't go into Continue watching.
+- **Mouse on the video**: click = play/pause (live TV: pause on channels
+  with an archive, else show the controls),
   double click = fullscreen (the click doesn't also fire), wheel = volume.
 - **Channels panel** (zap, `c`): side panel 360 wide, my Live TV
   categories as toolbar chips, then compact channel rows (logo, name, the
@@ -257,6 +300,12 @@ English for now.
 | Other sources | The other variants of the same movie or series in the provider's catalogue |
 | Last played | The source of a title that was played most recently |
 | Now (TV guide) | Goes back to the current time |
+| Replay | Playing a past (or running) programme from the provider's archive (catch-up) |
+| Play / Play from start | Replays a past programme / the one on now from its start |
+| Watch live | Plays the channel live from the programme panel |
+| Go live (LIVE) | Leaves a replay or a pause for the live stream |
+| Behind live | How far a replay or pause is behind the live stream |
+| Paused (live TV) | Live TV paused on a channel with an archive; resumes from the archive |
 | Tonight (TV guide) | Goes to 20:00 this evening, from 23:00 on tomorrow evening; disabled while the TV guide doesn't reach that far |
 
 - The heading above a list or grid names the selected category ("All
@@ -301,14 +350,16 @@ English for now.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".
 - Player tooltips name their keys: "Pause (Space or click the video)",
-  "Play the next episode (n)", "Seek (← / →: 10 s)", "Mute (m)", "Volume
+  "Pause live TV (Space or click the video)", "Play the next episode
+  (n)", "Seek (← / →: 10 s, with Shift: 1 min)", "Go live: watch
+  <channel> live (l)", "Mute (m)", "Volume
   (↑ / ↓, or the mouse wheel on the video)", "Channels: switch channel
   (c)", "Subtitles and audio (s: next subtitles)", "Fullscreen (f or
   double-click, Esc to leave)", "Close (Esc)", "Cancel and play to the
   end (Esc)". Stop and the back arrow: "Stop and go back", "Back (stops
-  playback)". Keys: Space pause, ←/→ seek 10 s, ↑/↓
+  playback)". Keys: Space pause, ←/→ seek 10 s (Shift: 1 min), ↑/↓
   volume, f fullscreen, Esc (cancel the countdown, close a panel, leave
-  fullscreen), s subtitles, m mute, c channels, n next episode.
+  fullscreen), s subtitles, m mute, c channels, n next episode, l go live.
 - Episodes with a next one get a "Next episode (n)" button after
   play/pause; it marks the current episode watched and plays the next.
 - "Automatic refresh" (Settings › Playlist, kept per provider): Off, On
