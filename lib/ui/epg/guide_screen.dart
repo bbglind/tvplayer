@@ -21,11 +21,18 @@ import '../theme/widgets.dart';
 import '../player/open_channel.dart';
 
 /// The full TV guide: channels down the side, time across the top.
-class GuideScreen extends ConsumerWidget {
+class GuideScreen extends ConsumerStatefulWidget {
   const GuideScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GuideScreen> createState() => _GuideScreenState();
+}
+
+class _GuideScreenState extends ConsumerState<GuideScreen> {
+  final _grid = GlobalKey<GuideGridState>();
+
+  @override
+  Widget build(BuildContext context) {
     final guideState = ref.watch(guideProvider);
     final catalog = ref.watch(liveCatalogProvider);
     if (!guideState.supported) {
@@ -63,7 +70,16 @@ class GuideScreen extends ConsumerWidget {
         final channels = ref.watch(categoryChannelsProvider).value ?? const [];
         return Column(
           children: [
-            _Toolbar(catalog: catalog, state: guideState),
+            _Toolbar(
+              catalog: catalog,
+              state: guideState,
+              onNow: channels.isEmpty
+                  ? null
+                  : () => _grid.currentState?.scrollToNow(),
+              onTonight: channels.isEmpty
+                  ? null
+                  : () => _grid.currentState?.scrollToTonight(),
+            ),
             if (guideState.loading)
               const LinearProgressIndicator(minHeight: 2)
             else
@@ -71,7 +87,7 @@ class GuideScreen extends ConsumerWidget {
             Expanded(
               child: channels.isEmpty
                   ? const Center(child: Text('No channels'))
-                  : GuideGrid(channels: channels, guide: guide),
+                  : GuideGrid(key: _grid, channels: channels, guide: guide),
             ),
           ],
         );
@@ -81,14 +97,28 @@ class GuideScreen extends ConsumerWidget {
 }
 
 class _Toolbar extends ConsumerWidget {
-  const _Toolbar({required this.catalog, required this.state});
+  const _Toolbar({
+    required this.catalog,
+    required this.state,
+    required this.onNow,
+    required this.onTonight,
+  });
 
   final LiveCatalog catalog;
   final GuideState state;
 
+  /// Jumps through time; null while there is no grid.
+  final VoidCallback? onNow;
+  final VoidCallback? onTonight;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final time = ref.watch(guideTimeProvider);
+    final tonight = time.tonight(ref.watch(clockProvider));
+    final evening = tonight.tomorrow ? 'tomorrow evening' : 'this evening';
+    // Guide times are unshifted; the target is a real moment.
+    final reachesTonight =
+        state.guide?.reaches(time.unadjust(tonight.at)) ?? false;
     final selected = ref.watch(liveSelectionProvider);
     final favourites = ref.watch(favouritesProvider);
     final hidden = favourites.hiddenIds(ContentKind.live);
@@ -138,6 +168,25 @@ class _Toolbar extends ConsumerWidget {
                 }
               },
             ),
+          ),
+          const SizedBox(width: 12),
+          ToolbarChip(
+            key: const Key('guide.now'),
+            label: 'Now',
+            icon: Icons.schedule_outlined,
+            tooltip: 'Go to the current time',
+            onPressed: onNow,
+          ),
+          const SizedBox(width: 8),
+          ToolbarChip(
+            key: const Key('guide.tonight'),
+            label: 'Tonight',
+            icon: Icons.bedtime_outlined,
+            tooltip: reachesTonight
+                ? 'Go to $evening, '
+                      '${GuideTime.eveningHour.toString().padLeft(2, '0')}:00'
+                : 'No TV guide for $evening yet',
+            onPressed: reachesTonight ? onTonight : null,
           ),
           const Spacer(),
           if (state.error case final error?)
@@ -292,9 +341,16 @@ class GuideGridState extends ConsumerState<GuideGrid> {
 
   static const _px = GuideGrid.pixelsPerMinute;
 
-  /// Start of the grid (a UTC instant on a display-zone hour).
-  DateTime _start(GuideTime time) =>
-      time.startOfHour(_opened.subtract(GuideGrid.past));
+  /// How much of the time before a jump target stays in view.
+  static const _lead = Duration(minutes: 30);
+
+  /// Start of the grid (a UTC instant on a display-zone hour): [GuideGrid.past]
+  /// before opening, or earlier so a jump to tonight shows its lead.
+  DateTime _start(GuideTime time) {
+    final past = _opened.subtract(GuideGrid.past);
+    final tonight = time.tonight(_opened).at.subtract(_lead);
+    return time.startOfHour(tonight.isBefore(past) ? tonight : past);
+  }
 
   double _x(DateTime start, DateTime moment) =>
       moment.difference(start).inSeconds / 60 * _px;
@@ -303,7 +359,7 @@ class GuideGridState extends ConsumerState<GuideGrid> {
   void initState() {
     super.initState();
     final start = _start(ref.read(guideTimeProvider));
-    final initial = math.max(0.0, _x(start, _opened) - 30 * _px);
+    final initial = math.max(0.0, _x(start, _opened.subtract(_lead)));
     _bodyH = ScrollController(initialScrollOffset: initial);
     _headerH = ScrollController(initialScrollOffset: initial);
     _step = _stepOf(initial);
@@ -386,20 +442,30 @@ class GuideGridState extends ConsumerState<GuideGrid> {
     AppSettings.maxGuideChannelWidth,
   );
 
-  /// Scrolls so the current time is near the left edge.
-  void scrollToNow() {
+  /// Scrolls so [moment] is near the left edge, where the current time is
+  /// when the guide opens.
+  void scrollToTime(DateTime moment) {
+    if (!_bodyH.hasClients) return;
     final start = _start(ref.read(guideTimeProvider));
-    final now = ref.read(clockProvider);
-    final target = (_x(start, now) - 30 * _px).clamp(
-      0.0,
-      _bodyH.position.maxScrollExtent,
-    );
+    final target = _x(
+      start,
+      moment.subtract(_lead),
+    ).clamp(0.0, _bodyH.position.maxScrollExtent);
     _bodyH.animateTo(
       target,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
   }
+
+  /// Scrolls so the current time is near the left edge.
+  void scrollToNow() => scrollToTime(ref.read(clockProvider));
+
+  /// Scrolls to 20:00 this evening (tomorrow's from 23:00), with a little of
+  /// the half hour before it in view.
+  void scrollToTonight() => scrollToTime(
+    ref.read(guideTimeProvider).tonight(ref.read(clockProvider)).at,
+  );
 
   @override
   void dispose() {
@@ -420,6 +486,13 @@ class GuideGridState extends ConsumerState<GuideGrid> {
       final guideSpan = time.adjust(end).difference(start);
       if (guideSpan > span) span = guideSpan;
     }
+    // Room after tonight's jump target, so it can reach the left edge.
+    final tonightSpan = time
+        .tonight(now)
+        .at
+        .add(const Duration(hours: 4))
+        .difference(start);
+    if (tonightSpan > span) span = tonightSpan;
     if (span > GuideGrid.maxSpan) span = GuideGrid.maxSpan;
     final width = span.inMinutes * _px;
     final channelWidth = _clampWidth(
@@ -451,7 +524,6 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                     time: time,
                     start: start,
                     width: channelWidth + 1,
-                    onNow: scrollToNow,
                   ),
                   Expanded(
                     child: _swipeTime(
@@ -603,21 +675,19 @@ class GuideGridState extends ConsumerState<GuideGrid> {
 
 typedef _Window = ({DateTime from, DateTime to});
 
-/// Top-left cell: the date at the left edge of the grid and a "now" button.
+/// Top-left cell: the date at the left edge of the grid.
 class _Corner extends StatelessWidget {
   const _Corner({
     required this.controller,
     required this.time,
     required this.start,
     required this.width,
-    required this.onNow,
   });
 
   final ScrollController controller;
   final GuideTime time;
   final DateTime start;
   final double width;
-  final VoidCallback onNow;
 
   @override
   Widget build(BuildContext context) {
@@ -648,7 +718,7 @@ class _Corner extends StatelessWidget {
               },
             ),
           ),
-          TextButton(onPressed: onNow, child: const Text('Now')),
+          const SizedBox(width: 12),
         ],
       ),
     );

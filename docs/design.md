@@ -130,7 +130,15 @@ weights 400, 500, 600, 700.
   padding 20, dividers in `hover`.
 - **TV guide**: programme cells `card`; programme on now `hover`; selected
   cell has an inset accent ring; a vertical accent line marks the current
-  time; channel column stays fixed.
+  time; channel column stays fixed. Its toolbar, left to right: the
+  category dropdown, the toolbar chips "Now" and "Tonight" (never accent:
+  they jump, they don't filter), then "Updated …" (cut short first when
+  space runs out) and ⟳. The top-left corner of the grid shows the date at
+  the left edge. "Now" puts the current time 30 min from the left edge, as
+  when the guide opens; "Tonight" puts 20:00 there (19:30 in view), from
+  23:00 on 20:00 tomorrow. "Tonight" is disabled while fewer than half of
+  the guide's channels have programmes past that time ("No TV guide for
+  tomorrow evening yet").
 - **Player overlay**: `scrim` background, controls in `textPrimary`, accent
   progress fill, secondary pills for Subtitles / Audio.
 - **Player controls bar**, left to right: the primary action (play/pause for
@@ -245,6 +253,8 @@ English for now.
 | Provider label | The provider's own tag of a title (`NF`, `4K-SC`), shown as-is |
 | Other sources | The other variants of the same movie or series in the provider's catalogue |
 | Last played | The source of a title that was played most recently |
+| Now (TV guide) | Goes back to the current time |
+| Tonight (TV guide) | Goes to 20:00 this evening, from 23:00 on tomorrow evening; disabled while the TV guide doesn't reach that far |
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).

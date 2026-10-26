@@ -120,7 +120,7 @@ void main() {
 
   tearDown(() => player.dispose());
 
-  Future<void> pump(WidgetTester tester, Widget screen) async {
+  Future<void> pump(WidgetTester tester, Widget screen, {DateTime? now}) async {
     await tester.pumpWidget(
       testApp(
         overrides: [
@@ -131,7 +131,7 @@ void main() {
         ],
         settings: settings,
         epg: epg,
-        now: _now,
+        now: now ?? _now,
         child: Scaffold(body: screen),
       ),
     );
@@ -908,6 +908,261 @@ void main() {
       expect(keepLastWordAttached('Kanal 2'), 'Kanal 2');
       expect(keepLastWordAttached('SE: Kanal 1 HD'), 'SE: Kanal 1 HD');
       expect(keepLastWordAttached('◉'), '◉');
+    });
+  });
+
+  group('quick jumps', () {
+    // Stockholm local time in late October 2026, after the switch to CET
+    // (+01:00).
+    DateTime local(int day, int hour, [int minute = 0]) =>
+        DateTime.utc(2026, 10, day, hour - 1, minute);
+
+    // Half-hour programmes from 06:00 on the 27th until [until] (local), for
+    // [extra] guide channels without a playlist channel ending at [extraUntil].
+    EpgGuide guide({
+      required DateTime until,
+      int extra = 0,
+      DateTime? extraUntil,
+    }) {
+      List<EpgProgram> programs(String id, DateTime end) => [
+        for (
+          var t = local(27, 6);
+          t.isBefore(end);
+          t = t.add(const Duration(minutes: 30))
+        )
+          _p(
+            id,
+            'Show ${t.toIso8601String()}',
+            t,
+            t.add(const Duration(minutes: 30)),
+          ),
+      ];
+      return EpgGuide(
+        programs: {
+          'kanal1.example': programs('kanal1.example', until),
+          'kanal2.example': programs('kanal2.example', until),
+          for (var i = 0; i < extra; i++)
+            'extra$i.example': programs('extra$i.example', extraUntil!),
+        },
+        displayNames: {
+          'kanal1.example': ['Kanal 1'],
+          'kanal2.example': ['Kanal 2'],
+        },
+        fetchedAt: local(27, 6),
+      );
+    }
+
+    final body = find.byKey(const Key('guide.body'));
+    final now = find.byKey(const Key('guide.now'));
+    final tonight = find.byKey(const Key('guide.tonight'));
+
+    ScrollPosition timeScroll(WidgetTester tester) => tester
+        .state<ScrollableState>(
+          find.descendant(of: body, matching: find.byType(Scrollable)).first,
+        )
+        .position;
+
+    /// How far [moment]'s programme on Kanal 2 starts from the grid's left
+    /// edge.
+    double fromLeft(WidgetTester tester, DateTime moment) =>
+        tester.getRect(_program('2', moment)).left - tester.getRect(body).left;
+
+    bool enabled(WidgetTester tester, Finder chip) =>
+        tester
+            .widget<FilterChip>(
+              find.descendant(of: chip, matching: find.byType(FilterChip)),
+            )
+            .onSelected !=
+        null;
+
+    Future<void> open(WidgetTester tester, DateTime at, EpgGuide g) async {
+      epg = FakeEpgRepository(cached: g);
+      await pump(tester, const GuideScreen(), now: at);
+      await tester.pumpAndSettle();
+    }
+
+    const lead = 30 * GuideGrid.pixelsPerMinute;
+
+    testWidgets('Now and Tonight are in the toolbar with hover texts', (
+      tester,
+    ) async {
+      await open(tester, local(27, 14), guide(until: local(29, 0)));
+      expect(find.byTooltip('Go to the current time'), findsOneWidget);
+      expect(find.byTooltip('Go to this evening, 20:00'), findsOneWidget);
+      // The corner no longer has a Now button of its own.
+      expect(find.text('Now'), findsOneWidget);
+      expect(find.descendant(of: now, matching: find.text('Now')), findsOne);
+      expect(enabled(tester, tonight), isTrue);
+    });
+
+    testWidgets('Now goes back to the current time', (tester) async {
+      await open(tester, local(27, 14), guide(until: local(29, 0)));
+      final opened = timeScroll(tester).pixels;
+      await tester.drag(body, const Offset(-1500, 0));
+      await tester.pumpAndSettle();
+      expect(timeScroll(tester).pixels, isNot(opened));
+
+      await tester.tap(now);
+      await tester.pumpAndSettle();
+      expect(timeScroll(tester).pixels, opened);
+      final line = tester.getRect(find.byKey(const Key('guide.nowLine')));
+      expect(line.center.dx - tester.getRect(body).left, closeTo(lead, 0.5));
+    });
+
+    testWidgets('Tonight goes to 20:00 with 19:30 in view', (tester) async {
+      await open(tester, local(27, 14), guide(until: local(29, 0)));
+      await tester.tap(tonight);
+      await tester.pumpAndSettle();
+      expect(fromLeft(tester, local(27, 20)), closeTo(lead, 0.5));
+      final label = find.descendant(
+        of: find.byKey(const Key('guide.header')),
+        matching: find.text('19:30'),
+      );
+      expect(
+        tester.getRect(label).left,
+        greaterThanOrEqualTo(tester.getRect(body).left),
+      );
+    });
+
+    testWidgets('after 23:00 Tonight goes to tomorrow evening', (tester) async {
+      // The guide only just reaches it; the grid still has room to put it
+      // at the left edge.
+      await open(tester, local(27, 23, 15), guide(until: local(28, 21)));
+      expect(find.byTooltip('Go to tomorrow evening, 20:00'), findsOneWidget);
+      await tester.tap(tonight);
+      await tester.pumpAndSettle();
+      expect(fromLeft(tester, local(28, 20)), closeTo(lead, 0.5));
+    });
+
+    testWidgets('after 23:00 Tonight is off while the guide ends sooner', (
+      tester,
+    ) async {
+      await open(tester, local(27, 23, 15), guide(until: local(28, 15)));
+      expect(
+        find.byTooltip('No TV guide for tomorrow evening yet'),
+        findsOneWidget,
+      );
+      expect(enabled(tester, tonight), isFalse);
+      final x = timeScroll(tester).pixels;
+      await tester.tap(tonight);
+      await tester.pumpAndSettle();
+      expect(timeScroll(tester).pixels, x);
+    });
+
+    testWidgets('one channel reaching the evening is not enough', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        local(27, 23, 15),
+        // Kanal 1 and 2 reach it, three others don't.
+        guide(until: local(29, 6), extra: 3, extraUntil: local(28, 15)),
+      );
+      expect(enabled(tester, tonight), isFalse);
+    });
+
+    testWidgets('a guide ending before this evening turns Tonight off', (
+      tester,
+    ) async {
+      await open(tester, local(27, 14), guide(until: local(27, 18)));
+      expect(find.byTooltip('No TV guide for this evening yet'), findsOne);
+      expect(enabled(tester, tonight), isFalse);
+    });
+
+    testWidgets('Tonight follows the clock past 23:00', (tester) async {
+      await open(tester, local(27, 22, 50), guide(until: local(28, 15)));
+      expect(find.byTooltip('Go to this evening, 20:00'), findsOneWidget);
+      expect(enabled(tester, tonight), isTrue);
+
+      final container = ProviderScope.containerOf(tester.element(body));
+      (container.read(clockProvider.notifier) as FixedClock).set(
+        local(27, 23, 5),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('No TV guide for tomorrow evening yet'),
+        findsOneWidget,
+      );
+      expect(enabled(tester, tonight), isFalse);
+    });
+
+    testWidgets('opened late in the evening, 19:30 is still in reach', (
+      tester,
+    ) async {
+      await open(tester, local(27, 22, 30), guide(until: local(29, 0)));
+      await tester.tap(tonight);
+      await tester.pumpAndSettle();
+      expect(fromLeft(tester, local(27, 20)), closeTo(lead, 0.5));
+    });
+
+    testWidgets('uses the guide time zone setting', (tester) async {
+      settings.saved = const AppSettings(guideTimeZone: 'America/New_York');
+      await open(tester, local(27, 14), guide(until: local(29, 0)));
+      await tester.tap(tonight);
+      await tester.pumpAndSettle();
+      // 20:00 EDT (-04:00) on the 27th.
+      expect(fromLeft(tester, DateTime.utc(2026, 10, 28)), closeTo(lead, 0.5));
+    });
+
+    testWidgets('both work from another day', (tester) async {
+      await open(tester, local(27, 14), guide(until: local(29, 0)));
+      final opened = timeScroll(tester).pixels;
+      // A day later.
+      timeScroll(tester).jumpTo(opened + 24 * 60 * GuideGrid.pixelsPerMinute);
+      await tester.pumpAndSettle();
+      expect(find.text('Wed 28 Oct'), findsWidgets);
+
+      await tester.tap(tonight);
+      await tester.pumpAndSettle();
+      expect(fromLeft(tester, local(27, 20)), closeTo(lead, 0.5));
+
+      timeScroll(tester).jumpTo(opened + 24 * 60 * GuideGrid.pixelsPerMinute);
+      await tester.pumpAndSettle();
+      await tester.tap(now);
+      await tester.pumpAndSettle();
+      expect(timeScroll(tester).pixels, opened);
+    });
+
+    testWidgets('the toolbar fits at text size 1.4 in a narrow window', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      epg = FakeEpgRepository(cached: guide(until: local(29, 0)));
+      await pump(
+        tester,
+        Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: const GuideScreen(),
+          ),
+        ),
+        now: local(27, 14),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      for (final (chip, label) in [(now, 'Now'), (tonight, 'Tonight')]) {
+        final text = tester.renderObject<RenderParagraph>(
+          find.descendant(of: chip, matching: find.text(label)),
+        );
+        expect(text.didExceedMaxLines, isFalse, reason: label);
+        expect(
+          text.size.width,
+          greaterThanOrEqualTo(text.getMaxIntrinsicWidth(double.infinity)),
+          reason: label,
+        );
+      }
+      // The update time gives way instead.
+      final updated = tester.renderObject<RenderParagraph>(
+        find.textContaining('Updated'),
+      );
+      expect(updated.didExceedMaxLines, isTrue);
+      expect(
+        tester.getRect(tonight).right,
+        lessThan(tester.getRect(find.textContaining('Updated')).left),
+      );
     });
   });
 
