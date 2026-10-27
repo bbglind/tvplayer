@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -25,10 +27,21 @@ abstract interface class ProviderStorage {
   Future<void> delete();
 }
 
+/// The keyring value saved under an earlier application ID.
+class LegacyKeyring {
+  const LegacyKeyring({required this.read, required this.clear});
+
+  /// The old value (a JSON object of all keys), or null when there is none.
+  final Future<String?> Function() read;
+
+  /// Deletes the old value.
+  final Future<void> Function() clear;
+}
+
 /// [ProviderStorage] in the platform keystore (Secret Service keyring on
 /// Linux, Keystore on Android). Nothing is written to plain files.
 class SecureProviderStorage implements ProviderStorage {
-  SecureProviderStorage({FlutterSecureStorage? storage, this.migrateLegacy})
+  SecureProviderStorage({FlutterSecureStorage? storage, this.legacy})
     : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'provider_config_v1';
@@ -38,19 +51,67 @@ class SecureProviderStorage implements ProviderStorage {
 
   final FlutterSecureStorage _storage;
 
-  /// Moves a provider saved under an earlier application ID into the
-  /// keystore and returns true when it did; tried when nothing is saved.
-  final Future<bool> Function()? migrateLegacy;
+  /// Where a provider saved under an earlier application ID is moved from,
+  /// once, on the first [load] when nothing is saved.
+  final LegacyKeyring? legacy;
+
+  /// The move from [legacy]; reset after a failure so a retry tries again.
+  Future<void>? _migration;
 
   @override
   Future<ProviderConfig?> load() async {
-    var raw = await _guard(() => _storage.read(key: _key));
-    final migrate = migrateLegacy;
-    if (raw == null && migrate != null && await _guard(migrate)) {
-      raw = await _guard(() => _storage.read(key: _key));
-    }
+    final legacy = this.legacy;
+    if (legacy != null) await (_migration ??= _migrate(legacy));
+    final raw = await _guard(() => _storage.read(key: _key));
     return raw == null ? null : decodeProviderConfig(raw);
   }
+
+  /// Moves the provider from [legacy] and logs the outcome, never the value.
+  Future<void> _migrate(LegacyKeyring legacy) => _guard(() async {
+    try {
+      final outcome = await _moveLegacy(legacy).timeout(_timeout);
+      debugPrint('Keyring migration: $outcome');
+    } catch (e) {
+      _migration = null;
+      debugPrint('Keyring migration: failed (${_describe(e)})');
+      rethrow;
+    }
+  });
+
+  Future<String> _moveLegacy(LegacyKeyring legacy) async {
+    if (await _storage.read(key: _key) != null) return 'exists';
+    final old = await legacy.read();
+    if (old == null) return 'none';
+    final String? value;
+    try {
+      final json = jsonDecode(old);
+      value = json is Map && json[_key] is String ? json[_key] as String : null;
+    } on FormatException {
+      // Its message quotes the value.
+      return 'none (old item unreadable)';
+    }
+    if (value == null) return 'none (old item has no provider)';
+    await _storage.write(key: _key, value: value);
+    if (await _storage.read(key: _key) != value) {
+      throw const ProviderStorageException(
+        'The moved provider did not read back the same.',
+      );
+    }
+    try {
+      await legacy.clear();
+    } catch (e) {
+      return 'migrated (old item left behind: ${_describe(e)})';
+    }
+    return 'migrated';
+  }
+
+  /// An error for the log; keyring errors never contain the stored value.
+  static String _describe(Object e) => switch (e) {
+    PlatformException(:final message) => message ?? e.code,
+    ProviderStorageException(:final message) => message,
+    TimeoutException() => 'no response',
+    _ => '${e.runtimeType}',
+  };
 
   @override
   Future<void> save(ProviderConfig config) => _guard(

@@ -58,7 +58,12 @@ final httpClientProvider = Provider<http.Client>((ref) {
 
 /// Where the provider config is persisted. Overridden in tests.
 final providerStorageProvider = Provider<ProviderStorage>(
-  (ref) => SecureProviderStorage(migrateLegacy: migrateLegacyKeyring),
+  (ref) => SecureProviderStorage(
+    legacy: const LegacyKeyring(
+      read: readLegacyKeyring,
+      clear: clearLegacyKeyring,
+    ),
+  ),
 );
 
 final connectionTesterProvider = Provider<ConnectionTester>(

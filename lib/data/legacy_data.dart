@@ -25,14 +25,16 @@ Future<void> migrateLegacyData() async {
 
 const _keyringChannel = MethodChannel('tvplayer/legacy_keyring');
 
-/// Moves the keyring item of [legacyApplicationId] to the current ID unless
-/// the current ID already has one; true when something was moved. Throws a
-/// [PlatformException] when the keyring can't be used.
-Future<bool> migrateLegacyKeyring() async {
-  if (!Platform.isLinux) return false;
-  final result = await _keyringChannel.invokeMethod<String>(
-    'migrate',
-    legacyApplicationId,
-  );
-  return result == 'migrated';
+/// The flutter_secure_storage keyring value of [legacyApplicationId] (a JSON
+/// object of all keys), or null when there is none or off Linux. Throws a
+/// [PlatformException] when the keyring can't be used. Contains credentials.
+Future<String?> readLegacyKeyring() async {
+  if (!Platform.isLinux) return null;
+  return _keyringChannel.invokeMethod<String>('read', legacyApplicationId);
+}
+
+/// Deletes the keyring item of [legacyApplicationId].
+Future<void> clearLegacyKeyring() async {
+  if (!Platform.isLinux) return;
+  await _keyringChannel.invokeMethod<void>('clear', legacyApplicationId);
 }
