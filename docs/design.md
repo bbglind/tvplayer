@@ -107,7 +107,10 @@ weights 400, 500, 600, 700.
   On a thumbnail: 4 px at the bottom edge over a dark translucent track.
 - **Poster**: 2:3, radius 12, placeholder `card`. Badges top-left
   ("New episode": accent bg; LIVE: live bg; both with `onAccent` text).
-  Watched/downloaded marker: small ✓ badge in success colour.
+  Watched marker: small ✓ badge in success colour; downloaded marker
+  below it: the same round `success` badge with the "downloaded" icon
+  (`download_done`, hint "Downloaded"), so the two never look alike. A
+  series poster has it while some of its episodes are downloaded.
 - **Provider label**: movie, series and episode titles drop the provider's
   tag, year and country (`NF-DO - Show (2025) (GB)` → "Show"); the tag
   shows as-is (never translated) in a small label before the title: pill
@@ -169,13 +172,17 @@ weights 400, 500, 600, 700.
   on; otherwise a line why not ("No replay: this channel has no archive",
   "No replay: older than 3 days", "No replay: not in the provider's
   archive", "Not started yet") and "Close". On now without an archive a
-  click plays live at once. Esc closes it.
+  click plays live at once. Esc closes it. A replayable past programme
+  also has "Download" (secondary; "In Downloads", disabled, once queued)
+  and, below the times, what it saves ("Download saves 19:58–21:15": the
+  start margin before, the end margin after).
 - **Player overlay**: `scrim` background, controls in `textPrimary`, accent
   progress fill, secondary pills for Subtitles / Audio.
 - **Player controls bar**, left to right: the primary action (play/pause for
   movies, episodes and replays; on live TV pause on channels with an
-  archive, else nothing; Record (group 9) follows it), the seek bar with
-  position and end time (on live TV nothing, or "Paused · Behind live
+  archive, else nothing; greyed out while recording, hint "Pause isn't
+  available while recording"), Record on live TV (see Recording), the
+  seek bar with position and end time (on live TV nothing, or "Paused · Behind live
   0:45" while paused; in a replay clock times, see Replay player), the
   "LIVE" button in a replay or while live TV is paused,
   mute button + volume slider (0–100 %, about 120 wide), the Channels and
@@ -216,6 +223,32 @@ weights 400, 500, 600, 700.
   without an error, or goes live within 10 s of live. Pausing live TV
   keeps the picture, closes the stream and resumes from the archive 15 s
   before the pause. Replays don't go into Continue watching.
+- **Recording** (Record now, live TV only, not while paused or in a
+  replay): Record (`fiber_manual_record_outlined`, hint "Record
+  <channel> until 21:15 (r)": the programme's end from the guide plus the
+  end margin, at most the maximum length) turns into "Stop recording (r)"
+  (`stop_circle_outlined`, `live` colour) followed by the recording
+  indicator: a `live` dot and "REC 0:12:34" (label 700, tabular figures;
+  it says REC, so not colour alone). In fullscreen the indicator stays at
+  the top right over the video as a pill (`scrim` at 85 %, pill radius),
+  also while the controls are hidden. A reason it can't start ("Can't
+  record: less than 5 GB free on the disk.") shows in its place for 6 s.
+  It records what mpv plays, with no second stream, and stops by itself
+  at the planned end, when the stream ends ("Stopped: the stream
+  ended.") or the disk fills up.
+- **Stop recording?**: switching channel, Stop, Back and closing the app
+  while recording ask first, in a side panel (dialogs can't be drawn over
+  the video): "Stop recording?" (card title), "Switching channel stops
+  the recording of <channel>. What's recorded so far is kept." (Leaving
+  the player / Closing the app …), primary "Stop recording", which then
+  goes on with the action, and "Keep recording" (focused, also Esc).
+- **One stream at a time**: the provider allows one stream for playback,
+  downloads and recordings together. Playing from the provider while a
+  download runs asks "Pause the download?" ("Your provider allows one
+  stream at a time. “X” is downloading (45 %). It continues when playback
+  stops.") with "Don't play" and "Pause download" (primary, focused); in
+  the player the same question is a side panel. Downloaded files play
+  offline and never ask. A download waits while something plays.
 - **Mouse on the video**: click = play/pause (live TV: pause on channels
   with an archive, else show the controls),
   double click = fullscreen (the click doesn't also fire), wheel = volume.
@@ -248,6 +281,57 @@ weights 400, 500, 600, 700.
   (icon, type overline, name, count), Continue watching thumbnails and
   Recently added posters, the last two with "See all". Rows still loading show `card`
   placeholders; empty rows are left out.
+- **Downloads page** (sidebar, after Series): page title "Downloads"
+  with "Open folder" (secondary, hint: the folder). Sections "In
+  progress" (queue order), "Recordings" (recordings and programmes from
+  the archive) and "Downloaded" (movies and episodes), newest first.
+  Rows: `card`, radius 12, padding 10/14: poster (44×64) or channel logo
+  (64×64 on `background`), the provider label and title, a meta line
+  (13, `textMuted`: "Movie · 2020 · 2.1 GB", "S01E02 · Pilot", "Recording
+  · <channel> · Mon 26 Oct 20:00–21:15"), while it downloads a 4 px
+  progress bar (indeterminate while the size is unknown) and a status
+  line (13, `textSecondary`): "45 % · 1.0 of 2.1 GB · 4.2 MB/s · 4 min
+  left", "Waiting for its turn", "Waiting: starts at 21:15", "Paused ·
+  45 % · …", "Paused while playing", "Paused: less than 5 GB free on the
+  disk.", "Failed: <reason>" (with an error icon), "Couldn't resume: the
+  server started it again from the beginning.", "Recording · 0:12:34 ·
+  1.2 GB" (with a `live` dot). Icon buttons at the end, each with a hint:
+  Pause / Resume (Try again after a failure), Cancel download; Play,
+  Remove (deletes the file). A click on a finished row plays it. Remove
+  and cancelling a partial download ask first ("Remove “X”? The file
+  (2.1 GB) is deleted." Cancel / Remove; "Cancel “X”?" Keep downloading /
+  Cancel download). Empty: "Nothing downloaded yet" and a line on where
+  Download is. Rows grow with the text (no fixed heights).
+- **Download actions**: movie details have "Download" (secondary) after
+  Mark as watched; once in the list it shows the state ("Downloading
+  45 %", "Queued for download", "Download paused", "Download failed",
+  "Downloaded" with the icon in `success`) and opens the Downloads page.
+  Episodes have "Download", "Cancel download" or "Remove download" in
+  their menu (⋮, right click, long press, Menu key), and a `downloading`
+  icon or the downloaded mark after the title; the season menu has
+  "Download season" (the episodes not in the list yet). Adding shows
+  "Added “X” to Downloads" (or "Added 3 episodes of “X” to Downloads")
+  with "Show" for 6 s; it also closes when another page opens.
+- **Download files**: saved exactly as the provider sends them, with its
+  extension, in the downloads folder: `Movies/<Title> (<Year>).<ext>`,
+  `Series/<Series>/Season 01/<Series> - S01E02 - <Episode>.<ext>`,
+  `Recordings/<Channel> - <Programme> - 2026-10-27 20-00.ts`; clean titles
+  only, " (2)" when a name is taken. One download at a time, in order,
+  while the app is open; partial files resume (also after a restart).
+  Movies and episodes share their position and watched marks with the
+  streamed item; recordings and programmes from the archive keep no
+  position and stay out of Continue watching.
+- **Disk space**: below the minimum free space plus 1 GB a snack bar
+  warns ("The disk is almost full: downloads pause at 5 GB free."); below
+  the minimum downloads pause (until Resume) and recordings stop,
+  keeping what was saved. A download whose size doesn't fit doesn't
+  start ("Not enough disk space: needs 4.2 GB, 6.0 GB free, keeps 5 GB
+  free.").
+- **Settings › Downloads & recording** (after Player): Folder (the path,
+  "Change…" opens a folder picker, "Use default" when changed), End
+  margin (None, 5–60 min, default 15), Start margin (replay) (None, 1, 2,
+  5, 10 min, default 2), Maximum recording length (1–12 h, default 4),
+  Minimum free disk space (1–50 GB, default 5).
 - **Settings › Playlist** (right after Provider): a row per part
   (Channels, Movies, Series, TV guide) with when it was last updated, in
   local time ("Updated Today 12:40 · 4,512 channels", "Yesterday 21:05",
@@ -332,6 +416,20 @@ English for now.
 | Behind live | How far a replay or pause is behind the live stream |
 | Paused (live TV) | Live TV paused on a channel with an archive; resumes from the archive |
 | Tonight (TV guide) | Goes to 20:00 this evening, from 23:00 on tomorrow evening; disabled while the TV guide doesn't reach that far |
+| Downloads | The page and list of downloads and recordings |
+| Download | Saves a movie, an episode or a past programme (from the archive) to the downloads folder |
+| Download season | Downloads the season's episodes that aren't in Downloads yet |
+| Downloaded | A movie or episode whose file is complete; it plays offline |
+| Cancel download | Stops a download that isn't finished and deletes what was saved |
+| Remove / Remove download | Deletes a finished download's file |
+| Pause the download? | The question before playing from the provider while a download runs |
+| Record | Records the live channel playing, from what the player plays |
+| Stop recording | Ends the recording, keeping the file |
+| Recording / Recordings | A recording in progress / recordings and programmes saved from the archive |
+| End margin | Minutes saved after a programme ends (recordings and the archive) |
+| Start margin (replay) | Minutes saved before a programme starts, from the archive |
+| Maximum recording length | A recording stops after this long in any case |
+| Minimum free disk space | Downloads pause and recordings stop below it |
 
 - The heading above a list or grid names the selected category ("All
   movies", one of my categories or a category).
@@ -383,10 +481,13 @@ English for now.
   (↑ / ↓, or the mouse wheel on the video)", "Channels: switch channel
   (c)", "Subtitles and audio (s: next subtitles)", "Fullscreen (f or
   double-click, Esc to leave)", "Close (Esc)", "Cancel and play to the
-  end (Esc)". Stop and the back arrow: "Stop and go back", "Back (stops
-  playback)". Keys: Space pause, ←/→ seek 10 s (Shift: 1 min), ↑/↓
-  volume, f fullscreen, Esc (cancel the countdown, close a panel, leave
-  fullscreen), s subtitles, m mute, c channels, n next episode, l go live.
+  end (Esc)", "Record <channel> until 21:15 (r)", "Stop recording (r)",
+  "Pause isn't available while recording", "Keep recording (Esc)". Stop
+  and the back arrow: "Stop and go back", "Back (stops playback)". Keys:
+  Space pause, ←/→ seek 10 s (Shift: 1 min), ↑/↓ volume, f fullscreen,
+  Esc (cancel the countdown, close a panel or answer no, leave
+  fullscreen), s subtitles, m mute, c channels, n next episode, l go
+  live, r record / stop recording.
 - Episodes with a next one get a "Next episode (n)" button after
   play/pause; it marks the current episode watched and plays the next.
 - "Automatic refresh" (Settings › Playlist, kept per provider): Off, On
