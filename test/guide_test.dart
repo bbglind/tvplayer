@@ -1290,7 +1290,11 @@ void main() {
       final zone = find.byKey(const Key('settings.timeZone'));
       await tester.scrollUntilVisible(zone, 100);
       await tester.pumpAndSettle();
-      expect(find.text('Device time zone (Europe/Stockholm)'), findsOneWidget);
+      // With the current UTC offset: still summer time at [_now].
+      expect(
+        find.text('Device time zone (Europe/Stockholm, UTC+02:00)'),
+        findsOneWidget,
+      );
 
       await tester.tap(zone);
       await tester.pumpAndSettle();
@@ -1302,7 +1306,7 @@ void main() {
       await tester.tap(find.text('America/New York'));
       await tester.pumpAndSettle();
       expect(settings.saved.guideTimeZone, 'America/New_York');
-      expect(find.text('America/New_York'), findsOneWidget);
+      expect(find.text('America/New_York, UTC-04:00'), findsOneWidget);
 
       // Back to the device zone.
       await tester.tap(find.byKey(const Key('settings.timeZone')));
@@ -1400,6 +1404,24 @@ void main() {
       expect(detect(androidZone: () => 'Europe/Brussels\n'), 'Europe/Brussels');
       expect(detect(androidZone: () => 'Not/AZone'), 'UTC');
       expect(detect(androidZone: () => null), 'UTC');
+    });
+
+    test("Android's zone converts with the bundled rules, daylight saving "
+        'included', () {
+      // No TZ, /etc/localtime or /etc/timezone on Android.
+      final time = GuideTime.named(
+        detect(androidZone: () => 'Europe/Stockholm\n'),
+      );
+      expect(time.zoneName, 'Europe/Stockholm');
+      expect(time.offsetAt(DateTime.utc(2026, 10, 24, 12)), '+02:00');
+      expect(time.offsetAt(DateTime.utc(2026, 10, 27, 12)), '+01:00');
+      expect(
+        time.formatRange(
+          DateTime.utc(2026, 10, 27, 19),
+          DateTime.utc(2026, 10, 27, 19, 30),
+        ),
+        '20:00–20:30',
+      );
     });
   });
 }

@@ -70,6 +70,18 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  /// The guide's time zone with its current UTC offset, e.g. "Device time
+  /// zone (Europe/Stockholm, UTC+01:00)", so a wrong offset can be told
+  /// from wrong guide data.
+  static String _timeZoneLabel(WidgetRef ref, AppSettings settings) {
+    final time = GuideTime.named(
+      settings.guideTimeZone ?? ref.watch(deviceTimeZoneProvider),
+    );
+    final zone =
+        '${time.zoneName}, UTC${time.offsetAt(ref.watch(clockProvider))}';
+    return settings.guideTimeZone == null ? 'Device time zone ($zone)' : zone;
+  }
+
   Future<void> _pickTimeZone(
     BuildContext context,
     WidgetRef ref,
@@ -177,11 +189,7 @@ class SettingsScreen extends ConsumerWidget {
               key: const Key('settings.timeZone'),
               leading: const Icon(Icons.public),
               title: const Text('Time zone'),
-              subtitle: Text(
-                settings.guideTimeZone == null
-                    ? 'Device time zone (${ref.watch(deviceTimeZoneProvider)})'
-                    : settings.guideTimeZone!,
-              ),
+              subtitle: Text(_timeZoneLabel(ref, settings)),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _pickTimeZone(context, ref, settings),
             ),

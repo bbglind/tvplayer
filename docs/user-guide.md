@@ -840,8 +840,10 @@ part, the same way.
 
 ### TV guide
 
-- **"Time zone"**: which time zone guide times are shown in. Default: your
-  device's time zone. Pick another from a searchable list.
+- **"Time zone"**: which time zone guide times are shown in, with its
+  current offset from UTC, e.g. "Device time zone (Europe/Stockholm,
+  UTC+01:00)". Default: your device's time zone. Pick another from a
+  searchable list.
 - **"Time shift"**: moves all guide times by whole hours (−12 to +12,
   default "None"), for providers whose times are wrong. If programmes are
   consistently an hour off, try this.
@@ -997,8 +999,10 @@ Differences from Linux so far:
 
 ### Tips
 
-- **Guide times are off by an hour or more?** Use Settings › TV guide ›
-  "Time shift" (or check "Time zone").
+- **Guide times are off by an hour or more?** First check that Settings ›
+  TV guide › "Time zone" shows the right UTC offset. If it does, the
+  provider's guide data is off (some providers get daylight saving wrong,
+  sometimes only on some channels): use "Time shift".
 - **Video stutters or drops frames?** Turn on "Show playback statistics" to
   see dropped frames. "Player debug info" has a hardware-decoding selector
   to try other modes than the default (VA-API).
