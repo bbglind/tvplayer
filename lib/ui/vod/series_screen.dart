@@ -78,6 +78,7 @@ class SeriesScreen extends ConsumerWidget {
       notifier: ref.read(seriesFilterProvider.notifier),
       categoryOf: (item) => item.categoryId,
       itemRef: seriesItemRef,
+      imageOf: (item) => item.coverUrl,
       onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.series),
       continueWatching: [
         if (catalog != null)

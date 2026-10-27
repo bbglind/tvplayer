@@ -68,6 +68,7 @@ class MoviesScreen extends ConsumerWidget {
       notifier: ref.read(movieFilterProvider.notifier),
       categoryOf: (item) => item.categoryId,
       itemRef: movieItemRef,
+      imageOf: (item) => item.posterUrl,
       onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.movies),
       continueWatching: [
         if (catalog != null)

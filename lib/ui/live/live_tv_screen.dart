@@ -11,6 +11,7 @@ import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
 import '../favourites/favourite_menu.dart';
+import '../favourites/reorder_list.dart';
 import '../player/open_channel.dart';
 import '../shell/category_layout.dart';
 import '../shell/category_list.dart';
@@ -47,6 +48,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
   void _selectCategory(CategorySelection category) {
     _search.clear();
     ref.read(channelQueryProvider.notifier).set('');
+    ref.read(itemReorderProvider.notifier).stop();
     ref.read(selectedCategoryProvider.notifier).select(category);
   }
 
@@ -97,7 +99,13 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
               section: 'live',
               headerAction: const CategoryEditButton(section: 'live'),
               list: _CategoryList(catalog: catalog, onSelect: _selectCategory),
-              content: _ChannelPane(catalog: catalog),
+              content: _ChannelPane(
+                catalog: catalog,
+                onClearSearch: () {
+                  _search.clear();
+                  ref.read(channelQueryProvider.notifier).set('');
+                },
+              ),
             ),
           ),
         ),
@@ -164,9 +172,12 @@ class _CategoryList extends ConsumerWidget {
 }
 
 class _ChannelPane extends ConsumerWidget {
-  const _ChannelPane({required this.catalog});
+  const _ChannelPane({required this.catalog, required this.onClearSearch});
 
   final LiveCatalog catalog;
+
+  /// Clears the search field (when reordering starts).
+  final VoidCallback onClearSearch;
 
   /// Items of the selected one of my categories that the provider no
   /// longer lists, matching the search. Left out while searching all
@@ -202,6 +213,11 @@ class _ChannelPane extends ConsumerWidget {
     final searchAll = searching && !inCategory && selection is! AllCategories;
     final missing = _missing(ref, searchAll);
     final mine = selection is MyCategory;
+    final category = selection is MyCategory && !searchAll
+        ? ref.watch(favouritesProvider).category(selection.id)
+        : null;
+    final reordering =
+        category != null && ref.watch(itemReorderProvider) == category.id;
     return Column(
       children: [
         Padding(
@@ -215,6 +231,16 @@ class _ChannelPane extends ConsumerWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (category != null &&
+                        (reordering ||
+                            channels.isNotEmpty ||
+                            missing.isNotEmpty))
+                      ReorderChip(
+                        key: const Key('live.reorder'),
+                        category: category,
+                        what: 'channels',
+                        onStart: onClearSearch,
+                      ),
                     if (searching && selection is! AllCategories)
                       ToolbarChip(
                         key: const Key('live.onlyIn'),
@@ -250,7 +276,18 @@ class _ChannelPane extends ConsumerWidget {
           ),
         ),
         Expanded(
-          child: channels.isEmpty && missing.isEmpty
+          child: reordering
+              ? ReorderItemsList(
+                  section: 'live',
+                  categoryId: category.id,
+                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                  leading: (context, m) =>
+                      ChannelLogo(catalog.byStableId(m.item.id)?.logoUrl),
+                  subtitle: (m) => catalog.byStableId(m.item.id) == null
+                      ? 'Not available'
+                      : null,
+                )
+              : channels.isEmpty && missing.isEmpty
               ? Center(
                   child: Text(
                     mine && !searching
@@ -261,29 +298,67 @@ class _ChannelPane extends ConsumerWidget {
                         : 'No channels',
                   ),
                 )
-              : ListView.builder(
-                  key: const Key('live.channels'),
-                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-                  itemExtent: ChannelRow.extent(context),
-                  itemCount: channels.length + missing.length,
-                  itemBuilder: (context, i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: i >= channels.length
-                        ? _MissingChannelRow(
-                            membership: missing[i - channels.length],
-                          )
-                        : channels[i].isSeparator
-                        ? SeparatorHeader(
-                            channel: channels[i],
-                            radius: AppRadius.card,
-                          )
-                        : ChannelRow(channel: channels[i]),
+              : _orderScope(
+                  category,
+                  channels,
+                  ListView.builder(
+                    key: const Key('live.channels'),
+                    padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                    itemExtent: ChannelRow.extent(context),
+                    itemCount: channels.length + missing.length,
+                    // Rows keep their state (and keyboard focus) when
+                    // they move.
+                    findChildIndexCallback: (key) {
+                      if (key case ValueKey<String>(:final value)) {
+                        final i = channels.indexWhere(
+                          (c) => 'channel.${c.id}' == value,
+                        );
+                        if (i >= 0) return i;
+                        final j = missing.indexWhere(
+                          (m) => 'missing.${m.item.id}' == value,
+                        );
+                        if (j >= 0) return channels.length + j;
+                      }
+                      return null;
+                    },
+                    itemBuilder: (context, i) => Padding(
+                      key: ValueKey(
+                        i >= channels.length
+                            ? 'missing.${missing[i - channels.length].item.id}'
+                            : 'channel.${channels[i].id}',
+                      ),
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: i >= channels.length
+                          ? _MissingChannelRow(
+                              membership: missing[i - channels.length],
+                            )
+                          : channels[i].isSeparator
+                          ? SeparatorHeader(
+                              channel: channels[i],
+                              radius: AppRadius.card,
+                            )
+                          : ChannelRow(channel: channels[i]),
+                    ),
                   ),
                 ),
         ),
       ],
     );
   }
+
+  /// [list] with Move up/down/to top in its context menus when it shows
+  /// my [category]; Move up and down pass over channels not [shown].
+  Widget _orderScope(
+    FavouriteCategory? category,
+    List<LiveStream> shown,
+    Widget list,
+  ) => category == null
+      ? list
+      : ItemOrderScope(
+          categoryId: category.id,
+          shown: {for (final c in shown) c.stableId},
+          child: list,
+        );
 }
 
 /// A channel in the list: number, logo tile, name and what's on now, and

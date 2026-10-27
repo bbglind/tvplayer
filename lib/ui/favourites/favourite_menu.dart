@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import 'category_dialogs.dart';
 import 'category_icons.dart';
+import 'order_actions.dart';
 
 /// Creates a category for [item]'s kind and adds [item] to it.
 Future<void> _addToNewCategory(
@@ -219,13 +221,79 @@ final class ItemMenuAction {
 
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+
+  /// Null disables the entry.
+  final VoidCallback? onPressed;
   final Key? key;
+}
+
+/// Marks the items below it as shown in my category [categoryId] in the
+/// user's order: their [ItemContextMenu]s offer Move up, Move down and
+/// Move to top.
+class ItemOrderScope extends InheritedWidget {
+  const ItemOrderScope({
+    super.key,
+    required this.categoryId,
+    required super.child,
+    this.shown,
+  });
+
+  final String categoryId;
+
+  /// Ids of the items shown, when not all are (a search); Move up and
+  /// down pass over the others.
+  final Set<String>? shown;
+
+  static ItemOrderScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ItemOrderScope>();
+
+  @override
+  bool updateShouldNotify(ItemOrderScope oldWidget) =>
+      categoryId != oldWidget.categoryId || !setEquals(shown, oldWidget.shown);
+}
+
+/// Move up, Move down and Move to top for [item] in [scope]'s category;
+/// none when it isn't in it.
+List<ItemMenuAction> _moveActions(
+  WidgetRef ref,
+  ItemOrderScope scope,
+  ItemRef item,
+) {
+  final items = ref.watch(favouritesProvider).itemsIn(scope.categoryId);
+  final shown = scope.shown;
+  // Items listed apart (no longer offered by the provider) move only in
+  // the Reorder list.
+  if (!items.any((m) => m.item == item) ||
+      (shown != null && !shown.contains(item.id))) {
+    return const [];
+  }
+  final ids = [for (final m in items) m.item.id];
+  final skip = shown == null
+      ? const <String>{}
+      : {
+          for (final id in ids)
+            if (!shown.contains(id)) id,
+        };
+  return [
+    for (final step in MoveStep.values)
+      if (moveTarget(ids, item.id, step, skip: skip) case final to)
+        ItemMenuAction(
+          key: Key('context.move.${step.name}'),
+          label: moveStepLabel(step),
+          icon: moveStepIcon(step),
+          onPressed: to == null
+              ? null
+              : () => ref
+                    .read(favouritesProvider.notifier)
+                    .moveItem(scope.categoryId, item, to),
+        ),
+  ];
 }
 
 /// The context menu of a channel, movie or series around [child]: opened
 /// by a right click, a long press (touch) or the Menu key / Shift+F10
-/// while [child] has focus. It offers [actions], then "Add to
+/// while [child] has focus. It offers Move up, Move down and Move to top
+/// inside an [ItemOrderScope], then [actions], then "Add to
 /// favourites…", which turns the menu into the favourites checkboxes in
 /// place.
 class ItemContextMenu extends ConsumerStatefulWidget {
@@ -283,6 +351,13 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
 
   @override
   Widget build(BuildContext context) {
+    final scope = ItemOrderScope.maybeOf(context);
+    final actions = [
+      if (scope != null) ..._moveActions(ref, scope, widget.item),
+      ...widget.actions,
+    ];
+    // Keyboard focus goes to the first entry that can take it.
+    final firstEnabled = actions.where((a) => a.onPressed != null).firstOrNull;
     return MenuAnchor(
       controller: _menu,
       onOpen: () {
@@ -299,17 +374,17 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
                 _addToNewCategory(context, ref, widget.item, widget.name),
           )
         else ...[
-          for (final (i, a) in widget.actions.indexed)
+          for (final a in actions)
             MenuItemButton(
               key: a.key,
-              focusNode: i == 0 ? _first : null,
+              focusNode: identical(a, firstEnabled) ? _first : null,
               leadingIcon: Icon(a.icon),
               onPressed: a.onPressed,
               child: Text(a.label),
             ),
           MenuItemButton(
             key: const Key('context.favourites'),
-            focusNode: widget.actions.isEmpty ? _first : null,
+            focusNode: firstEnabled == null ? _first : null,
             closeOnActivate: false,
             leadingIcon: const Icon(Icons.star_border),
             onPressed: _showFavourites,

@@ -51,7 +51,8 @@ final _catalog = LiveCatalog(
   ],
 );
 
-/// My Live TV categories News (channels 0, 1) and Sport (channels 2, 3).
+/// My Live TV categories News (channels 0, 1) and Sport (channels 2, 3),
+/// listed in that order (added last first: new items go first).
 FavouritesData _favourites() {
   var data = FavouritesData.empty;
   for (final (i, name) in ['News', 'Sport'].indexed) {
@@ -65,10 +66,10 @@ FavouritesData _favourites() {
     );
   }
   for (final (i, (category, channel)) in [
-    ('live0', 0),
     ('live0', 1),
-    ('live1', 2),
+    ('live0', 0),
     ('live1', 3),
+    ('live1', 2),
   ].indexed) {
     data = setMembership(
       data,

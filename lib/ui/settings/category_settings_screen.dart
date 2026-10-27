@@ -5,6 +5,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../state/providers.dart';
 import '../favourites/category_dialogs.dart';
 import '../favourites/category_icons.dart';
+import '../favourites/order_actions.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
@@ -100,7 +101,10 @@ class _CategorySettingsScreenState
     final provider = _provider();
     final query = _filter.text.trim().toLowerCase();
     final listed = [
-      for (final c in provider?.categories ?? const <Category>[])
+      for (final c in favourites.orderedCategories(
+        kind,
+        provider?.categories ?? const <Category>[],
+      ))
         if (c.name.toLowerCase().contains(query)) c,
     ];
     final filtering = query.isNotEmpty;
@@ -192,6 +196,10 @@ class _CategorySettingsScreenState
                               for (final c in listed) c.id,
                             ], true),
                             child: Text(filtering ? 'Hide these' : 'Hide all'),
+                          ),
+                          ResetOrderButton(
+                            key: const Key('settings.categories.resetOrder'),
+                            kind: kind,
                           ),
                         ],
                       ),

@@ -272,6 +272,27 @@ weights 400, 500, 600, 700.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).
+- **Custom order** (kept per provider, like my categories): reorderable
+  rows have a drag handle (`drag_indicator`, hint "Drag to reorder"), and
+  the same moves are in a menu for the keyboard: "Move up", "Move down",
+  "Move to top" (disabled where they can't move; Move up/down pass over
+  entries that aren't shown, such as hidden categories or items left out
+  by a search). Keyboard focus stays on the moved entry.
+  - Provider categories: each of Live TV, Movies and Series has its own
+    order, used wherever they are listed (category column, Settings
+    categories page, TV guide category menu). Dragged in edit mode; the
+    moves are in their context menu (right click, long press, Menu key,
+    Shift+F10). Categories the provider adds later go at the end; removed
+    ones drop out. "Reset to provider order" (edit mode and the Settings
+    categories page) offers "Undo" in a snack bar for 6 s.
+  - Items in my categories: a newly added item goes first. "Reorder" (a
+    chip above the list or grid while one of my categories is shown)
+    turns the channel list or poster grid into a list with drag handles,
+    small logos/posters and the names, items the provider dropped
+    included; "Done reordering" ends it. The moves are in the item's
+    context menu inside my category (Movies/Series: while sorted by "My
+    order"). The order is used by the channel list, the player's Channels
+    panel and Movies/Series in "My order".
 
 ## Naming
 
@@ -291,6 +312,10 @@ English for now.
 | Recently viewed channels | The last live channels played (up to 20) |
 | Recently added series / movies | Newest series (by last update) / movies (by date added) |
 | Edit home | The mode that moves and hides Home rows |
+| Move up / Move down / Move to top | Menu entries that move a category or an item one place or to the start |
+| Reorder / Done reordering | The mode that drags the items of one of my categories into my order |
+| Reset to provider order | Puts the provider categories of a section back in the provider's order |
+| My order | The sort of Movies/Series in my categories that keeps my order (default there) |
 | Channels | The player's zap panel of my Live TV categories |
 | Play next episode | The setting and countdown that start the next episode |
 | Playlist | The provider's channels, movies, series and TV guide, as downloaded |
@@ -332,7 +357,9 @@ English for now.
 - The search field of Live TV, Movies and Series searches the whole
   section (except hidden categories); "Only in <category>" limits it to
   the selected category.
-- Sort: "Recently added" (Series: "Recently updated"), "A–Z", "Top rated".
+- Sort: "Recently added" (Series: "Recently updated"), "A–Z", "Top rated";
+  in one of my categories "My order" comes first and is the default. My
+  categories remember their own sort, apart from provider categories.
   Year filter: "This year", "Last 2 years", "Last 5 years", "Custom
   range…". "Reset filters" clears year and genre.
 - Home: "Continue watching" mixes movies and episodes, most recently

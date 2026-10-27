@@ -13,6 +13,7 @@ export 'src/epg/epg_guide.dart';
 export 'src/epg/guide_time.dart';
 export 'src/favourites/favourites_data.dart';
 export 'src/favourites/favourites_logic.dart';
+export 'src/favourites/ordering.dart';
 export 'src/home/home_picks.dart';
 export 'src/live/live_source.dart';
 export 'src/live/replay.dart';

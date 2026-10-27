@@ -25,6 +25,8 @@ final class AppSettings {
     this.showHiddenInGlobalSearch = false,
     this.movieSort = VodSort.recent,
     this.seriesSort = VodSort.recent,
+    this.movieMySort = VodSort.myOrder,
+    this.seriesMySort = VodSort.myOrder,
     this.homeLayout = HomeLayout.defaults,
     this.playerVolume = defaultPlayerVolume,
     this.showRemainingTime = false,
@@ -91,6 +93,12 @@ final class AppSettings {
   /// Sort order of the Series tab.
   final VodSort seriesSort;
 
+  /// Sort order of the Movies tab in one of my categories.
+  final VodSort movieMySort;
+
+  /// Sort order of the Series tab in one of my categories.
+  final VodSort seriesMySort;
+
   /// Order and visibility of the start page rows.
   final HomeLayout homeLayout;
 
@@ -129,6 +137,8 @@ final class AppSettings {
     bool? showHiddenInGlobalSearch,
     VodSort? movieSort,
     VodSort? seriesSort,
+    VodSort? movieMySort,
+    VodSort? seriesMySort,
     HomeLayout? homeLayout,
     int? playerVolume,
     bool? showRemainingTime,
@@ -149,6 +159,8 @@ final class AppSettings {
         showHiddenInGlobalSearch ?? this.showHiddenInGlobalSearch,
     movieSort: movieSort ?? this.movieSort,
     seriesSort: seriesSort ?? this.seriesSort,
+    movieMySort: movieMySort ?? this.movieMySort,
+    seriesMySort: seriesMySort ?? this.seriesMySort,
     homeLayout: homeLayout ?? this.homeLayout,
     playerVolume: playerVolume ?? this.playerVolume,
     showRemainingTime: showRemainingTime ?? this.showRemainingTime,
@@ -172,6 +184,8 @@ final class AppSettings {
     'showHiddenInGlobalSearch': showHiddenInGlobalSearch,
     'movieSort': movieSort.name,
     'seriesSort': seriesSort.name,
+    'movieMySort': movieMySort.name,
+    'seriesMySort': seriesMySort.name,
     'homeLayout': homeLayout.toJson(),
     'playerVolume': playerVolume,
     'showRemainingTime': showRemainingTime,
@@ -219,8 +233,12 @@ final class AppSettings {
         defaultGuideChannelWidth,
       ),
       showHiddenInGlobalSearch: json['showHiddenInGlobalSearch'] == true,
-      movieSort: VodSort.byName(_string(json['movieSort'])) ?? VodSort.recent,
-      seriesSort: VodSort.byName(_string(json['seriesSort'])) ?? VodSort.recent,
+      movieSort: _providerSort(json['movieSort']),
+      seriesSort: _providerSort(json['seriesSort']),
+      movieMySort:
+          VodSort.byName(_string(json['movieMySort'])) ?? VodSort.myOrder,
+      seriesMySort:
+          VodSort.byName(_string(json['seriesMySort'])) ?? VodSort.myOrder,
       homeLayout: HomeLayout.fromJson(json['homeLayout']),
       playerVolume: volume is num && volume.isFinite
           ? volume.round().clamp(0, maxPlayerVolume)
@@ -236,14 +254,34 @@ final class AppSettings {
 
   static String? _string(Object? json) => json is String ? json : null;
 
-  /// The sort order of [section] (`movies` or `series`).
-  VodSort sortOf(String section) =>
-      section == 'series' ? seriesSort : movieSort;
+  /// A sort outside my categories: any but My order.
+  static VodSort _providerSort(Object? json) =>
+      switch (VodSort.byName(_string(json))) {
+        null || VodSort.myOrder => VodSort.recent,
+        final sort => sort,
+      };
 
-  /// These settings with [sort] for [section] (`movies` or `series`).
-  AppSettings withSort(String section, VodSort sort) => section == 'series'
-      ? copyWith(seriesSort: sort)
-      : copyWith(movieSort: sort);
+  /// The sort order of [section] (`movies` or `series`); with [mine], in
+  /// one of my categories.
+  VodSort sortOf(String section, {bool mine = false}) =>
+      switch ((section == 'series', mine)) {
+        (true, true) => seriesMySort,
+        (true, false) => seriesSort,
+        (false, true) => movieMySort,
+        (false, false) => movieSort,
+      };
+
+  /// These settings with [sort] for [section] (`movies` or `series`); with
+  /// [mine], for my categories. My order is only for my categories.
+  AppSettings withSort(String section, VodSort sort, {bool mine = false}) {
+    if (sort == VodSort.myOrder && !mine) return this;
+    return switch ((section == 'series', mine)) {
+      (true, true) => copyWith(seriesMySort: sort),
+      (true, false) => copyWith(seriesSort: sort),
+      (false, true) => copyWith(movieMySort: sort),
+      (false, false) => copyWith(movieSort: sort),
+    };
+  }
 
   /// A width from JSON, clamped to [min]..[max]; [fallback] when invalid.
   static double _width(Object? json, double min, double max, double fallback) =>

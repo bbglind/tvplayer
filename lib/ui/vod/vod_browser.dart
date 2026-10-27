@@ -9,7 +9,10 @@ import '../../state/category_selection.dart';
 import '../../state/providers.dart';
 import '../../state/vod_controller.dart';
 import '../shell/category_layout.dart';
+import '../favourites/favourite_menu.dart';
+import '../favourites/reorder_list.dart';
 import '../shell/category_list.dart';
+import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import 'poster.dart';
 import 'provider_title.dart';
@@ -35,6 +38,7 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
     required this.itemBuilder,
     required this.categoryOf,
     required this.itemRef,
+    required this.imageOf,
     this.continueWatching = const [],
   });
 
@@ -59,6 +63,9 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
 
   /// An item's reference for my categories.
   final ItemRef Function(T item) itemRef;
+
+  /// An item's poster, for the Reorder list.
+  final String? Function(T item) imageOf;
 
   /// Started items with their cards for the "Continue watching" row, most
   /// recently watched first. Under "All" or a provider category only those
@@ -103,6 +110,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   /// Shows [category] as if the search had been cleared first.
   void _selectCategory(CategorySelection category) {
     _search.clear();
+    ref.read(itemReorderProvider.notifier).stop();
     widget.notifier
       ..setQuery('')
       ..selectCategory(category);
@@ -112,10 +120,34 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   /// category.
   bool get _searchAll => _searching && !widget.filter.searchInCategory;
 
+  /// Whether one of my categories is shown (not a search of the whole
+  /// section): it has its own sort, with "My order".
+  bool get _inMine => _selection is MyCategory && !_searchAll;
+
   VodSort get _sort =>
       (ref.watch(appSettingsProvider).value ?? const AppSettings()).sortOf(
         widget.what,
+        mine: _inMine,
       );
+
+  /// My category being reordered; null when not reordering.
+  FavouriteCategory? get _reordering {
+    if (_selection case MyCategory(:final id) when _inMine) {
+      if (ref.watch(itemReorderProvider) == id) {
+        return ref.watch(favouritesProvider).category(id);
+      }
+    }
+    return null;
+  }
+
+  /// Starts reordering: without a search, in My order.
+  void _startReorder() {
+    _search.clear();
+    widget.notifier.setQuery('');
+    ref
+        .read(appSettingsProvider.notifier)
+        .remember((s) => s.withSort(widget.what, VodSort.myOrder, mine: true));
+  }
 
   VodScope _scope(FavouritesData favourites) {
     final hidden = favourites.hiddenIds(widget.kind);
@@ -327,6 +359,12 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     final favourites = ref.watch(favouritesProvider);
     final hidden = favourites.hiddenIds(widget.kind);
     final text = Theme.of(context).textTheme;
+    final mine = _inMine;
+    final category = switch (_selection) {
+      MyCategory(:final id) when mine => favourites.category(id),
+      _ => null,
+    };
+    final reordering = _reordering != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
       child: Row(
@@ -339,40 +377,51 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SortMenu(
-                  section: what,
-                  sort: _sort,
-                  onChanged: (sort) => ref
-                      .read(appSettingsProvider.notifier)
-                      .remember((s) => s.withSort(what, sort)),
-                ),
-                YearFilterMenu(
-                  section: what,
-                  filter: filters.years,
-                  onChanged: (y) => notifier.setFilters(filters.withYears(y)),
-                ),
-                if (catalog.genreSource != null)
-                  GenreFilterMenu(
+                if (category != null && (reordering || count > 0))
+                  ReorderChip(
+                    key: Key('$what.reorder'),
+                    category: category,
+                    what: what,
+                    onStart: _startReorder,
+                  ),
+                if (!reordering) ...[
+                  SortMenu(
                     section: what,
-                    genres: _genreCounts(catalog, hidden),
-                    selected: filters.genres,
-                    onChanged: (g) =>
-                        notifier.setFilters(filters.withGenres(g)),
+                    sort: _sort,
+                    mine: mine,
+                    onChanged: (sort) => ref
+                        .read(appSettingsProvider.notifier)
+                        .remember((s) => s.withSort(what, sort, mine: mine)),
                   ),
-                if (_searching && _selection is! AllCategories)
-                  ToolbarChip(
-                    key: Key('$what.onlyIn'),
-                    icon: filter.searchInCategory
-                        ? Icons.check
-                        : Icons.filter_alt_outlined,
-                    selected: filter.searchInCategory,
-                    tooltip: filter.searchInCategory
-                        ? 'Search all $what'
-                        : 'Search only in this category',
-                    label: 'Only in ${_selectionName(catalog)}',
-                    onPressed: () =>
-                        notifier.setSearchInCategory(!filter.searchInCategory),
+                  YearFilterMenu(
+                    section: what,
+                    filter: filters.years,
+                    onChanged: (y) => notifier.setFilters(filters.withYears(y)),
                   ),
+                  if (catalog.genreSource != null)
+                    GenreFilterMenu(
+                      section: what,
+                      genres: _genreCounts(catalog, hidden),
+                      selected: filters.genres,
+                      onChanged: (g) =>
+                          notifier.setFilters(filters.withGenres(g)),
+                    ),
+                  if (_searching && _selection is! AllCategories)
+                    ToolbarChip(
+                      key: Key('$what.onlyIn'),
+                      icon: filter.searchInCategory
+                          ? Icons.check
+                          : Icons.filter_alt_outlined,
+                      selected: filter.searchInCategory,
+                      tooltip: filter.searchInCategory
+                          ? 'Search all $what'
+                          : 'Search only in this category',
+                      label: 'Only in ${_selectionName(catalog)}',
+                      onPressed: () => notifier.setSearchInCategory(
+                        !filter.searchInCategory,
+                      ),
+                    ),
+                ],
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
@@ -385,7 +434,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
                     style: text.bodySmall,
                   ),
                 ),
-                if (!filters.isEmpty)
+                if (!filters.isEmpty && !reordering)
                   TextButton.icon(
                     key: Key('$what.filters.reset'),
                     icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
@@ -411,63 +460,135 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
         ? const <Widget>[]
         : _continueCards(favourites);
     final showContinue = continueCards.isNotEmpty;
+    final reordering = _reordering;
+    if (reordering != null) {
+      return Column(
+        children: [
+          _buildToolbar(context, catalog, favourites.countIn(reordering.id)),
+          Expanded(
+            child: ReorderItemsList(
+              section: what,
+              categoryId: reordering.id,
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+              leading: (context, m) {
+                final item = catalog.byId(int.tryParse(m.item.id) ?? m.item.id);
+                return SizedBox(
+                  width: 40,
+                  height: 60,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.small),
+                    child: Poster(
+                      url: item == null ? null : widget.imageOf(item),
+                      decodeWidth: 80,
+                      placeholder: item == null
+                          ? Icons.block
+                          : Icons.movie_outlined,
+                    ),
+                  ),
+                );
+              },
+              subtitle: (m) =>
+                  catalog.byId(int.tryParse(m.item.id) ?? m.item.id) == null
+                  ? 'Not available'
+                  : null,
+            ),
+          ),
+        ],
+      );
+    }
+    // Move up/down/to top in my category in My order; they pass over items
+    // left out by the search or filters.
+    final orderScope = mine && _sort == VodSort.myOrder
+        ? switch (_selection) {
+            MyCategory(:final id) => (
+              id,
+              {for (final item in items) widget.itemRef(item).id},
+            ),
+            _ => null,
+          }
+        : null;
+    final grid = CustomScrollView(
+      key: Key('$what.grid'),
+      slivers: [
+        if (showContinue) ...[
+          _sectionTitle(context, 'Continue watching'),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              key: Key('$what.continue'),
+              height: 270,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                children: [
+                  for (final card in continueCards)
+                    SizedBox(width: 150, child: card),
+                ],
+              ),
+            ),
+          ),
+          _sectionTitle(context, _selectionName(catalog)),
+        ],
+        if (items.isEmpty && missing.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                mine && !_searching && !filtering
+                    ? 'No $what yet. Add some with the star on a '
+                          'poster.'
+                    : _searching || filtering
+                    ? 'No $what found'
+                    : 'No $what',
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+            // Only the visible posters are built.
+            sliver: SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 160,
+                childAspectRatio: 0.52,
+              ),
+              itemCount: items.length + missing.length,
+              // Posters keep their state (and keyboard focus) when
+              // they move.
+              findChildIndexCallback: (key) {
+                if (key case ValueKey<String>(:final value)) {
+                  final i = items.indexWhere(
+                    (item) => 'item.${widget.itemRef(item).id}' == value,
+                  );
+                  if (i >= 0) return i;
+                  final j = missing.indexWhere(
+                    (m) => 'missing.${m.item.id}' == value,
+                  );
+                  if (j >= 0) return items.length + j;
+                }
+                return null;
+              },
+              itemBuilder: (context, i) => i < items.length
+                  ? KeyedSubtree(
+                      key: ValueKey('item.${widget.itemRef(items[i]).id}'),
+                      child: widget.itemBuilder(context, items[i]),
+                    )
+                  : _missingCard(context, missing[i - items.length]),
+            ),
+          ),
+      ],
+    );
     return Column(
       children: [
         _buildToolbar(context, catalog, items.length + missing.length),
         Expanded(
-          child: CustomScrollView(
-            key: Key('$what.grid'),
-            slivers: [
-              if (showContinue) ...[
-                _sectionTitle(context, 'Continue watching'),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    key: Key('$what.continue'),
-                    height: 270,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
-                      children: [
-                        for (final card in continueCards)
-                          SizedBox(width: 150, child: card),
-                      ],
-                    ),
-                  ),
-                ),
-                _sectionTitle(context, _selectionName(catalog)),
-              ],
-              if (items.isEmpty && missing.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Text(
-                      mine && !_searching && !filtering
-                          ? 'No $what yet. Add some with the star on a '
-                                'poster.'
-                          : _searching || filtering
-                          ? 'No $what found'
-                          : 'No $what',
-                    ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
-                  // Only the visible posters are built.
-                  sliver: SliverGrid.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 160,
-                          childAspectRatio: 0.52,
-                        ),
-                    itemCount: items.length + missing.length,
-                    itemBuilder: (context, i) => i < items.length
-                        ? widget.itemBuilder(context, items[i])
-                        : _missingCard(context, missing[i - items.length]),
-                  ),
-                ),
-            ],
-          ),
+          child: switch (orderScope) {
+            (final id, final shown) => ItemOrderScope(
+              categoryId: id,
+              shown: shown,
+              child: grid,
+            ),
+            null => grid,
+          },
         ),
       ],
     );

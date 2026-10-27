@@ -112,7 +112,29 @@ void main() {
       );
     });
 
+    test('my order keeps the scope order, also with a search', () {
+      const scope = VodScope.ids([5, 1, 3]);
+      expect(_ids(_movies.query(scope: scope, sort: VodSort.myOrder)), [
+        5,
+        1,
+        3,
+      ]);
+      final all = _ids(_movies.query(scope: scope, sort: VodSort.myOrder));
+      final found = _ids(
+        _movies.query(
+          scope: scope,
+          sort: VodSort.myOrder,
+          search: _movies.items.firstWhere((m) => m.streamId == 1).name,
+        ),
+      );
+      expect(found, [
+        for (final id in all)
+          if (found.contains(id)) id,
+      ]);
+    });
+
     test('byName', () {
+      expect(VodSort.byName('myOrder'), VodSort.myOrder);
       expect(VodSort.byName('rating'), VodSort.rating);
       expect(VodSort.byName('nope'), isNull);
       expect(VodSort.byName(null), isNull);

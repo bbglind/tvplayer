@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -108,4 +108,39 @@ class FavouritesController extends Notifier<FavouritesData> {
   /// Hides or shows the provider categories [ids] of [kind].
   void setHidden(ContentKind kind, Iterable<String> ids, bool hidden) =>
       _update(setCategoriesHidden(state, kind, ids, hidden: hidden, now: _now));
+
+  /// Moves [item] to [toIndex] in category [categoryId].
+  void moveItem(String categoryId, ItemRef item, int toIndex) => _update(
+    moveFavouriteItem(state, categoryId, item, toIndex: toIndex, now: _now),
+  );
+
+  /// Moves the provider category [id] of [kind] to [toIndex] among the
+  /// provider's [categories] in the user's order.
+  void moveProvider(
+    ContentKind kind,
+    List<Category> categories,
+    String id,
+    int toIndex,
+  ) => _update(
+    moveProviderCategory(
+      state,
+      kind,
+      categories,
+      id,
+      toIndex: toIndex,
+      now: _now,
+    ),
+  );
+
+  /// Puts the provider categories of [kind] back in the provider's order.
+  /// Returns the order before, for [restoreOrder].
+  CategoryOrder? resetOrder(ContentKind kind) {
+    final previous = state.categoryOrder(kind);
+    _update(resetCategoryOrder(state, kind, now: _now));
+    return previous;
+  }
+
+  /// Undoes [resetOrder].
+  void restoreOrder(ContentKind kind, CategoryOrder? previous) =>
+      _update(restoreCategoryOrder(state, kind, previous, now: _now));
 }

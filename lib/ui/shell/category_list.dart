@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -6,17 +8,20 @@ import '../../state/category_selection.dart';
 import '../../state/providers.dart';
 import '../favourites/category_dialogs.dart';
 import '../favourites/category_icons.dart';
+import '../favourites/order_actions.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 
 /// The category list of Live TV, Movies or Series: "My categories" with a
 /// "New category" button, then "All …" and the provider categories that
-/// aren't hidden.
+/// aren't hidden, in the user's order.
 ///
 /// In edit mode ([CategoryEditButton]) my categories can be reordered
 /// (drag handle, or Move up/down in their menu), edited and deleted, and
-/// every provider category shows an eye toggle to hide or show it.
+/// every provider category shows a drag handle and an eye toggle to hide
+/// or show it. The context menu of a provider category (right click, long
+/// press, Menu key, Shift+F10) has Move up, Move down and Move to top.
 class CategoryList extends ConsumerWidget {
   const CategoryList({
     super.key,
@@ -37,7 +42,8 @@ class CategoryList extends ConsumerWidget {
   /// "All channels" etc.
   final String allLabel;
 
-  /// All provider categories, hidden ones included.
+  /// All provider categories, hidden ones included, in the provider's
+  /// order.
   final List<Category> categories;
 
   /// Number of items outside the given hidden categories.
@@ -57,12 +63,35 @@ class CategoryList extends ConsumerWidget {
     final notifier = ref.read(favouritesProvider.notifier);
     final mine = favourites.categoriesOf(kind);
     final hidden = favourites.hiddenIds(kind);
+    final ordered = favourites.orderedCategories(kind, categories);
+    final orderedIds = [for (final c in ordered) c.id];
     final shown = editing
-        ? categories
+        ? ordered
         : [
-            for (final c in categories)
+            for (final c in ordered)
               if (!hidden.contains(c.id)) c,
           ];
+
+    /// [pill] of provider category [c] with its context menu.
+    Widget withMenu(Category c, Widget pill) => _ProviderCategoryMenu(
+      section: section,
+      kind: kind,
+      categories: categories,
+      ids: orderedIds,
+      id: c.id,
+      // Outside edit mode hidden categories aren't shown, so moves pass
+      // over them.
+      skip: editing ? const {} : hidden,
+      child: pill,
+    );
+
+    int? indexOfKey(Key key) {
+      if (key case ValueKey<String>(:final value)) {
+        final i = shown.indexWhere((c) => 'provider.${c.id}' == value);
+        if (i >= 0) return i;
+      }
+      return null;
+    }
 
     Widget pad(Widget child) =>
         Padding(padding: const EdgeInsets.only(bottom: 4), child: child);
@@ -146,6 +175,10 @@ class CategoryList extends ConsumerWidget {
                               ], true),
                         child: const Text('Hide all'),
                       ),
+                      ResetOrderButton(
+                        key: Key('$section.categories.resetOrder'),
+                        kind: kind,
+                      ),
                     ],
                   ),
                 ),
@@ -165,38 +198,78 @@ class CategoryList extends ConsumerWidget {
                   ),
                 ),
               ],
-              SliverList.builder(
-                itemCount: shown.length,
-                itemBuilder: (context, i) {
-                  final c = shown[i];
-                  if (!editing) {
-                    return pad(
-                      CategoryPill(
-                        label: c.name,
-                        count: countIn(c.id),
-                        selected: selected == ProviderCategory(c.id),
-                        onTap: () => onSelect(ProviderCategory(c.id)),
+              if (editing)
+                SliverReorderableList(
+                  itemCount: shown.length,
+                  findChildIndexCallback: indexOfKey,
+                  proxyDecorator: (child, _, _) => Material(
+                    color: AppColors.hover,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: child,
+                  ),
+                  onReorderItem: (from, to) => notifier.moveProvider(
+                    kind,
+                    categories,
+                    shown[from].id,
+                    to,
+                  ),
+                  itemBuilder: (context, i) {
+                    final c = shown[i];
+                    final isHidden = hidden.contains(c.id);
+                    return Padding(
+                      key: ValueKey('provider.${c.id}'),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          _DragHandle(index: i),
+                          Expanded(
+                            child: withMenu(
+                              c,
+                              CategoryPill(
+                                key: Key('$section.visibility.${c.id}'),
+                                icon: isHidden
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                label: c.name,
+                                count: countIn(c.id),
+                                selected: false,
+                                dimmed: isHidden,
+                                checked: !isHidden,
+                                tooltip: isHidden
+                                    ? 'Hidden: show'
+                                    : 'Shown: hide',
+                                onTap: () =>
+                                    notifier.setHidden(kind, [c.id], !isHidden),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
-                  }
-                  final isHidden = hidden.contains(c.id);
-                  return pad(
-                    CategoryPill(
-                      key: Key('$section.visibility.${c.id}'),
-                      icon: isHidden
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      label: c.name,
-                      count: countIn(c.id),
-                      selected: false,
-                      dimmed: isHidden,
-                      checked: !isHidden,
-                      tooltip: isHidden ? 'Hidden: show' : 'Shown: hide',
-                      onTap: () => notifier.setHidden(kind, [c.id], !isHidden),
-                    ),
-                  );
-                },
-              ),
+                  },
+                )
+              else
+                SliverList.builder(
+                  itemCount: shown.length,
+                  findChildIndexCallback: indexOfKey,
+                  itemBuilder: (context, i) {
+                    final c = shown[i];
+                    return Padding(
+                      key: ValueKey('provider.${c.id}'),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: withMenu(
+                        c,
+                        CategoryPill(
+                          key: Key('$section.category.${c.id}'),
+                          label: c.name,
+                          count: countIn(c.id),
+                          selected: selected == ProviderCategory(c.id),
+                          onTap: () => onSelect(ProviderCategory(c.id)),
+                        ),
+                      ),
+                    );
+                  },
+                ),
             ],
           ),
         ),
@@ -268,20 +341,7 @@ class _MyCategoryEditRow extends ConsumerWidget {
         constraints: const BoxConstraints(minHeight: 44),
         child: Row(
           children: [
-            ReorderableDragStartListener(
-              index: index,
-              child: const MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                  child: Icon(
-                    Icons.drag_indicator,
-                    size: 20,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ),
-            ),
+            _DragHandle(index: index),
             Icon(
               categoryIcon(category.icon),
               size: 18,
@@ -309,8 +369,8 @@ class _MyCategoryEditRow extends ConsumerWidget {
   }
 }
 
-/// A ⋯ button with Edit, Move up, Move down and Delete for [category],
-/// which is at [index] of [count] categories.
+/// A ⋯ button with Edit, Move up, Move to top, Move down and Delete for
+/// [category], which is at [index] of [count] categories.
 class CategoryActionsMenu extends ConsumerWidget {
   const CategoryActionsMenu({
     super.key,
@@ -343,6 +403,12 @@ class CategoryActionsMenu extends ConsumerWidget {
           child: const Text('Move up'),
         ),
         MenuItemButton(
+          key: const Key('category.action.top'),
+          leadingIcon: Icon(moveStepIcon(MoveStep.top)),
+          onPressed: index == 0 ? null : () => notifier.move(category.id, 0),
+          child: Text(moveStepLabel(MoveStep.top)),
+        ),
+        MenuItemButton(
           key: const Key('category.action.down'),
           leadingIcon: const Icon(Icons.arrow_downward),
           onPressed: index >= count - 1
@@ -362,6 +428,144 @@ class CategoryActionsMenu extends ConsumerWidget {
         icon: const Icon(Icons.more_vert, size: 20),
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
+      ),
+    );
+  }
+}
+
+/// The drag handle of row [index] of a reorderable list.
+class _DragHandle extends StatelessWidget {
+  const _DragHandle({required this.index});
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    return ReorderableDragStartListener(
+      index: index,
+      child: const Tooltip(
+        message: 'Drag to reorder',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.grab,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            child: Icon(
+              Icons.drag_indicator,
+              size: 20,
+              color: AppColors.textMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The context menu of the provider category [id] around [child]: Move
+/// up, Move down and Move to top in [ids] (the user's order), passing over
+/// [skip]. Opened by a right click, a long press (touch) or the Menu key /
+/// Shift+F10 while [child] has focus.
+class _ProviderCategoryMenu extends ConsumerStatefulWidget {
+  const _ProviderCategoryMenu({
+    required this.section,
+    required this.kind,
+    required this.categories,
+    required this.ids,
+    required this.id,
+    required this.skip,
+    required this.child,
+  });
+
+  final String section;
+  final ContentKind kind;
+
+  /// The provider's categories, in its order.
+  final List<Category> categories;
+  final List<String> ids;
+  final String id;
+  final Set<String> skip;
+  final Widget child;
+
+  @override
+  ConsumerState<_ProviderCategoryMenu> createState() =>
+      _ProviderCategoryMenuState();
+}
+
+class _ProviderCategoryMenuState extends ConsumerState<_ProviderCategoryMenu> {
+  final _menu = MenuController();
+  final _first = FocusNode(debugLabel: 'category.menu.first');
+
+  /// Whether the menu was opened from the keyboard, so focus moves into
+  /// it.
+  bool _byKeyboard = false;
+
+  @override
+  void dispose() {
+    _first.dispose();
+    super.dispose();
+  }
+
+  void _openAt(Offset position) {
+    _byKeyboard = false;
+    _menu.open(position: position);
+  }
+
+  void _openByKeyboard() {
+    _byKeyboard = true;
+    _menu.open();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final targets = {
+      for (final step in MoveStep.values)
+        step: moveTarget(widget.ids, widget.id, step, skip: widget.skip),
+    };
+    final firstEnabled = MoveStep.values
+        .where((s) => targets[s] != null)
+        .firstOrNull;
+    return MenuAnchor(
+      controller: _menu,
+      onOpen: () {
+        if (_byKeyboard) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (_first.context != null) _first.requestFocus();
+          });
+        }
+      },
+      menuChildren: [
+        for (final step in MoveStep.values)
+          MenuItemButton(
+            key: Key('${widget.section}.categoryMenu.${step.name}'),
+            focusNode: step == firstEnabled ? _first : null,
+            leadingIcon: Icon(moveStepIcon(step)),
+            onPressed: switch (targets[step]) {
+              final to? =>
+                () => ref
+                    .read(favouritesProvider.notifier)
+                    .moveProvider(
+                      widget.kind,
+                      widget.categories,
+                      widget.id,
+                      to,
+                    ),
+              null => null,
+            },
+            child: Text(moveStepLabel(step)),
+          ),
+      ],
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.contextMenu):
+              _openByKeyboard,
+          const SingleActivator(LogicalKeyboardKey.f10, shift: true):
+              _openByKeyboard,
+        },
+        child: GestureDetector(
+          onSecondaryTapUp: (d) => _openAt(d.localPosition),
+          onLongPressStart: (d) => _openAt(d.localPosition),
+          child: widget.child,
+        ),
       ),
     );
   }

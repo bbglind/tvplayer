@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import '../models/category.dart';
 import '../util/json.dart';
 
 /// What a favourite category holds, and which provider list a hidden
@@ -155,6 +156,7 @@ final class FavouriteMembership {
     required this.name,
     required this.addedAt,
     required this.updatedAt,
+    this.order = 0,
     this.deleted = false,
   });
 
@@ -165,9 +167,14 @@ final class FavouriteMembership {
   /// lists it.
   final String name;
 
-  /// When the item was (last) added; items are listed in this order.
+  /// When the item was (last) added.
   final DateTime addedAt;
   final DateTime updatedAt;
+
+  /// Position in the category, ascending; the user's order. Data saved
+  /// before it existed gets one when it is read (see
+  /// [FavouritesData.fromJson]).
+  final int order;
 
   /// Tombstone: removed from the category.
   final bool deleted;
@@ -183,7 +190,20 @@ final class FavouriteMembership {
     'item': item.id,
     'name': name,
     'added': addedAt.millisecondsSinceEpoch,
+    'order': order,
   };
+
+  /// This membership at [order], keeping its change time (for filling in
+  /// the order of data saved without one).
+  FavouriteMembership _withOrder(int order) => FavouriteMembership(
+    categoryId: categoryId,
+    item: item,
+    name: name,
+    addedAt: addedAt,
+    updatedAt: updatedAt,
+    order: order,
+    deleted: deleted,
+  );
 
   static FavouriteMembership? fromJson(
     Object? json,
@@ -204,6 +224,7 @@ final class FavouriteMembership {
       name: readString(map['name']) ?? '',
       addedAt: added == null ? updatedAt : _time(added),
       updatedAt: updatedAt,
+      order: readInt(map['order']) ?? 0,
       deleted: deleted,
     );
   }
@@ -216,11 +237,12 @@ final class FavouriteMembership {
       other.name == name &&
       other.addedAt == addedAt &&
       other.updatedAt == updatedAt &&
+      other.order == order &&
       other.deleted == deleted;
 
   @override
   int get hashCode =>
-      Object.hash(categoryId, item, name, addedAt, updatedAt, deleted);
+      Object.hash(categoryId, item, name, addedAt, updatedAt, order, deleted);
 }
 
 /// Whether a provider category is hidden. Showing it again keeps the
@@ -276,6 +298,83 @@ final class HiddenCategory {
   int get hashCode => Object.hash(kind, categoryId, hidden, updatedAt);
 }
 
+/// The user's order of the provider categories of [kind]. Categories not
+/// in [ids] (new ones) follow in the provider's order; ids the provider no
+/// longer has are ignored. One record per kind, so a reorder never merges
+/// half. A reset back to the provider's order is a tombstone ([deleted]),
+/// so it wins a merge like any other change.
+final class CategoryOrder {
+  const CategoryOrder({
+    required this.kind,
+    required this.ids,
+    required this.names,
+    required this.updatedAt,
+    this.deleted = false,
+  });
+
+  final ContentKind kind;
+
+  /// The provider's category ids, in the user's order.
+  final List<String> ids;
+
+  /// The category names at the time, beside [ids], so the order can be
+  /// matched by name to another provider's categories.
+  final List<String> names;
+  final DateTime updatedAt;
+  final bool deleted;
+
+  String get key => kind.name;
+
+  Map<String, Object?> toJson() => {
+    'kind': kind.name,
+    'ids': ids,
+    'names': names,
+  };
+
+  static CategoryOrder? fromJson(
+    Object? json,
+    DateTime updatedAt, {
+    required bool deleted,
+  }) {
+    final map = readMap(json);
+    final kind = _kind(map?['kind']);
+    if (map == null || kind == null) return null;
+    return CategoryOrder(
+      kind: kind,
+      ids: readStringList(map['ids']),
+      names: readStringList(map['names']),
+      updatedAt: updatedAt,
+      deleted: deleted,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is CategoryOrder &&
+      other.kind == kind &&
+      _listEquals(other.ids, ids) &&
+      _listEquals(other.names, names) &&
+      other.updatedAt == updatedAt &&
+      other.deleted == deleted;
+
+  @override
+  int get hashCode => Object.hash(
+    kind,
+    Object.hashAll(ids),
+    Object.hashAll(names),
+    updatedAt,
+    deleted,
+  );
+}
+
+bool _listEquals(List<String> a, List<String> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 ContentKind? _kind(Object? json) {
   final name = readString(json);
   for (final k in ContentKind.values) {
@@ -286,8 +385,8 @@ ContentKind? _kind(Object? json) {
 
 DateTime _time(int ms) => DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
 
-/// The user's favourite categories, their items and the hidden provider
-/// categories, for one provider.
+/// The user's favourite categories, their items, the hidden provider
+/// categories and the user's order of them, for one provider.
 ///
 /// Like [WatchData] it is a set of records with keys and change times, and
 /// deletions are kept as tombstones, so copies from several devices can be
@@ -298,6 +397,7 @@ final class FavouritesData {
     this.categories = const {},
     this.memberships = const {},
     this.hidden = const {},
+    this.categoryOrders = const {},
   });
 
   /// Categories by id, including deleted ones.
@@ -308,6 +408,10 @@ final class FavouritesData {
 
   /// Hidden-category records by [HiddenCategory.key].
   final Map<String, HiddenCategory> hidden;
+
+  /// The order of the provider categories by [CategoryOrder.key], resets
+  /// included.
+  final Map<String, CategoryOrder> categoryOrders;
 
   static final empty = FavouritesData();
 
@@ -321,7 +425,7 @@ final class FavouritesData {
     return c == null || c.deleted ? null : c;
   }
 
-  /// Items of category [id] in the order they were added.
+  /// Items of category [id] in the user's order.
   List<FavouriteMembership> itemsIn(String id) => _items[id] ?? const [];
 
   int countIn(String id) => itemsIn(id).length;
@@ -334,6 +438,35 @@ final class FavouritesData {
 
   /// Ids of the hidden provider categories of [kind].
   Set<String> hiddenIds(ContentKind kind) => _hidden[kind] ?? const {};
+
+  /// The user's order of the provider categories of [kind]; null for the
+  /// provider's order.
+  CategoryOrder? categoryOrder(ContentKind kind) {
+    final order = categoryOrders[kind.name];
+    return order == null || order.deleted ? null : order;
+  }
+
+  /// The provider's [categories] of [kind] in the user's order: the ones
+  /// in [categoryOrder] first, then the rest (new ones) in the provider's
+  /// order.
+  List<Category> orderedCategories(
+    ContentKind kind,
+    List<Category> categories,
+  ) {
+    final order = categoryOrder(kind);
+    if (order == null || order.ids.isEmpty) return categories;
+    final position = {for (final (i, id) in order.ids.indexed) id: i};
+    final indexed = [...categories.indexed];
+    indexed.sort((a, b) {
+      final pa = position[a.$2.id];
+      final pb = position[b.$2.id];
+      if (pa != null && pb != null) return pa.compareTo(pb);
+      if (pa != null) return -1;
+      if (pb != null) return 1;
+      return a.$1.compareTo(b.$1);
+    });
+    return [for (final (_, c) in indexed) c];
+  }
 
   late final Map<ContentKind, List<FavouriteCategory>> _sorted = () {
     final byKind = <ContentKind, List<FavouriteCategory>>{};
@@ -361,7 +494,9 @@ final class FavouritesData {
     }
     for (final list in byCategory.values) {
       list.sort(
-        (a, b) => a.addedAt != b.addedAt
+        (a, b) => a.order != b.order
+            ? a.order.compareTo(b.order)
+            : a.addedAt != b.addedAt
             ? a.addedAt.compareTo(b.addedAt)
             : a.key.compareTo(b.key),
       );
@@ -391,10 +526,12 @@ final class FavouritesData {
     Map<String, FavouriteCategory>? categories,
     Map<String, FavouriteMembership>? memberships,
     Map<String, HiddenCategory>? hidden,
+    Map<String, CategoryOrder>? categoryOrders,
   }) => FavouritesData(
     categories: categories ?? this.categories,
     memberships: memberships ?? this.memberships,
     hidden: hidden ?? this.hidden,
+    categoryOrders: categoryOrders ?? this.categoryOrders,
   );
 
   /// Combines two copies: for each record, the one changed last wins
@@ -414,6 +551,11 @@ final class FavouritesData {
       categories: newest(categories, other.categories, (c) => c.updatedAt),
       memberships: newest(memberships, other.memberships, (m) => m.updatedAt),
       hidden: newest(hidden, other.hidden, (h) => h.updatedAt),
+      categoryOrders: newest(
+        categoryOrders,
+        other.categoryOrders,
+        (o) => o.updatedAt,
+      ),
     );
   }
 
@@ -451,12 +593,20 @@ final class FavouritesData {
           ),
         for (final h in hidden.values)
           record('hidden:${h.key}', h.updatedAt, h.toJson()),
+        for (final o in categoryOrders.values)
+          record('order:${o.key}', o.updatedAt, o.toJson(), deleted: o.deleted),
       ],
     };
   }
 
   /// Lenient inverse of [toJson]; unreadable records are skipped. Null when
   /// [json] isn't favourites data at all (e.g. a damaged file).
+  ///
+  /// Items saved without an order (by an older version) get one, without
+  /// a new change time, so every copy fills it in the same way: in a
+  /// category without any order they keep the order they were added in;
+  /// next to items with an order they go first, newest first, as newly
+  /// added items do.
   static FavouritesData? fromJson(Object? json) {
     final map = readMap(json);
     final records = map?['records'];
@@ -464,6 +614,8 @@ final class FavouritesData {
     final categories = <String, FavouriteCategory>{};
     final memberships = <String, FavouriteMembership>{};
     final hidden = <String, HiddenCategory>{};
+    final categoryOrders = <String, CategoryOrder>{};
+    final unordered = <String>{};
     for (final r in records) {
       final record = readMap(r);
       final key = readString(record?['k']);
@@ -484,18 +636,64 @@ final class FavouritesData {
           if (FavouriteMembership.fromJson(value, time, deleted: deleted)
               case final m?) {
             memberships[m.key] = m;
+            if (readMap(value)?['order'] == null) {
+              unordered.add(m.key);
+            } else {
+              unordered.remove(m.key);
+            }
           }
         case 'hidden':
           if (HiddenCategory.fromJson(value, time) case final h?) {
             hidden[h.key] = h;
           }
+        case 'order':
+          if (CategoryOrder.fromJson(value, time, deleted: deleted)
+              case final o?) {
+            categoryOrders[o.key] = o;
+          }
       }
     }
+    _fillItemOrder(memberships, unordered);
     return FavouritesData(
       categories: categories,
       memberships: memberships,
       hidden: hidden,
+      categoryOrders: categoryOrders,
     );
+  }
+
+  /// Gives the [unordered] keys of [memberships] an order (see [fromJson]).
+  static void _fillItemOrder(
+    Map<String, FavouriteMembership> memberships,
+    Set<String> unordered,
+  ) {
+    if (unordered.isEmpty) return;
+    final ordered = <String, List<FavouriteMembership>>{};
+    final missing = <String, List<FavouriteMembership>>{};
+    for (final m in memberships.values) {
+      if (m.deleted) continue;
+      final into = unordered.contains(m.key) ? missing : ordered;
+      (into[m.categoryId] ??= []).add(m);
+    }
+    for (final MapEntry(key: category, value: items) in missing.entries) {
+      int byAdded(FavouriteMembership a, FavouriteMembership b) =>
+          a.addedAt != b.addedAt
+          ? a.addedAt.compareTo(b.addedAt)
+          : a.key.compareTo(b.key);
+      final others = ordered[category];
+      if (others == null) {
+        items.sort(byAdded);
+        for (final (i, m) in items.indexed) {
+          memberships[m.key] = m._withOrder(i);
+        }
+      } else {
+        items.sort((a, b) => byAdded(b, a));
+        final first = others.map((m) => m.order).reduce(min);
+        for (final (i, m) in items.indexed) {
+          memberships[m.key] = m._withOrder(first - items.length + i);
+        }
+      }
+    }
   }
 }
 

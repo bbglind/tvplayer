@@ -1,4 +1,5 @@
 import '../live/live_source.dart';
+import '../models/category.dart';
 import '../models/movie.dart';
 import '../models/series.dart';
 import 'favourites_data.dart';
@@ -145,6 +146,7 @@ FavouritesData deleteCategory(
           name: m.name,
           addedAt: m.addedAt,
           updatedAt: now,
+          order: m.order,
           deleted: true,
         ),
     },
@@ -152,8 +154,9 @@ FavouritesData deleteCategory(
 }
 
 /// [data] with [item] added to ([member] true) or removed from category
-/// [categoryId]. [name] is remembered for when the provider drops the
-/// item. Unchanged when the category doesn't exist or holds another kind.
+/// [categoryId]. An added item goes first in the category. [name] is
+/// remembered for when the provider drops the item. Unchanged when the
+/// category doesn't exist or holds another kind.
 FavouritesData setMembership(
   FavouritesData data,
   String categoryId,
@@ -167,6 +170,8 @@ FavouritesData setMembership(
   final current = data.memberships[key];
   final isMember = current != null && !current.deleted;
   if (isMember == member) return data;
+  final items = data.itemsIn(categoryId);
+  final first = items.isEmpty ? 1 : items.first.order;
   return data.copyWith(
     memberships: {
       ...data.memberships,
@@ -176,6 +181,7 @@ FavouritesData setMembership(
         name: name,
         addedAt: member ? now : current!.addedAt,
         updatedAt: now,
+        order: member ? first - 1 : current!.order,
         deleted: !member,
       ),
     },
@@ -203,4 +209,113 @@ FavouritesData setCategoriesHidden(
   };
   if (changed.isEmpty) return data;
   return data.copyWith(hidden: {...data.hidden, ...changed});
+}
+
+/// [data] with [item] moved to position [toIndex] (clamped) in category
+/// [categoryId]. Only items whose position changes are touched.
+FavouritesData moveFavouriteItem(
+  FavouritesData data,
+  String categoryId,
+  ItemRef item, {
+  required int toIndex,
+  required DateTime now,
+}) {
+  final list = [...data.itemsIn(categoryId)];
+  final from = list.indexWhere((m) => m.item == item);
+  if (from < 0) return data;
+  final to = toIndex.clamp(0, list.length - 1);
+  if (from == to) return data;
+  list.insert(to, list.removeAt(from));
+  final changed = {...data.memberships};
+  for (final (i, m) in list.indexed) {
+    if (m.order != i) {
+      changed[m.key] = FavouriteMembership(
+        categoryId: m.categoryId,
+        item: m.item,
+        name: m.name,
+        addedAt: m.addedAt,
+        updatedAt: now,
+        order: i,
+      );
+    }
+  }
+  return data.copyWith(memberships: changed);
+}
+
+/// [data] with the provider category [id] of [kind] moved to position
+/// [toIndex] (clamped) of [categories], the provider's categories as
+/// [FavouritesData.orderedCategories] lists them. The whole order is
+/// saved, without categories the provider no longer has.
+FavouritesData moveProviderCategory(
+  FavouritesData data,
+  ContentKind kind,
+  List<Category> categories,
+  String id, {
+  required int toIndex,
+  required DateTime now,
+}) {
+  final list = [...data.orderedCategories(kind, categories)];
+  final from = list.indexWhere((c) => c.id == id);
+  if (from < 0) return data;
+  final to = toIndex.clamp(0, list.length - 1);
+  if (from == to) return data;
+  list.insert(to, list.removeAt(from));
+  return _setCategoryOrder(data, kind, list, now);
+}
+
+FavouritesData _setCategoryOrder(
+  FavouritesData data,
+  ContentKind kind,
+  List<Category> list,
+  DateTime now,
+) {
+  final order = CategoryOrder(
+    kind: kind,
+    ids: [for (final c in list) c.id],
+    names: [for (final c in list) c.name],
+    updatedAt: now,
+  );
+  return data.copyWith(
+    categoryOrders: {...data.categoryOrders, order.key: order},
+  );
+}
+
+/// [data] with the provider categories of [kind] back in the provider's
+/// order. Unchanged when they already are.
+FavouritesData resetCategoryOrder(
+  FavouritesData data,
+  ContentKind kind, {
+  required DateTime now,
+}) {
+  if (data.categoryOrder(kind) == null) return data;
+  final reset = CategoryOrder(
+    kind: kind,
+    ids: const [],
+    names: const [],
+    updatedAt: now,
+    deleted: true,
+  );
+  return data.copyWith(
+    categoryOrders: {...data.categoryOrders, reset.key: reset},
+  );
+}
+
+/// [data] with [previous] as the order again (undo of a reset); a null
+/// [previous] resets.
+FavouritesData restoreCategoryOrder(
+  FavouritesData data,
+  ContentKind kind,
+  CategoryOrder? previous, {
+  required DateTime now,
+}) {
+  if (previous == null) return resetCategoryOrder(data, kind, now: now);
+  final order = CategoryOrder(
+    kind: kind,
+    ids: previous.ids,
+    names: previous.names,
+    updatedAt: now,
+  );
+  return data.copyWith(
+    categoryOrders: {...data.categoryOrders, order.key: order},
+  );
 }

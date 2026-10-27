@@ -19,6 +19,7 @@ String sortLabel(VodSort sort, {required bool series}) => switch (sort) {
   VodSort.recent => series ? 'Recently updated' : 'Recently added',
   VodSort.title => 'A–Z',
   VodSort.rating => 'Top rated',
+  VodSort.myOrder => 'My order',
 };
 
 /// A check mark for the chosen entry of a menu, or the same space.
@@ -26,18 +27,21 @@ Widget _check(bool chosen) => chosen
     ? const Icon(Icons.check, size: 18, color: AppColors.accent)
     : const SizedBox(width: 18);
 
-/// The sort chip of the Movies or Series tab and its menu.
+/// The sort chip of the Movies or Series tab and its menu. "My order"
+/// comes first and only in one of my categories ([mine]).
 class SortMenu extends StatefulWidget {
   const SortMenu({
     super.key,
     required this.section,
     required this.sort,
     required this.onChanged,
+    this.mine = false,
   });
 
   /// `movies` or `series`, for labels and widget keys.
   final String section;
   final VodSort sort;
+  final bool mine;
   final ValueChanged<VodSort> onChanged;
 
   @override
@@ -61,7 +65,11 @@ class _SortMenuState extends State<SortMenu> {
       controller: _menu,
       onOpen: () => _focusSoon(_first),
       menuChildren: [
-        for (final (i, sort) in VodSort.values.indexed)
+        for (final (i, sort) in [
+          if (widget.mine) VodSort.myOrder,
+          for (final s in VodSort.values)
+            if (s != VodSort.myOrder) s,
+        ].indexed)
           MenuItemButton(
             key: Key('${widget.section}.sort.${sort.name}'),
             focusNode: i == 0 ? _first : null,

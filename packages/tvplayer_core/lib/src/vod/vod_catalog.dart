@@ -178,7 +178,8 @@ final class VodCatalog<T extends Object> {
   };
 
   /// Items in [scope] matching [search] (see [SearchQuery]) and
-  /// [filters], ordered by [sort] (null keeps the scope's order).
+  /// [filters], ordered by [sort] (null or [VodSort.myOrder] keeps the
+  /// scope's order).
   ///
   /// Year filters use the release date, else a `(YYYY)` at the end of
   /// the name, and the [currentYear]; genre filters use
@@ -215,7 +216,9 @@ final class VodCatalog<T extends Object> {
           if (genreOf(items[i]).any((g) => wanted.contains(g.toLowerCase()))) i,
       ];
     }
-    if (sort != null) indexes = _sorted(indexes, sort);
+    if (sort != null && sort != VodSort.myOrder) {
+      indexes = _sorted(indexes, sort);
+    }
     return [for (final i in indexes) items[i]];
   }
 
@@ -251,6 +254,8 @@ final class VodCatalog<T extends Object> {
           final c = _compareDescNullsLast(ratings[a], ratings[b]);
           return c != 0 ? c : a.compareTo(b);
         });
+      case VodSort.myOrder:
+        break;
     }
     return sorted;
   }

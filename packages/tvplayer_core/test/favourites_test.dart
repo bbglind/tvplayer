@@ -17,7 +17,53 @@ String Function() _ids() {
 
 const _ch1 = ItemRef(ContentKind.live, '101');
 const _ch2 = ItemRef(ContentKind.live, '102');
+const _ch3 = ItemRef(ContentKind.live, '103');
 const _movie = ItemRef(ContentKind.movie, '7');
+
+const _cats = [
+  Category(id: 'a', name: 'Alpha'),
+  Category(id: 'b', name: 'Beta'),
+  Category(id: 'c', name: 'Gamma'),
+];
+
+List<String> _ids0(List<Category> c) => [for (final x in c) x.id];
+
+/// [_sample] with channels One, Two, Three added to Sport (id0) in that
+/// order, at minutes 10, 11, 12; listed newest first.
+FavouritesData _withChannels() {
+  var data = _sample();
+  for (final (i, (item, name)) in [
+    (_ch1, 'One'),
+    (_ch2, 'Two'),
+    (_ch3, 'Three'),
+  ].indexed) {
+    data = setMembership(
+      data,
+      'id0',
+      item,
+      name: name,
+      member: true,
+      now: _at(10 + i),
+    );
+  }
+  return data;
+}
+
+List<String> _names(FavouritesData data, String id) => [
+  for (final m in data.itemsIn(id)) m.name,
+];
+
+/// [data] as an older version saved it: items without an order.
+Map<String, Object?> _withoutOrder(FavouritesData data) {
+  final json = data.toJson();
+  for (final r in json['records']! as List) {
+    final record = r as Map<String, Object?>;
+    if ((record['k']! as String).startsWith('member:')) {
+      (record['v']! as Map<String, Object?>).remove('order');
+    }
+  }
+  return jsonDecode(jsonEncode(json)) as Map<String, Object?>;
+}
 
 /// Two live categories ("Sport" id0, "News" id1) and one movie category
 /// ("Weekend" id2).
@@ -179,7 +225,7 @@ void main() {
       expect(data.countIn('id0'), 0);
     });
 
-    test('items are listed in the order they were added', () {
+    test('a newly added item goes first', () {
       var data = _sample();
       data = setMembership(
         data,
@@ -197,8 +243,8 @@ void main() {
         member: true,
         now: _at(11),
       );
-      expect(data.itemsIn('id0').map((m) => m.name), ['Two', 'One']);
-      // Removing and adding again moves it to the end.
+      expect(data.itemsIn('id0').map((m) => m.name), ['One', 'Two']);
+      // Removing and adding again puts it first again.
       data = setMembership(
         data,
         'id0',
@@ -215,7 +261,9 @@ void main() {
         member: true,
         now: _at(13),
       );
-      expect(data.itemsIn('id0').map((m) => m.name), ['One', 'Two']);
+      expect(data.itemsIn('id0').map((m) => m.name), ['Two', 'One']);
+      // Only the added item's record changed.
+      expect(data.memberships['id0|live:101']!.updatedAt, _at(11));
     });
 
     test('need an existing category of the same kind', () {
@@ -412,6 +460,357 @@ void main() {
       );
       expect(added.merge(removed).isFavourite(_ch1), isFalse);
       expect(removed.merge(added).isFavourite(_ch1), isFalse);
+    });
+  });
+
+  group('moveTarget', () {
+    const ids = ['a', 'b', 'c', 'd'];
+
+    test('up, down and to top, disabled at the ends', () {
+      expect(moveTarget(ids, 'c', MoveStep.up), 1);
+      expect(moveTarget(ids, 'b', MoveStep.down), 2);
+      expect(moveTarget(ids, 'c', MoveStep.top), 0);
+      expect(moveTarget(ids, 'a', MoveStep.up), isNull);
+      expect(moveTarget(ids, 'a', MoveStep.top), isNull);
+      expect(moveTarget(ids, 'd', MoveStep.down), isNull);
+      expect(moveTarget(ids, 'x', MoveStep.up), isNull);
+    });
+
+    test('passes over skipped entries', () {
+      // b is hidden: the visible order a, c, d.
+      expect(moveTarget(ids, 'c', MoveStep.up, skip: {'b'}), 0);
+      expect(moveTarget(ids, 'a', MoveStep.down, skip: {'b'}), 2);
+      expect(moveTarget(['b', 'a'], 'a', MoveStep.up, skip: {'b'}), isNull);
+      expect(moveTarget(['b', 'a'], 'a', MoveStep.top, skip: {'b'}), isNull);
+      expect(moveTarget(['a', 'b'], 'a', MoveStep.down, skip: {'b'}), isNull);
+    });
+  });
+
+  group('item order', () {
+    test('move renumbers, touching only items whose position changes', () {
+      var data = _withChannels();
+      expect(_names(data, 'id0'), ['Three', 'Two', 'One']);
+      data = moveFavouriteItem(data, 'id0', _ch1, toIndex: 0, now: _at(20));
+      expect(_names(data, 'id0'), ['One', 'Three', 'Two']);
+      data = moveFavouriteItem(data, 'id0', _ch3, toIndex: 2, now: _at(21));
+      expect(_names(data, 'id0'), ['One', 'Two', 'Three']);
+      // One was added first (order 0) and stayed at 0: never touched.
+      expect(data.memberships['id0|live:101']!.updatedAt, _at(10));
+      expect(data.memberships['id0|live:102']!.updatedAt, _at(21));
+      expect(
+        moveFavouriteItem(data, 'id0', _ch1, toIndex: -5, now: _at(22)),
+        same(data),
+      );
+      expect(
+        moveFavouriteItem(data, 'id1', _ch1, toIndex: 0, now: _at(22)),
+        same(data),
+      );
+    });
+
+    test('move to top with moveTarget', () {
+      var data = _withChannels();
+      final ids = [for (final m in data.itemsIn('id0')) m.item.id];
+      final to = moveTarget(ids, _ch1.id, MoveStep.top)!;
+      data = moveFavouriteItem(data, 'id0', _ch1, toIndex: to, now: _at(20));
+      expect(_names(data, 'id0'), ['One', 'Three', 'Two']);
+    });
+
+    test('is per category', () {
+      var data = _withChannels();
+      data = setMembership(
+        data,
+        'id1',
+        _ch1,
+        name: 'One',
+        member: true,
+        now: _at(20),
+      );
+      data = setMembership(
+        data,
+        'id1',
+        _ch2,
+        name: 'Two',
+        member: true,
+        now: _at(21),
+      );
+      data = moveFavouriteItem(data, 'id1', _ch1, toIndex: 0, now: _at(22));
+      expect(_names(data, 'id1'), ['One', 'Two']);
+      expect(_names(data, 'id0'), ['Three', 'Two', 'One']);
+    });
+
+    test('a reorder on one device and an add on another merge', () {
+      final base = _withChannels();
+      final a = moveFavouriteItem(base, 'id0', _ch3, toIndex: 2, now: _at(20));
+      final b = setMembership(
+        base,
+        'id0',
+        const ItemRef(ContentKind.live, '104'),
+        name: 'Four',
+        member: true,
+        now: _at(21),
+      );
+      for (final merged in [a.merge(b), b.merge(a)]) {
+        expect(_names(merged, 'id0'), ['Four', 'Two', 'One', 'Three']);
+      }
+    });
+
+    test('round-trips through JSON', () {
+      final data = moveFavouriteItem(
+        _withChannels(),
+        'id0',
+        _ch1,
+        toIndex: 0,
+        now: _at(20),
+      );
+      final back = FavouritesData.fromJson(
+        jsonDecode(jsonEncode(data.toJson())),
+      )!;
+      expect(back.memberships, data.memberships);
+      expect(_names(back, 'id0'), ['One', 'Three', 'Two']);
+    });
+  });
+
+  group('migration of items saved without an order', () {
+    /// Items added One, Two, Three, as an older version listed them.
+    FavouritesData old() {
+      var data = _sample();
+      for (final (i, (item, name)) in [
+        (_ch1, 'One'),
+        (_ch2, 'Two'),
+        (_ch3, 'Three'),
+      ].indexed) {
+        data = setMembership(
+          data,
+          'id0',
+          item,
+          name: name,
+          member: true,
+          now: _at(10 + i),
+        );
+      }
+      return FavouritesData.fromJson(_withoutOrder(data))!;
+    }
+
+    test('keep the order they were added in, without a new change time', () {
+      final data = old();
+      expect(_names(data, 'id0'), ['One', 'Two', 'Three']);
+      expect(data.memberships['id0|live:101']!.updatedAt, _at(10));
+      expect(data.memberships['id0|live:103']!.updatedAt, _at(12));
+      // Saved and read again: the same.
+      final back = FavouritesData.fromJson(
+        jsonDecode(jsonEncode(data.toJson())),
+      )!;
+      expect(back.memberships, data.memberships);
+    });
+
+    test('a new item then goes first; moves work', () {
+      var data = setMembership(
+        old(),
+        'id0',
+        const ItemRef(ContentKind.live, '104'),
+        name: 'Four',
+        member: true,
+        now: _at(20),
+      );
+      expect(_names(data, 'id0'), ['Four', 'One', 'Two', 'Three']);
+      data = moveFavouriteItem(data, 'id0', _ch3, toIndex: 1, now: _at(21));
+      expect(_names(data, 'id0'), ['Four', 'Three', 'One', 'Two']);
+    });
+
+    test('next to ordered items, unordered ones go first, newest first', () {
+      // This version's data, then two items added by an older version.
+      var data = _withChannels();
+      data = moveFavouriteItem(data, 'id0', _ch1, toIndex: 0, now: _at(20));
+      for (final (i, id) in ['104', '105'].indexed) {
+        data = setMembership(
+          data,
+          'id0',
+          ItemRef(ContentKind.live, id),
+          name: 'Old $id',
+          member: true,
+          now: _at(30 + i),
+        );
+      }
+      final json = data.toJson();
+      for (final r in json['records']! as List) {
+        final record = r as Map<String, Object?>;
+        if ((record['k']! as String).contains(':10') &&
+            ['104', '105'].any((id) => (record['k']! as String).endsWith(id))) {
+          (record['v']! as Map<String, Object?>).remove('order');
+        }
+      }
+      final back = FavouritesData.fromJson(jsonDecode(jsonEncode(json)))!;
+      expect(_names(back, 'id0'), [
+        'Old 105',
+        'Old 104',
+        'One',
+        'Three',
+        'Two',
+      ]);
+    });
+
+    test('a later record with an order wins over an older one without', () {
+      final data = _withChannels();
+      final json = data.toJson();
+      final records = json['records']! as List;
+      final first = records.cast<Map<String, Object?>>().firstWhere(
+        (r) => r['k'] == 'member:id0|live:101',
+      );
+      // The same key once more, without an order, before it.
+      records.insert(0, {
+        ...first,
+        'v': {...(first['v']! as Map<String, Object?>)}..remove('order'),
+      });
+      final back = FavouritesData.fromJson(jsonDecode(jsonEncode(json)))!;
+      expect(back.memberships, data.memberships);
+    });
+  });
+
+  group('provider category order', () {
+    test('is the provider order until moved', () {
+      final data = _sample();
+      expect(data.orderedCategories(ContentKind.live, _cats), _cats);
+      expect(data.categoryOrder(ContentKind.live), isNull);
+    });
+
+    test('move saves the whole order, per kind', () {
+      final data = moveProviderCategory(
+        _sample(),
+        ContentKind.live,
+        _cats,
+        'c',
+        toIndex: 0,
+        now: _at(20),
+      );
+      expect(_ids0(data.orderedCategories(ContentKind.live, _cats)), [
+        'c',
+        'a',
+        'b',
+      ]);
+      expect(data.categoryOrder(ContentKind.live)!.names, [
+        'Gamma',
+        'Alpha',
+        'Beta',
+      ]);
+      expect(data.orderedCategories(ContentKind.movie, _cats), _cats);
+      expect(
+        moveProviderCategory(
+          data,
+          ContentKind.live,
+          _cats,
+          'c',
+          toIndex: 0,
+          now: _at(21),
+        ),
+        same(data),
+      );
+    });
+
+    test('new categories go at the end, removed ones disappear', () {
+      var data = moveProviderCategory(
+        _sample(),
+        ContentKind.live,
+        _cats,
+        'c',
+        toIndex: 0,
+        now: _at(20),
+      );
+      // The provider drops Beta and adds Delta and Epsilon.
+      const later = [
+        Category(id: 'e', name: 'Epsilon'),
+        Category(id: 'a', name: 'Alpha'),
+        Category(id: 'c', name: 'Gamma'),
+        Category(id: 'd', name: 'Delta'),
+      ];
+      expect(_ids0(data.orderedCategories(ContentKind.live, later)), [
+        'c',
+        'a',
+        'e',
+        'd',
+      ]);
+      // The next move saves it without Beta.
+      data = moveProviderCategory(
+        data,
+        ContentKind.live,
+        later,
+        'd',
+        toIndex: 0,
+        now: _at(21),
+      );
+      expect(data.categoryOrder(ContentKind.live)!.ids, ['d', 'c', 'a', 'e']);
+    });
+
+    test('reset, undo and merge', () {
+      final moved = moveProviderCategory(
+        _sample(),
+        ContentKind.live,
+        _cats,
+        'c',
+        toIndex: 0,
+        now: _at(20),
+      );
+      final previous = moved.categoryOrder(ContentKind.live);
+      final reset = resetCategoryOrder(moved, ContentKind.live, now: _at(21));
+      expect(reset.orderedCategories(ContentKind.live, _cats), _cats);
+      expect(reset.categoryOrders['live']!.deleted, isTrue);
+      expect(
+        resetCategoryOrder(reset, ContentKind.live, now: _at(22)),
+        same(reset),
+      );
+      // The reset wins over the earlier move from another copy.
+      expect(moved.merge(reset).categoryOrder(ContentKind.live), isNull);
+      expect(reset.merge(moved).categoryOrder(ContentKind.live), isNull);
+
+      final undone = restoreCategoryOrder(
+        reset,
+        ContentKind.live,
+        previous,
+        now: _at(22),
+      );
+      expect(_ids0(undone.orderedCategories(ContentKind.live, _cats)), [
+        'c',
+        'a',
+        'b',
+      ]);
+      expect(
+        restoreCategoryOrder(
+          undone,
+          ContentKind.live,
+          null,
+          now: _at(23),
+        ).categoryOrder(ContentKind.live),
+        isNull,
+      );
+    });
+
+    test('round-trips through JSON, resets included', () {
+      var data = moveProviderCategory(
+        _sample(),
+        ContentKind.live,
+        _cats,
+        'b',
+        toIndex: 0,
+        now: _at(20),
+      );
+      data = moveProviderCategory(
+        data,
+        ContentKind.series,
+        _cats,
+        'c',
+        toIndex: 0,
+        now: _at(21),
+      );
+      data = resetCategoryOrder(data, ContentKind.series, now: _at(22));
+      final back = FavouritesData.fromJson(
+        jsonDecode(jsonEncode(data.toJson())),
+      )!;
+      expect(back.categoryOrders, data.categoryOrders);
+      expect(_ids0(back.orderedCategories(ContentKind.live, _cats)), [
+        'b',
+        'a',
+        'c',
+      ]);
+      expect(back.categoryOrder(ContentKind.series), isNull);
     });
   });
 

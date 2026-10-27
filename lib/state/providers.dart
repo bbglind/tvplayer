@@ -229,6 +229,25 @@ class CategoryEditing extends Notifier<String?> {
   void toggle(String section) => state = state == section ? null : section;
 }
 
+/// The one of my categories whose items are being reordered ("Reorder" in
+/// Live TV, Movies or Series); null when none. Ends with the provider.
+final itemReorderProvider = NotifierProvider<ItemReorder, String?>(
+  ItemReorder.new,
+);
+
+class ItemReorder extends Notifier<String?> {
+  @override
+  String? build() {
+    ref.watch(providerKeyProvider);
+    return null;
+  }
+
+  /// Starts reordering my category [id], or ends it.
+  void toggle(String id) => state = state == id ? null : id;
+
+  void stop() => state = null;
+}
+
 /// Creates the playlist status store of a provider (by [providerKey]).
 /// Overridden in tests.
 final playlistStatusStoreProvider =

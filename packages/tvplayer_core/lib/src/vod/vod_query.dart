@@ -8,7 +8,10 @@ enum VodSort {
   title,
 
   /// Highest rating first; items without a rating last.
-  rating;
+  rating,
+
+  /// The user's order: the scope's order, as for one of my categories.
+  myOrder;
 
   /// The sort with [name], or null.
   static VodSort? byName(String? name) =>

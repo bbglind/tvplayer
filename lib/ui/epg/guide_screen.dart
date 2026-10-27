@@ -159,7 +159,10 @@ class _Toolbar extends ConsumerWidget {
                   value: AllCategories(),
                   child: Text('All channels'),
                 ),
-                for (final c in catalog.categories)
+                for (final c in favourites.orderedCategories(
+                  ContentKind.live,
+                  catalog.categories,
+                ))
                   if (!hidden.contains(c.id))
                     DropdownMenuItem(
                       value: ProviderCategory(c.id),
