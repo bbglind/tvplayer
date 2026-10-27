@@ -282,7 +282,10 @@ weights 400, 500, 600, 700.
   Recently added posters, the last two with "See all". Rows still loading show `card`
   placeholders; empty rows are left out.
 - **Downloads page** (sidebar, after Series): page title "Downloads"
-  with "Open folder" (secondary, hint: the folder). Sections "In
+  with "Pause all" (secondary, pause icon, hint "Pause all downloads;
+  none starts until you resume"; "Resume all", play icon, hint "Downloads
+  are paused. Resume the queue" while paused; shown while something is in
+  the queue) and "Open folder" (secondary, hint: the folder). Sections "In
   progress" (queue order), "Recordings" (recordings and programmes from
   the archive) and "Downloaded" (movies and episodes), newest first.
   Rows: `card`, radius 12, padding 10/14: poster (44×64) or channel logo
@@ -291,7 +294,8 @@ weights 400, 500, 600, 700.
   · <channel> · Mon 26 Oct 20:00–21:15"), while it downloads a 4 px
   progress bar (indeterminate while the size is unknown) and a status
   line (13, `textSecondary`): "45 % · 1.0 of 2.1 GB · 4.2 MB/s · 4 min
-  left", "Waiting for its turn", "Waiting: starts at 21:15", "Paused ·
+  left", "Waiting for its turn" ("Queued · downloads paused" while the
+  queue is paused), "Waiting: starts at 21:15", "Paused ·
   45 % · …", "Paused while playing", "Paused: less than 5 GB free on the
   disk.", "Failed: <reason>" (with an error icon), "Couldn't resume: the
   server started it again from the beginning.", "Recording · 0:12:34 ·
@@ -318,6 +322,10 @@ weights 400, 500, 600, 700.
   `Recordings/<Channel> - <Programme> - 2026-10-27 20-00.ts`; clean titles
   only, " (2)" when a name is taken. One download at a time, in order,
   while the app is open; partial files resume (also after a restart).
+  Pausing the running download (or Pause all) pauses the whole queue,
+  also across a restart, until Resume on a download (which then goes
+  first) or Resume all; pausing a queued one only skips it. A download
+  paused for playback continues by itself when playback stops.
   Movies and episodes share their position and watched marks with the
   streamed item; recordings and programmes from the archive keep no
   position and stay out of Continue watching.

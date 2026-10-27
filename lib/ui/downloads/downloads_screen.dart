@@ -44,12 +44,29 @@ class DownloadsScreen extends ConsumerWidget {
           i,
     ];
     final folder = ref.watch(downloadFolderProvider);
+    final queueable = pending.any((i) => i.kind != DownloadKind.recording);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PageHeader(
           title: 'Downloads',
           actions: [
+            if (state.paused || queueable)
+              Tooltip(
+                message: state.paused
+                    ? 'Downloads are paused. Resume the queue'
+                    : 'Pause all downloads; none starts until you resume',
+                child: OutlinedButton.icon(
+                  key: const Key('downloads.pauseAll'),
+                  onPressed: () {
+                    final downloads = ref.read(downloadsProvider.notifier);
+                    state.paused ? downloads.resumeAll() : downloads.pauseAll();
+                  },
+                  icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
+                  label: Text(state.paused ? 'Resume all' : 'Pause all'),
+                ),
+              ),
+            if (state.paused || queueable) const SizedBox(width: 8),
             Tooltip(
               message: folder,
               child: OutlinedButton.icon(
@@ -447,7 +464,7 @@ String? downloadStatusText(
       ].join(' · ').ifEmpty('Starting…');
     case DownloadStatus.queued:
       return [
-        'Waiting for its turn',
+        state.paused ? 'Queued · downloads paused' : 'Waiting for its turn',
         if (item.bytes > 0) sizes(),
         ?note,
       ].join(' · ');

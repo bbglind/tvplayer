@@ -117,6 +117,7 @@ final class DownloadsState {
     this.speed,
     this.timeLeft,
     this.loaded = false,
+    this.paused = false,
   });
 
   /// In queue order, finished ones and recordings included.
@@ -126,6 +127,9 @@ final class DownloadsState {
   final double? speed;
   final Duration? timeLeft;
   final bool loaded;
+
+  /// Whether the user paused the queue.
+  final bool paused;
 
   DownloadItem? byId(String id) {
     for (final item in items) {
@@ -221,16 +225,16 @@ class DownloadsController extends Notifier<DownloadsState> {
   }
 
   Future<void> _load(DownloadsStore store) async {
-    List<DownloadItem> saved;
+    ({List<DownloadItem> items, bool paused}) saved;
     try {
       saved = await store.load();
     } catch (e) {
       debugPrint('Could not read the downloads list (${e.runtimeType})');
-      saved = const [];
+      saved = (items: const [], paused: false);
     }
     if (!ref.mounted || !identical(store, _store)) return;
     final items = [
-      for (final item in saved)
+      for (final item in saved.items)
         // A recording still running when the app closed ended there.
         if (item.status == DownloadStatus.recording)
           item.copyWith(
@@ -249,6 +253,7 @@ class DownloadsController extends Notifier<DownloadsState> {
       clock: () => _now,
       beforeStart: _checkBeforeStart,
       items: items,
+      paused: saved.paused,
     );
     queue.changes.listen((_) => _sync(queue));
     _sync(queue);
@@ -280,16 +285,18 @@ class DownloadsController extends Notifier<DownloadsState> {
       speed: queue.speed,
       timeLeft: queue.timeLeft,
       loaded: true,
+      paused: queue.paused,
     );
-    _save(items);
+    _save(items, paused: queue.paused);
   }
 
   /// Saves on every change of the list or a status, and progress at most
   /// every few seconds.
-  void _save(List<DownloadItem> items) {
+  void _save(List<DownloadItem> items, {required bool paused}) {
     final store = _store;
     if (store == null) return;
-    final shape = items.map((i) => '${i.id}:${i.status.name}').join(',');
+    final shape =
+        '$paused;${items.map((i) => '${i.id}:${i.status.name}').join(',')}';
     final now = DateTime.now();
     if (shape == _savedShape &&
         now.difference(_savedAt) < const Duration(seconds: 5)) {
@@ -299,7 +306,7 @@ class DownloadsController extends Notifier<DownloadsState> {
     _savedAt = now;
     _saving = _saving.then((_) async {
       try {
-        await store.save(items);
+        await store.save(items, paused: paused);
       } catch (e) {
         debugPrint('Could not save the downloads list (${e.runtimeType})');
       }
@@ -562,6 +569,20 @@ class DownloadsController extends Notifier<DownloadsState> {
     _queue?.resume(id);
   }
 
+  /// Pauses the whole queue, with the running download.
+  void pauseAll() => _queue?.pauseAll();
+
+  /// Continues the queue, with the downloads the user or low space paused.
+  void resumeAll() {
+    for (final item in state.items) {
+      if (item.status == DownloadStatus.paused) {
+        _warned.remove(item.id);
+        _restartNoted.remove(item.id);
+      }
+    }
+    _queue?.resumeAll();
+  }
+
   /// Pauses the running download so the player can use the stream; it
   /// continues when the player stops.
   void pauseForPlayback() => _queue?.pauseForPlayback();
@@ -619,9 +640,10 @@ class _FileDownloadsStore implements DownloadsStore {
   );
 
   @override
-  Future<List<DownloadItem>> load() async => (await _store).load();
+  Future<({List<DownloadItem> items, bool paused})> load() async =>
+      (await _store).load();
 
   @override
-  Future<void> save(List<DownloadItem> items) async =>
-      (await _store).save(items);
+  Future<void> save(List<DownloadItem> items, {bool paused = false}) async =>
+      (await _store).save(items, paused: paused);
 }

@@ -477,6 +477,55 @@ void main() {
       );
     });
 
+    testWidgets('Pause all holds the queue; Resume all goes on', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        page(),
+        items: [
+          _item('a', total: 1000),
+          _item('b', source: '8', total: 1000),
+        ],
+      );
+      await startQueue(tester);
+      final toggle = find.byKey(const Key('downloads.pauseAll'));
+      expect(
+        find.descendant(of: toggle, matching: find.text('Pause all')),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip('Pause all downloads; none starts until you resume'),
+        findsOneWidget,
+      );
+
+      await tester.tap(toggle);
+      await tester.pump();
+      await tester.pump();
+      expect(transfers.runs.single.control.stopped, isTrue);
+      expect(container(tester).read(downloadsProvider).paused, isTrue);
+      expect(
+        find.descendant(of: toggle, matching: find.text('Resume all')),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip('Downloads are paused. Resume the queue'),
+        findsOneWidget,
+      );
+      expect(find.text('Queued · downloads paused'), findsOneWidget);
+      await container(tester).read(downloadsProvider.notifier).saved;
+      expect(downloads.paused, isTrue);
+
+      await tester.tap(toggle);
+      await tester.pump();
+      await tester.pump();
+      expect(transfers.runs.map((r) => r.item.id), ['a', 'a']);
+      expect(container(tester).read(downloadsProvider).paused, isFalse);
+      expect(find.text('Waiting for its turn'), findsOneWidget);
+      await container(tester).read(downloadsProvider.notifier).saved;
+      expect(downloads.paused, isFalse);
+    });
+
     testWidgets('Remove asks, then deletes the file', (tester) async {
       final dir = Directory.systemTemp.createTempSync('tvplayer_test');
       addTearDown(() => dir.deleteSync(recursive: true));

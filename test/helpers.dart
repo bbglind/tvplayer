@@ -485,15 +485,18 @@ class MemoryDownloadsStore implements DownloadsStore {
     : items = List.of(items);
 
   List<DownloadItem> items;
+  var paused = false;
   var saves = 0;
 
   @override
-  Future<List<DownloadItem>> load() async => items;
+  Future<({List<DownloadItem> items, bool paused})> load() async =>
+      (items: items, paused: paused);
 
   @override
-  Future<void> save(List<DownloadItem> items) async {
+  Future<void> save(List<DownloadItem> items, {bool paused = false}) async {
     saves++;
     this.items = List.of(items);
+    this.paused = paused;
   }
 }
 

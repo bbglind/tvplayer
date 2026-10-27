@@ -28,8 +28,10 @@ abstract final class DownloadNotes {
 /// holds the provider stream from [guard].
 ///
 /// Pausing for playback gives the stream back at once; the download goes
-/// on when playback lets go of the stream. A download paused by the user,
-/// or for lack of disk space, waits until [resume]. Archive programmes
+/// on when playback lets go of the stream. Pausing the running download
+/// by the user pauses the whole queue ([paused]), and a pause for lack of
+/// disk space holds it too: nothing starts until [resume] or [resumeAll].
+/// Archive programmes
 /// whose end hasn't passed yet wait for it ([DownloadStatus.waiting]);
 /// [pump] (called on changes and periodically by the owner) starts them.
 final class DownloadQueue {
@@ -39,7 +41,9 @@ final class DownloadQueue {
     required DateTime Function() clock,
     StartCheck? beforeStart,
     Iterable<DownloadItem> items = const [],
+    bool paused = false,
   }) : _run = run,
+       _paused = paused,
        _clock = clock,
        _beforeStart = beforeStart,
        _items = [for (final item in items) _restored(item)] {
@@ -59,6 +63,12 @@ final class DownloadQueue {
   /// Set after a pause for lack of space: nothing starts by itself until
   /// the user resumes a download.
   bool _heldForSpace = false;
+
+  /// Set when the user pauses the running download or the whole queue.
+  bool _paused;
+
+  /// The download [resume] asked for, started before the others.
+  String? _startFirst;
   bool _disposed = false;
 
   /// After a restart a running download continues from the queue, and
@@ -69,6 +79,9 @@ final class DownloadQueue {
       item.copyWith(status: DownloadStatus.queued, pauseReason: () => null),
     _ => item,
   };
+
+  /// Whether the user paused the queue: nothing starts until a resume.
+  bool get paused => _paused;
 
   /// All entries, in queue order (finished ones included).
   List<DownloadItem> get items => List.unmodifiable(_items);
@@ -124,8 +137,41 @@ final class DownloadQueue {
     _changed();
   }
 
-  /// Pauses [id] until the user resumes it.
-  void pause(String id) => _pause(id, PauseReason.user);
+  /// Pauses [id] until the user resumes it; when it is the running
+  /// download, the whole queue pauses.
+  void pause(String id) {
+    if (_active?.id == id) _paused = true;
+    _pause(id, PauseReason.user);
+  }
+
+  /// Pauses the queue, with the running download, until [resumeAll] or
+  /// [resume].
+  void pauseAll() {
+    _paused = true;
+    final item = running;
+    if (item != null) _pause(item.id, PauseReason.user);
+    _changed();
+  }
+
+  /// Puts the downloads paused by the user or for lack of space back in
+  /// the queue and starts it again.
+  void resumeAll() {
+    _paused = false;
+    _heldForSpace = false;
+    for (var i = 0; i < _items.length; i++) {
+      final item = _items[i];
+      if (item.status == DownloadStatus.paused &&
+          item.pauseReason != PauseReason.playback) {
+        _items[i] = item.copyWith(
+          status: DownloadStatus.queued,
+          pauseReason: () => null,
+          message: () => null,
+        );
+      }
+    }
+    _changed();
+    pump();
+  }
 
   /// Pauses the running download for lack of disk space, keeping what was
   /// saved; nothing starts by itself afterwards.
@@ -160,7 +206,8 @@ final class DownloadQueue {
     }
   }
 
-  /// Puts a paused or failed download back in the queue.
+  /// Puts a paused or failed download back in the queue and starts the
+  /// queue again, with [id] first.
   void resume(String id) {
     final item = byId(id);
     if (item == null) return;
@@ -169,6 +216,8 @@ final class DownloadQueue {
       return;
     }
     _heldForSpace = false;
+    _paused = false;
+    _startFirst = id;
     update(
       item.copyWith(
         status: DownloadStatus.queued,
@@ -214,18 +263,28 @@ final class DownloadQueue {
         _changed();
       }
     }
-    if (_active != null || _heldForSpace) return;
-    DownloadItem? next;
-    for (final item in _items) {
-      if (item.status == DownloadStatus.queued &&
-          item.kind != DownloadKind.recording) {
-        next = item;
-        break;
+    if (_active != null || _heldForSpace || _paused) return;
+    bool startable(DownloadItem? item) =>
+        item != null &&
+        item.status == DownloadStatus.queued &&
+        item.kind != DownloadKind.recording;
+    var next = switch (_startFirst) {
+      final id? => byId(id),
+      null => null,
+    };
+    if (!startable(next)) {
+      next = null;
+      for (final item in _items) {
+        if (startable(item)) {
+          next = item;
+          break;
+        }
       }
     }
     if (next == null) return;
     final lease = guard.tryAcquire(StreamUse.download);
     if (lease == null) return;
+    _startFirst = null;
     unawaited(_start(next, lease));
   }
 

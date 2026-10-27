@@ -228,7 +228,7 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('downloads_store');
     addTearDown(() => dir.delete(recursive: true));
     final store = JsonFileDownloadsStore(File('${dir.path}/d/key.json'));
-    expect(await store.load(), isEmpty);
+    expect((await store.load()).items, isEmpty);
     final items = [
       for (final id in ['b', 'a'])
         DownloadItem(
@@ -242,8 +242,24 @@ void main() {
         ),
     ];
     await store.save(items);
-    expect((await store.load()).map((i) => i.id), ['b', 'a']);
+    final loaded = await store.load();
+    expect(loaded.items.map((i) => i.id), ['b', 'a']);
+    expect(loaded.paused, isFalse);
     await File('${dir.path}/d/key.json').writeAsString('{broken');
-    expect(await store.load(), isEmpty);
+    expect((await store.load()).items, isEmpty);
+  });
+
+  test('JsonFileDownloadsStore keeps a paused queue paused', () async {
+    final dir = await Directory.systemTemp.createTemp('downloads_store');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/key.json');
+    final store = JsonFileDownloadsStore(file);
+    await store.save(const [], paused: true);
+    expect((await store.load()).paused, isTrue);
+    await store.save(const []);
+    expect((await store.load()).paused, isFalse);
+    // Saved before the queue could be paused.
+    await file.writeAsString('{"version":1,"items":[]}');
+    expect((await store.load()).paused, isFalse);
   });
 }
