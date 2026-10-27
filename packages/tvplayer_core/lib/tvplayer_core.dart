@@ -2,10 +2,17 @@
 /// clients/parsers, the TV guide (matching and time zones), movie and
 /// series catalogues, metadata sources, audio/subtitle track selection and
 /// watch history, replay (catch-up), favourites and hidden categories,
-/// playlist refresh scheduling, title parsing, search, sorting and filters.
+/// playlist refresh scheduling, title parsing, search, sorting and filters,
+/// the provider stream guard and the downloads queue.
 /// Pure Dart, no Flutter dependency.
 library;
 
+export 'src/downloads/disk_space.dart';
+export 'src/downloads/download_item.dart';
+export 'src/downloads/download_queue.dart';
+export 'src/downloads/file_names.dart';
+export 'src/downloads/http_download.dart';
+export 'src/downloads/replay_clip.dart';
 export 'src/epg/archive_listings.dart';
 export 'src/epg/channel_name.dart';
 export 'src/epg/epg_builder.dart';
@@ -32,6 +39,7 @@ export 'src/models/series.dart';
 export 'src/playlist/missing_items.dart';
 export 'src/playlist/playlist_status.dart';
 export 'src/playlist/refresh_schedule.dart';
+export 'src/streams/stream_guard.dart';
 export 'src/text/provider_titles.dart';
 export 'src/text/search_text.dart';
 export 'src/text/title_parser.dart';
