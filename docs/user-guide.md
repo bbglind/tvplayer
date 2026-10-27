@@ -986,8 +986,11 @@ just choose "Pause download" and it resumes when you stop.
   (c) then becomes a quick zap list.
 - **Where your data lives**: connection details in the system keyring;
   the downloaded playlist, favourites, watch history and settings in the
-  app's data folder (`~/.local/share/dev.example.tvplayer`); downloads in
+  app's data folder (`~/.local/share/io.github.bbglind.tvplayer`); downloads in
   the downloads folder. Removing the provider deletes the keyring entry.
+  If you used an earlier test build, its data folder
+  (`~/.local/share/dev.example.tvplayer`), cache and saved provider are moved
+  over automatically the first time this version starts.
 
 ### Reporting problems
 

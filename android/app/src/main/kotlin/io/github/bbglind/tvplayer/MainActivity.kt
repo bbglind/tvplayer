@@ -1,4 +1,4 @@
-package dev.example.tvplayer
+package io.github.bbglind.tvplayer
 
 import io.flutter.embedding.android.FlutterActivity
 

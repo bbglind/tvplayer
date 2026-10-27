@@ -14,6 +14,7 @@ import '../data/connection_tester.dart';
 import '../data/device_time_zone.dart';
 import '../data/epg_repository.dart';
 import '../data/errors.dart';
+import '../data/legacy_data.dart';
 import '../data/poster_cache.dart';
 import '../data/provider_storage.dart';
 import '../data/vod_repository.dart';
@@ -57,7 +58,7 @@ final httpClientProvider = Provider<http.Client>((ref) {
 
 /// Where the provider config is persisted. Overridden in tests.
 final providerStorageProvider = Provider<ProviderStorage>(
-  (ref) => SecureProviderStorage(),
+  (ref) => SecureProviderStorage(migrateLegacy: migrateLegacyKeyring),
 );
 
 final connectionTesterProvider = Provider<ConnectionTester>(

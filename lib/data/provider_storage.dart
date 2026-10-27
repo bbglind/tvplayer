@@ -28,7 +28,7 @@ abstract interface class ProviderStorage {
 /// [ProviderStorage] in the platform keystore (Secret Service keyring on
 /// Linux, Keystore on Android). Nothing is written to plain files.
 class SecureProviderStorage implements ProviderStorage {
-  SecureProviderStorage([FlutterSecureStorage? storage])
+  SecureProviderStorage({FlutterSecureStorage? storage, this.migrateLegacy})
     : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'provider_config_v1';
@@ -38,9 +38,17 @@ class SecureProviderStorage implements ProviderStorage {
 
   final FlutterSecureStorage _storage;
 
+  /// Moves a provider saved under an earlier application ID into the
+  /// keystore and returns true when it did; tried when nothing is saved.
+  final Future<bool> Function()? migrateLegacy;
+
   @override
   Future<ProviderConfig?> load() async {
-    final raw = await _guard(() => _storage.read(key: _key));
+    var raw = await _guard(() => _storage.read(key: _key));
+    final migrate = migrateLegacy;
+    if (raw == null && migrate != null && await _guard(migrate)) {
+      raw = await _guard(() => _storage.read(key: _key));
+    }
     return raw == null ? null : decodeProviderConfig(raw);
   }
 

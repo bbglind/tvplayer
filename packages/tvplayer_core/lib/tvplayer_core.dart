@@ -47,6 +47,7 @@ export 'src/text/title_parser.dart';
 export 'src/tracks/language.dart';
 export 'src/tracks/media_track.dart';
 export 'src/tracks/track_picker.dart';
+export 'src/util/legacy_directory.dart';
 export 'src/util/provider_failure.dart';
 export 'src/util/provider_key.dart';
 export 'src/vod/variants.dart';

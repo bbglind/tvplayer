@@ -6,6 +6,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "legacy_keyring.h"
 #include "video_embed.h"
 
 struct _MyApplication {
@@ -68,6 +69,7 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(view));
   // Overlay with a native child window for embedded mpv.
   video_embed_new(window, view);
+  legacy_keyring_register(view);
 
   // Show the window when Flutter renders.
   // Requires the view to be realized so we can start rendering.
