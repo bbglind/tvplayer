@@ -5,8 +5,11 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/errors.dart';
 import '../../format.dart';
 import '../../player/playback_request.dart';
+import '../../state/downloads_controller.dart';
 import '../../state/providers.dart';
 import '../../state/variants.dart';
+import '../downloads/download_actions.dart';
+import '../downloads/download_button.dart';
 import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
@@ -177,6 +180,14 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                     const SizedBox(width: 12),
                     const WatchedBadge(),
                   ],
+                  if (ref.watch(
+                    downloadsProvider.select(
+                      (s) => s.doneFor(movieKey(movie.streamId)) != null,
+                    ),
+                  )) ...[
+                    const SizedBox(width: 12),
+                    const DownloadedBadge(filled: true),
+                  ],
                 ],
               ),
               if (facts.isNotEmpty || lastPlayed) ...[
@@ -226,6 +237,17 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
                     label: Text(
                       watched ? 'Mark as unwatched' : 'Mark as watched',
                     ),
+                  ),
+                  DownloadButton(
+                    watchKey: movieKey(movie.streamId),
+                    onDownload: () {
+                      final item = ref
+                          .read(downloadsProvider.notifier)
+                          .addMovie(movie, ref.read(providerTagsProvider));
+                      if (item != null) {
+                        showAddedToDownloads(context, ref, item.title);
+                      }
+                    },
                   ),
                   FavouriteButton(
                     item: movieItemRef(movie),

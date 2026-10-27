@@ -24,8 +24,13 @@ sealed class PlaybackRequest {
   /// Key of the [WatchProgress] to update; null for live TV.
   String? get watchKey => null;
 
-  /// Playback URL from the provider's sources; null when the needed source
-  /// is missing. Contains credentials: never log or show it.
+  /// Whether it plays from the provider, using one of its streams (see
+  /// `StreamGuard`); a downloaded file doesn't.
+  bool get usesProviderStream => true;
+
+  /// Playback URL from the provider's sources (or the downloaded file);
+  /// null when the needed source is missing. Contains credentials: never
+  /// log or show it.
   Uri? url({LiveSource? live, VodSource? vod});
 }
 
@@ -95,9 +100,18 @@ final class ReplayPlayback extends PlaybackRequest {
 }
 
 final class MoviePlayback extends PlaybackRequest {
-  const MoviePlayback(this.movie, {this.start});
+  const MoviePlayback(this.movie, {this.start, this.localFile});
 
   final Movie movie;
+
+  /// The downloaded file to play instead of the provider's stream.
+  final String? localFile;
+
+  MoviePlayback withLocalFile(String? path) =>
+      MoviePlayback(movie, start: start, localFile: path);
+
+  @override
+  bool get usesProviderStream => localFile == null;
 
   @override
   final Duration? start;
@@ -112,15 +126,27 @@ final class MoviePlayback extends PlaybackRequest {
   String get watchKey => movieKey(movie.streamId);
 
   @override
-  Uri? url({LiveSource? live, VodSource? vod}) => vod?.movieUrl(movie);
+  Uri? url({LiveSource? live, VodSource? vod}) => switch (localFile) {
+    final path? => Uri.file(path),
+    null => vod?.movieUrl(movie),
+  };
 }
 
 final class EpisodePlayback extends PlaybackRequest {
-  const EpisodePlayback(this.info, this.episode, {this.start});
+  const EpisodePlayback(this.info, this.episode, {this.start, this.localFile});
 
   /// The series with all its episodes, to find the next one.
   final SeriesInfo info;
   final Episode episode;
+
+  /// The downloaded file to play instead of the provider's stream.
+  final String? localFile;
+
+  EpisodePlayback withLocalFile(String? path) =>
+      EpisodePlayback(info, episode, start: start, localFile: path);
+
+  @override
+  bool get usesProviderStream => localFile == null;
 
   @override
   final Duration? start;
@@ -135,7 +161,31 @@ final class EpisodePlayback extends PlaybackRequest {
   String get watchKey => episodeKey(episode.id);
 
   @override
-  Uri? url({LiveSource? live, VodSource? vod}) => vod?.episodeUrl(episode);
+  Uri? url({LiveSource? live, VodSource? vod}) => switch (localFile) {
+    final path? => Uri.file(path),
+    null => vod?.episodeUrl(episode),
+  };
+}
+
+/// A recording or a programme saved from the archive, played from its
+/// file. It keeps no position and stays out of Continue watching, like a
+/// replay.
+final class RecordingPlayback extends PlaybackRequest {
+  const RecordingPlayback(this.file, {required this.name});
+
+  final String file;
+
+  @override
+  final String name;
+
+  @override
+  String title(ProviderTags tags) => name;
+
+  @override
+  bool get usesProviderStream => false;
+
+  @override
+  Uri? url({LiveSource? live, VodSource? vod}) => Uri.file(file);
 }
 
 /// E.g. `Series · S01E02 · Pilot`, without the provider's tag. Panels

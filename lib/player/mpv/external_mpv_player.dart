@@ -640,6 +640,75 @@ class ExternalMpvPlayer extends ChangeNotifier {
     }
   }
 
+  /// Starts recording what mpv plays to [path] (a `.ts` file, the format of
+  /// live streams), without a second stream: `dump-cache` from the frame
+  /// showing on, continuing with everything mpv reads. Falls back to
+  /// `stream-record`, which starts with the next data read. Returns false
+  /// when mpv can't record. [path] is never logged.
+  ///
+  /// Loading anything else in this mpv (another channel, a still for
+  /// pausing) ends the recording.
+  Future<bool> startRecording(String path) async {
+    final run = _run;
+    final ipc = run?.ipc;
+    if (run == null || run.closed || run.exited || ipc == null) return false;
+    try {
+      await File(path).parent.create(recursive: true);
+    } on FileSystemException {
+      return false;
+    }
+    try {
+      final position = _seconds(
+        await ipc.command(['get_property', 'time-pos']),
+      );
+      if (position == null) throw const MpvIpcException('No position');
+      // A continuous dump only replies when it ends, so it runs in the
+      // background; an early error still shows within a moment.
+      final dump = ipc.command([
+        'dump-cache',
+        _secondsText(position),
+        'no',
+        path,
+      ], async: true);
+      final failed = await dump
+          .then((_) => false, onError: (Object _) => true)
+          .timeout(const Duration(milliseconds: 500), onTimeout: () => false);
+      if (failed) throw const MpvIpcException('dump-cache failed');
+      run.recording = _Recording.dumpCache;
+      return true;
+    } on MpvIpcException {
+      try {
+        await ipc.command(['set_property', 'stream-record', path]);
+        run.recording = _Recording.streamRecord;
+        return true;
+      } on MpvIpcException {
+        return false;
+      }
+    }
+  }
+
+  /// Stops a recording started with [startRecording]; the file is closed
+  /// and kept.
+  Future<void> stopRecording() async {
+    final run = _run;
+    final ipc = run?.ipc;
+    if (run == null || ipc == null) return;
+    final mode = run.recording;
+    run.recording = null;
+    try {
+      switch (mode) {
+        case _Recording.dumpCache:
+          // An empty file name ends the running dump.
+          await ipc.command(['dump-cache', 'no', 'no', '']);
+        case _Recording.streamRecord:
+          await ipc.command(['set_property', 'stream-record', '']);
+        case null:
+      }
+    } on MpvIpcException {
+      // mpv is gone, which closed the file.
+    }
+  }
+
   Future<void> _command(List<Object?> args) async {
     try {
       await _run?.ipc?.command(args);
@@ -686,6 +755,9 @@ class _Overlay {
 }
 
 /// The process, socket and socket directory of one session.
+/// The mpv feature a recording uses.
+enum _Recording { dumpCache, streamRecord }
+
 class _MpvRun {
   _MpvRun(this._quitTimeout);
 
@@ -703,6 +775,9 @@ class _MpvRun {
   bool exited = false;
   Timer? statsTimer;
   bool polling = false;
+
+  /// How this mpv records, while it does.
+  _Recording? recording;
 
   /// Overlay ids being sent, and those with a newer image waiting.
   final overlaysSending = <int>{};

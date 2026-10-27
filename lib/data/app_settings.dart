@@ -31,6 +31,11 @@ final class AppSettings {
     this.playerVolume = defaultPlayerVolume,
     this.showRemainingTime = false,
     this.playNextSeconds = defaultPlayNextSeconds,
+    this.downloadFolder,
+    this.endMarginMinutes = defaultEndMarginMinutes,
+    this.startMarginMinutes = defaultStartMarginMinutes,
+    this.maxRecordingHours = defaultMaxRecordingHours,
+    this.minFreeGb = defaultMinFreeGb,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -116,6 +121,43 @@ final class AppSettings {
   /// offered with a countdown (one of [playNextChoices]); null for off.
   final int? playNextSeconds;
 
+  /// Where downloads and recordings are saved; null for the default
+  /// (`~/Videos/tvplayer`, or the XDG videos folder).
+  final String? downloadFolder;
+
+  /// Minutes recorded and saved after a programme's end (one of
+  /// [endMarginChoices]).
+  final int endMarginMinutes;
+
+  static const defaultEndMarginMinutes = 15;
+  static const endMarginChoices = [0, 5, 10, 15, 20, 30, 45, 60];
+
+  /// Minutes saved before a programme's start, from the archive (one of
+  /// [startMarginChoices]).
+  final int startMarginMinutes;
+
+  static const defaultStartMarginMinutes = 2;
+  static const startMarginChoices = [0, 1, 2, 5, 10];
+
+  /// Hours after which a recording stops in any case (one of
+  /// [maxRecordingChoices]).
+  final int maxRecordingHours;
+
+  static const defaultMaxRecordingHours = 4;
+  static const maxRecordingChoices = [1, 2, 3, 4, 6, 8, 12];
+
+  /// Gigabytes kept free on the disk of the downloads (one of
+  /// [minFreeChoices]): below it downloads pause and recordings stop.
+  final int minFreeGb;
+
+  static const defaultMinFreeGb = 5;
+  static const minFreeChoices = [1, 2, 5, 10, 20, 50];
+
+  Duration get endMargin => Duration(minutes: endMarginMinutes);
+  Duration get startMargin => Duration(minutes: startMarginMinutes);
+  Duration get maxRecordingLength => Duration(hours: maxRecordingHours);
+  SpacePolicy get spacePolicy => SpacePolicy(minFreeGb * bytesPerGb);
+
   TrackPreferences get trackPreferences => TrackPreferences(
     subtitleLanguages: subtitleLanguages,
     audioLanguages: audioLanguages,
@@ -143,6 +185,11 @@ final class AppSettings {
     int? playerVolume,
     bool? showRemainingTime,
     int? Function()? playNextSeconds,
+    String? Function()? downloadFolder,
+    int? endMarginMinutes,
+    int? startMarginMinutes,
+    int? maxRecordingHours,
+    int? minFreeGb,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -167,6 +214,13 @@ final class AppSettings {
     playNextSeconds: playNextSeconds == null
         ? this.playNextSeconds
         : playNextSeconds(),
+    downloadFolder: downloadFolder == null
+        ? this.downloadFolder
+        : downloadFolder(),
+    endMarginMinutes: endMarginMinutes ?? this.endMarginMinutes,
+    startMarginMinutes: startMarginMinutes ?? this.startMarginMinutes,
+    maxRecordingHours: maxRecordingHours ?? this.maxRecordingHours,
+    minFreeGb: minFreeGb ?? this.minFreeGb,
   );
 
   Map<String, Object?> toJson() => {
@@ -191,6 +245,11 @@ final class AppSettings {
     'showRemainingTime': showRemainingTime,
     // 0 for off, so a missing value still means the default.
     'playNextSeconds': playNextSeconds ?? 0,
+    'downloadFolder': ?downloadFolder,
+    'endMarginMinutes': endMarginMinutes,
+    'startMarginMinutes': startMarginMinutes,
+    'maxRecordingHours': maxRecordingHours,
+    'minFreeGb': minFreeGb,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -249,8 +308,32 @@ final class AppSettings {
         final int s when playNextChoices.contains(s) => s,
         _ => defaultPlayNextSeconds,
       },
+      downloadFolder: switch (json['downloadFolder']) {
+        final String f when f.isNotEmpty => f,
+        _ => null,
+      },
+      endMarginMinutes: _choice(
+        json['endMarginMinutes'],
+        endMarginChoices,
+        defaultEndMarginMinutes,
+      ),
+      startMarginMinutes: _choice(
+        json['startMarginMinutes'],
+        startMarginChoices,
+        defaultStartMarginMinutes,
+      ),
+      maxRecordingHours: _choice(
+        json['maxRecordingHours'],
+        maxRecordingChoices,
+        defaultMaxRecordingHours,
+      ),
+      minFreeGb: _choice(json['minFreeGb'], minFreeChoices, defaultMinFreeGb),
     );
   }
+
+  /// One of [choices] from JSON, else [fallback].
+  static int _choice(Object? json, List<int> choices, int fallback) =>
+      json is int && choices.contains(json) ? json : fallback;
 
   static String? _string(Object? json) => json is String ? json : null;
 

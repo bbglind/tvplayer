@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/provider_storage.dart';
 import 'state/providers.dart';
+import 'state/recording_controller.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
 import 'ui/shell/snack_bar_dismisser.dart';
@@ -19,9 +20,18 @@ class TvPlayerApp extends ConsumerStatefulWidget {
 }
 
 class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
-  // Closing the window must not leave an external mpv running.
+  // Closing the window must not leave an external mpv running. While
+  // recording the player asks first; a download just pauses and resumes
+  // on the next start.
   late final _lifecycle = AppLifecycleListener(
     onExitRequested: () async {
+      final recorder = ref.read(recordingProvider.notifier);
+      if (recorder.active) {
+        if (!await recorder.confirmStop(RecordingStop.quit)) {
+          return AppExitResponse.cancel;
+        }
+        await recorder.stop();
+      }
       await ref.read(externalMpvProvider).stop();
       return AppExitResponse.exit;
     },

@@ -78,13 +78,17 @@ class MpvIpc {
 
   /// Sends [args] as a command and returns the reply's `data`. Throws
   /// [MpvIpcException] if mpv reports an error or the connection closes.
-  Future<Object?> command(List<Object?> args) {
+  /// With [async] mpv runs it in the background (other commands go on
+  /// meanwhile) and replies when it has finished.
+  Future<Object?> command(List<Object?> args, {bool async = false}) {
     if (_closed) {
       return Future.error(const MpvIpcException('Connection closed'));
     }
     final id = _nextRequestId++;
     final completer = _pending[id] = Completer<Object?>();
-    _socket.write('${jsonEncode({'command': args, 'request_id': id})}\n');
+    _socket.write(
+      '${jsonEncode({'command': args, 'request_id': id, if (async) 'async': true})}\n',
+    );
     return completer.future;
   }
 

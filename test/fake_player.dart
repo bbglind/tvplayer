@@ -100,6 +100,22 @@ class FakeExternalPlayer extends ExternalMpvPlayer {
   /// Every URL loaded, by [open] or [reload], in order.
   final loads = <Uri>[];
 
+  /// [startRecording] paths, in order, and the number of [stopRecording]
+  /// calls. With [recordingFails] mpv refuses to record.
+  final recordings = <String>[];
+  var recordingStops = 0;
+  var recordingFails = false;
+
+  @override
+  Future<bool> startRecording(String path) async {
+    if (recordingFails) return false;
+    recordings.add(path);
+    return true;
+  }
+
+  @override
+  Future<void> stopRecording() async => recordingStops++;
+
   @override
   Future<void> stop({int? session}) async => stopped.add(session);
 

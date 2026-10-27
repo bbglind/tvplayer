@@ -577,6 +577,11 @@ void main() {
     testWidgets('stores the global search setting', (tester) async {
       final settings = FakeSettingsStorage();
       await pump(tester, MemoryFavouritesStore(), settings: settings);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('settings.searchHidden')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(find.byKey(const Key('settings.searchHidden')));
       await tester.pumpAndSettle();
       expect(settings.saved.showHiddenInGlobalSearch, isTrue);

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
+import '../../state/downloads_controller.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../../state/variants.dart';
@@ -48,6 +49,12 @@ Widget seriesPoster(
       imageUrl: series.coverUrl,
       placeholder: Icons.tv,
       watched: progress?.finished ?? false,
+      // Some of its episodes are downloaded.
+      downloaded: ref.watch(
+        downloadsProvider.select(
+          (s) => s.items.any((i) => i.isDone && i.seriesId == series.seriesId),
+        ),
+      ),
       // Started: at least a sliver, so the bar shows.
       progress: progress == null ? null : math.max(progress.fraction, 0.03),
       onTap: () => openSeries(context, series),

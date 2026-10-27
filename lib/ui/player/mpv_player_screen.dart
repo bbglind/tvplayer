@@ -17,7 +17,10 @@ import '../../player/pointer_forwarder.dart';
 import '../../player/video_gestures.dart';
 import '../../player/video_pointer.dart';
 import '../../state/archive_listings.dart';
+import '../../state/downloads_controller.dart';
+import '../../state/player_stream.dart';
 import '../../state/providers.dart';
+import '../../state/recording_controller.dart';
 import '../../state/variants.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
@@ -26,11 +29,13 @@ import '../favourites/favourite_panel.dart';
 import '../live/replay_mark.dart';
 import '../theme/app_colors.dart';
 import '../vod/provider_title.dart';
+import 'confirm_panel.dart';
 import 'next_episode_card.dart';
 import 'open_channel.dart';
 import 'player_controls.dart';
 import 'player_hint.dart';
 import 'player_shortcuts.dart';
+import 'recording_indicator.dart';
 import 'track_panel.dart';
 import 'zap_panel.dart';
 
@@ -46,13 +51,25 @@ enum _Mode {
 }
 
 /// The side panel shown beside the video (or over it in fullscreen).
-enum _Panel { none, tracks, favourites, zap }
+enum _Panel { none, tracks, favourites, zap, confirm }
 
 /// mpv overlay ids of the parts shown over the video in fullscreen.
 abstract final class _Overlay {
   static const bottom = 1;
   static const panel = 2;
+  static const recording = 3;
 }
+
+/// A question asked in the confirm panel.
+typedef _Question = ({
+  String title,
+  String text,
+  String confirmLabel,
+  String confirmHint,
+  String cancelLabel,
+  String cancelHint,
+  Completer<bool> answer,
+});
 
 /// Plays a live channel, movie or episode with mpv: embedded in the app
 /// window on X11, in a separate mpv window otherwise. Leaving the screen
@@ -101,6 +118,16 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// Read in [initState]: settings are also saved from [dispose], where
   /// [ref] can't be used.
   late final AppSettingsNotifier _settings;
+
+  /// Read in [initState]: a recording is also stopped from [dispose].
+  late final RecordingController _recorder;
+
+  /// The question of the confirm panel, while it shows.
+  _Question? _question;
+
+  /// Why "Record" didn't start, shown in the bar for a moment.
+  String? _recordProblem;
+  Timer? _recordProblemTimer;
 
   /// What plays now; zapping and the next episode change it.
   late PlaybackRequest _request = widget.request;
@@ -171,6 +198,8 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   void initState() {
     super.initState();
     _settings = ref.read(appSettingsProvider.notifier);
+    _recorder = ref.read(recordingProvider.notifier)
+      ..confirmer = _askStopRecording;
     _url = playbackUrl(ref, _request);
     if (_url == null) return;
     _needListing(_request);
@@ -250,6 +279,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _rememberVolume(state);
     _updateCountdown(state);
     _checkEndOfArchive(state);
+    if (state.status == ExternalPlayerStatus.exited ||
+        state.status == ExternalPlayerStatus.failed) {
+      _stopRecording(note: 'Stopped: the stream ended.');
+    }
     switch (state.status) {
       case ExternalPlayerStatus.exited
           when ModalRoute.of(context)?.isCurrent ?? false:
@@ -442,18 +475,22 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     }
     final view = ref.read(episodeViewProvider(info.series.seriesId));
     final start = resumePosition(view.progress(next));
-    _switchTo(EpisodePlayback(info, next, start: start), save: false);
+    _switchTo(
+      withDownload(ref, EpisodePlayback(info, next, start: start)),
+      save: false,
+    );
   }
 
   /// Switches to [channel] without leaving the player: live, also from a
   /// replay.
-  void _zapTo(LiveStream channel) {
+  Future<void> _zapTo(LiveStream channel) async {
     _showPanel(_Panel.none);
     // The new channel's now/next shows, then hides like after any key.
     _controls.activity();
     if (_request case LivePlayback(channel: final c) when c.id == channel.id) {
       return;
     }
+    if (!await _confirmStopRecording(RecordingStop.zap) || !mounted) return;
     ref.read(watchProvider.notifier).recordChannel(channel);
     _switchTo(LivePlayback(channel), reuse: _channel?.id == channel.id);
   }
@@ -474,6 +511,13 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   }) {
     final url = playbackUrl(ref, request);
     if (url == null) return;
+    if (ref.read(playerStreamProvider).request(request) ==
+        StreamNeed.pauseDownload) {
+      unawaited(
+        _askPauseDownload(() => _switchTo(request, save: save, reuse: reuse)),
+      );
+      return;
+    }
     if (save && _playing) _saveProgress();
     _needListing(request);
     if (_panel == _Panel.zap) _showPanel(_Panel.none);
@@ -630,7 +674,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     // controls.
     if (_request.fixedLength && _playing) {
       unawaited(_player.togglePause());
-    } else if (_canPauseLive && _playing) {
+    } else if (_canPauseLive && _playing && !_recordingHere) {
       _toggleLivePause();
     }
     _controls.activity();
@@ -655,7 +699,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   /// Stops the live stream and keeps its last picture.
   void _pauseLive() {
-    if (!_canPauseLive || _pausedAt != null) return;
+    if (!_canPauseLive || _pausedAt != null || _recordingHere) return;
     final session = _player.freezeFrame();
     if (session == null) return;
     setState(() {
@@ -680,6 +724,137 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _pauseTicker?.cancel();
     _pauseTicker = null;
     _pausedAt = null;
+  }
+
+  /// Whether the recording runs in this player.
+  bool get _recordingHere => ref.read(recordingProvider) != null;
+
+  /// Whether "Record" is offered: live TV playing, not paused.
+  bool get _canRecord =>
+      _request is LivePlayback &&
+      _pausedAt == null &&
+      _isMine &&
+      _player.state.status == ExternalPlayerStatus.playing;
+
+  /// Starts recording what plays, or stops the recording.
+  Future<void> _toggleRecording() async {
+    if (_recordingHere) {
+      await _recorder.stop();
+      return;
+    }
+    final channel = _channel;
+    if (channel == null || !_canRecord) return;
+    final problem = await _recorder.start(channel, _player);
+    if (!mounted) return;
+    _recordProblemTimer?.cancel();
+    setState(() => _recordProblem = problem);
+    if (problem != null) {
+      _recordProblemTimer = Timer(const Duration(seconds: 6), () {
+        if (mounted) setState(() => _recordProblem = null);
+      });
+    }
+  }
+
+  /// Ends the recording without asking, e.g. when the stream ended.
+  void _stopRecording({String? note}) {
+    if (!_recordingHere) return;
+    final recorder = _recorder;
+    scheduleMicrotask(() => unawaited(recorder.stop(note: note)));
+  }
+
+  /// Asks before [reason] stops the recording, and stops it on yes; true
+  /// when there is none or it was stopped.
+  Future<bool> _confirmStopRecording(RecordingStop reason) async {
+    if (!_recordingHere) return true;
+    if (!await _askStopRecording(reason)) return false;
+    await _recorder.stop();
+    return true;
+  }
+
+  /// "Stop recording?" in the confirm panel; true to stop.
+  Future<bool> _askStopRecording(RecordingStop reason) {
+    final channel = ref.read(recordingProvider)?.channel ?? _channel;
+    final name = channel == null ? 'this channel' : channelDisplayName(channel);
+    final (doing, hint) = switch (reason) {
+      RecordingStop.zap => (
+        'Switching channel',
+        'Stop recording and switch channel',
+      ),
+      RecordingStop.leave => (
+        'Leaving the player',
+        'Stop recording and go back',
+      ),
+      RecordingStop.quit => (
+        'Closing the app',
+        'Stop recording and close the app',
+      ),
+    };
+    return _ask((
+      title: 'Stop recording?',
+      text:
+          '$doing stops the recording of $name. '
+          "What's recorded so far is kept.",
+      confirmLabel: 'Stop recording',
+      confirmHint: hint,
+      cancelLabel: 'Keep recording',
+      cancelHint: 'Keep recording (Esc)',
+      answer: Completer<bool>(),
+    ));
+  }
+
+  /// "Pause the download?" before playing from the provider while a
+  /// download has the stream; [play] runs after it is paused.
+  Future<void> _askPauseDownload(VoidCallback play) async {
+    final yes = await _ask((
+      title: 'Pause the download?',
+      text: pauseDownloadText(ref.read(downloadsProvider)),
+      confirmLabel: 'Pause download',
+      confirmHint: 'Pause the download and play',
+      cancelLabel: "Don't play",
+      cancelHint: "Don't play (Esc)",
+      answer: Completer<bool>(),
+    ));
+    if (!mounted) return;
+    if (yes) {
+      ref.read(downloadsProvider.notifier).pauseForPlayback();
+      play();
+    } else if (!_isMine ||
+        _player.state.status == ExternalPlayerStatus.exited) {
+      // The episode before has ended: show that.
+      _setFullscreen(false);
+      unawaited(_embed?.hide());
+      setState(() {
+        _ended = true;
+        _countdown = null;
+      });
+    }
+  }
+
+  /// Shows [question] in the confirm panel; completes with the answer.
+  Future<bool> _ask(_Question question) {
+    final previous = _question;
+    if (previous != null && !previous.answer.isCompleted) {
+      previous.answer.complete(false);
+    }
+    _question = question;
+    _showPanel(_Panel.confirm);
+    _controls.activity();
+    return question.answer.future;
+  }
+
+  void _answer(bool yes) {
+    final question = _question;
+    _question = null;
+    _showPanel(_Panel.none);
+    if (question != null && !question.answer.isCompleted) {
+      question.answer.complete(yes);
+    }
+  }
+
+  /// Stop and Back: leave the player, asking first while recording.
+  Future<void> _leave() async {
+    if (!await _confirmStopRecording(RecordingStop.leave) || !mounted) return;
+    Navigator.of(context).pop();
   }
 
   /// Pointer input on the video area (mpv's window). In fullscreen,
@@ -753,6 +928,13 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// so the hold that keeps the controls up while a panel is open always
   /// ends with it.
   void _showPanel(_Panel panel) {
+    if (_panel == _Panel.confirm && panel != _Panel.confirm) {
+      final question = _question;
+      _question = null;
+      if (question != null && !question.answer.isCompleted) {
+        question.answer.complete(false);
+      }
+    }
     setState(() => _panel = panel);
     _controls.hold(#panel, panel != _Panel.none);
     if (panel == _Panel.none) _shortcutsFocus.requestFocus();
@@ -780,6 +962,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// fullscreen.
   VoidCallback? get _onEscape {
     if (_countdown != null) return _cancelNext;
+    if (_panel == _Panel.confirm) return () => _answer(false);
     if (_panel != _Panel.none) return () => _setPanel(_Panel.none);
     if (_fullscreen) return () => _setFullscreen(false);
     return null;
@@ -788,6 +971,17 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   @override
   void dispose() {
     _pauseTicker?.cancel();
+    _recordProblemTimer?.cancel();
+    if (_recorder.confirmer == _askStopRecording) _recorder.confirmer = null;
+    final pending = _question;
+    if (pending != null && !pending.answer.isCompleted) {
+      pending.answer.complete(false);
+    }
+    // Leaving the player ends its recording (after asking, see [_leave]).
+    if (_recorder.active) {
+      final recorder = _recorder;
+      scheduleMicrotask(() => unawaited(recorder.stop()));
+    }
     _player.removeListener(_onChange);
     for (final s in _subscriptions) {
       s.cancel();
@@ -851,12 +1045,13 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final playing = _playing;
     final live = _request is LivePlayback;
     final replay = _request is ReplayPlayback;
-    return PlayerShortcuts(
+    final recording = ref.watch(recordingProvider) != null;
+    final shortcuts = PlayerShortcuts(
       focusNode: _shortcutsFocus,
       onTogglePause: !playing
           ? null
           : _canPauseLive
-          ? _toggleLivePause
+          ? (recording ? () {} : _toggleLivePause)
           : !live
           ? _player.togglePause
           : null,
@@ -877,6 +1072,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           : null,
       onNextEpisode: _nextEpisode != null ? _playNext : null,
       onGoLive: (replay || _pausedAt != null) && _showVideo ? _goLive : null,
+      // Checked when pressed: whether it can record changes with the
+      // player's state, which doesn't rebuild this.
+      onRecord: _request is LivePlayback
+          ? () => unawaited(_toggleRecording())
+          : null,
       onActivity: _controls.activity,
       child: PlayerHintScope(
         controller: _hintsShown ? _hints : null,
@@ -903,6 +1103,14 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           body: body,
         ),
       ),
+    );
+    // Back asks first while recording; Stop goes through [_leave] too.
+    return PopScope(
+      canPop: !recording,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_leave());
+      },
+      child: shortcuts,
     );
   }
 
@@ -1035,6 +1243,16 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               ),
             ),
           ),
+        if (ref.watch(recordingProvider) case final recording?)
+          Positioned(
+            top: 16,
+            right: right + 16,
+            child: OsdMirror(
+              id: _Overlay.recording,
+              player: _player,
+              child: RecordingIndicator(recording: recording, pill: true),
+            ),
+          ),
         if (panel != null)
           Positioned(
             top: 0,
@@ -1082,10 +1300,23 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _Panel.zap => switch (_channel) {
       final channel? => ZapPanel(
         current: channel,
-        onSelect: _zapTo,
+        onSelect: (c) => unawaited(_zapTo(c)),
         onClose: () => _setPanel(_Panel.none),
       ),
       _ => null,
+    },
+    _Panel.confirm => switch (_question) {
+      final q? => PlayerConfirmPanel(
+        title: q.title,
+        text: q.text,
+        confirmLabel: q.confirmLabel,
+        confirmHint: q.confirmHint,
+        cancelLabel: q.cancelLabel,
+        cancelHint: q.cancelHint,
+        onConfirm: () => _answer(true),
+        onCancel: () => _answer(false),
+      ),
+      null => null,
     },
   };
 
@@ -1109,6 +1340,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         fullName: episodeFullName(info.series, episode),
         player: true,
       ),
+      RecordingPlayback(:final name) => Text(name),
     };
   }
 
@@ -1162,41 +1394,102 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   }
 
   /// The actions at the start of the bar: play/pause for movies and
-  /// episodes, then the next episode when there is one. Live TV can't
-  /// pause; its slot is kept for a record button.
-  List<Widget> _leadingActions(ExternalPlaybackState state, bool starting) => [
-    if (_canPauseLive)
-      PlayerTooltip(
-        message: _pausedAt != null
-            ? 'Resume (Space or click the video)'
-            : 'Pause live TV (Space or click the video)',
-        child: IconButton(
-          key: const Key('player.livePause'),
-          icon: Icon(_pausedAt != null ? Icons.play_arrow : Icons.pause),
-          onPressed: starting ? null : _toggleLivePause,
+  /// episodes, then the next episode when there is one. Live TV pauses on
+  /// channels with an archive (not while recording), then Record.
+  List<Widget> _leadingActions(ExternalPlaybackState state, bool starting) {
+    final recording = ref.watch(recordingProvider);
+    return [
+      if (_canPauseLive)
+        PlayerTooltip(
+          message: recording != null
+              ? "Pause isn't available while recording"
+              : _pausedAt != null
+              ? 'Resume (Space or click the video)'
+              : 'Pause live TV (Space or click the video)',
+          child: IconButton(
+            key: const Key('player.livePause'),
+            icon: Icon(_pausedAt != null ? Icons.play_arrow : Icons.pause),
+            onPressed: starting || recording != null ? null : _toggleLivePause,
+          ),
         ),
-      ),
-    if (_request.fixedLength)
-      PlayerTooltip(
-        message: state.paused
-            ? 'Resume (Space or click the video)'
-            : 'Pause (Space or click the video)',
-        child: IconButton(
-          key: const Key('player.pause'),
-          icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
-          onPressed: starting ? null : _player.togglePause,
+      if (_request case LivePlayback(:final channel)) ...[
+        if (recording != null)
+          PlayerTooltip(
+            message: 'Stop recording (r)',
+            child: IconButton(
+              key: const Key('player.stopRecording'),
+              icon: const Icon(Icons.stop_circle_outlined),
+              color: AppColors.live,
+              onPressed: () => unawaited(_toggleRecording()),
+            ),
+          )
+        else
+          PlayerTooltip(
+            message: _recordTooltip(channel),
+            child: IconButton(
+              key: const Key('player.record'),
+              icon: const Icon(Icons.fiber_manual_record_outlined),
+              onPressed: starting || !_canRecord
+                  ? null
+                  : () => unawaited(_toggleRecording()),
+            ),
+          ),
+        if (recording != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, right: 8),
+            child: RecordingIndicator(recording: recording),
+          )
+        else if (_recordProblem case final problem?)
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, right: 8),
+              child: Text(
+                problem,
+                key: const Key('player.recordProblem'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: AppColors.textSecondary),
+              ),
+            ),
+          ),
+      ],
+      if (_request.fixedLength)
+        PlayerTooltip(
+          message: state.paused
+              ? 'Resume (Space or click the video)'
+              : 'Pause (Space or click the video)',
+          child: IconButton(
+            key: const Key('player.pause'),
+            icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
+            onPressed: starting ? null : _player.togglePause,
+          ),
         ),
-      ),
-    if (_nextEpisode != null)
-      PlayerTooltip(
-        message: _nextTooltip,
-        child: IconButton(
-          key: const Key('player.nextEpisodeButton'),
-          icon: const Icon(Icons.skip_next),
-          onPressed: starting ? null : _playNext,
+      if (_nextEpisode != null)
+        PlayerTooltip(
+          message: _nextTooltip,
+          child: IconButton(
+            key: const Key('player.nextEpisodeButton'),
+            icon: const Icon(Icons.skip_next),
+            onPressed: starting ? null : _playNext,
+          ),
         ),
-      ),
-  ];
+    ];
+  }
+
+  /// "Record News 24 until 21:15 (r)": the planned end from the guide.
+  String _recordTooltip(LiveStream channel) {
+    final time = ref.watch(guideTimeProvider);
+    final plan = plannedRecording(
+      settings: _appSettings,
+      time: time,
+      guide: ref.watch(guideProvider.select((s) => s.guide)),
+      channel: channel,
+      now: _now(),
+    );
+    return 'Record ${channelDisplayName(channel)} until '
+        '${time.formatHm(time.unadjust(plan.end))} (r)';
+  }
 
   Widget _buildControls(
     BuildContext context,
@@ -1302,7 +1595,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                 child: IconButton(
                   key: const Key('player.stop'),
                   icon: const Icon(Icons.stop),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () => unawaited(_leave()),
                 ),
               ),
               const SizedBox(width: 12),

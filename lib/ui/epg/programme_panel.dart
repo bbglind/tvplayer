@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../player/playback_request.dart';
+import '../../data/app_settings.dart';
+import '../../state/downloads_controller.dart';
 import '../../state/providers.dart';
+import '../downloads/download_actions.dart';
 import '../live/replay_mark.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
@@ -102,6 +105,45 @@ class ProgrammePanel extends ConsumerWidget {
       playReplay(outer, ref, channel, start);
     }
 
+    // A past programme from the archive can go into the downloads queue,
+    // with the margins from Settings.
+    final settings =
+        ref.watch(appSettingsProvider).value ?? const AppSettings();
+    final clip = block == null && !running
+        ? ReplayClip.forProgramme(
+            start: start,
+            stop: stop,
+            startMargin: settings.startMargin,
+            endMargin: settings.endMargin,
+            window: ReplayWindow(channel.archiveDays),
+            now: now,
+          )
+        : null;
+    final queued =
+        clip != null &&
+        ref
+            .watch(downloadsProvider)
+            .items
+            .any(
+              (i) =>
+                  i.kind == DownloadKind.replay &&
+                  i.sourceId == channel.id &&
+                  i.from == clip.from,
+            );
+    void download() {
+      close();
+      final item = ref
+          .read(downloadsProvider.notifier)
+          .addReplay(
+            channel: channel,
+            programme: program.title,
+            start: start,
+            stop: stop,
+            localStart: time.local(start),
+          );
+      showAddedToDownloads(outer, ref, downloadName(item));
+    }
+
     final List<Widget> actions;
     if (running) {
       actions = [
@@ -128,6 +170,12 @@ class ProgrammePanel extends ConsumerWidget {
           onPressed: play,
           icon: const Icon(Icons.play_arrow),
           label: const Text('Play'),
+        ),
+        OutlinedButton.icon(
+          key: const Key('programme.download'),
+          onPressed: queued ? null : download,
+          icon: Icon(queued ? Icons.download_done : Icons.download_outlined),
+          label: Text(queued ? 'In Downloads' : 'Download'),
         ),
         OutlinedButton(onPressed: close, child: const Text('Close')),
       ];
@@ -165,6 +213,16 @@ class ProgrammePanel extends ConsumerWidget {
                   color: AppColors.textSecondary,
                 ),
               ),
+              if (clip != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Download saves '
+                  '${time.formatLocalHm(clip.from)}–'
+                  '${time.formatLocalHm(clip.to)}',
+                  key: const Key('programme.clip'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
               if (program.category case final category?) ...[
                 const SizedBox(height: 4),
                 Text(category, style: theme.textTheme.bodySmall),

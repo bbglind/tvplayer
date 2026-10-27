@@ -141,6 +141,43 @@ class WatchedBadge extends StatelessWidget {
   }
 }
 
+/// The mark of a downloaded movie or episode: a success-coloured
+/// "downloaded" icon (not the watched ✓), with "Downloaded" as its hint.
+class DownloadedBadge extends StatelessWidget {
+  const DownloadedBadge({super.key, this.size = 16, this.filled = false});
+
+  final double size;
+
+  /// On a round success tile, for posters.
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(
+      Icons.download_done,
+      size: size,
+      color: filled ? AppColors.onAccent : AppColors.success,
+    );
+    return Tooltip(
+      message: 'Downloaded',
+      child: Semantics(
+        label: 'Downloaded',
+        child: filled
+            ? Container(
+                key: const Key('poster.downloaded'),
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+                child: icon,
+              )
+            : KeyedSubtree(key: const Key('downloaded.mark'), child: icon),
+      ),
+    );
+  }
+}
+
 /// A grid or row item: poster with watched badge or progress bar, title
 /// and an optional second line. The focus ring goes around the poster.
 ///
@@ -156,6 +193,7 @@ class PosterCard extends StatefulWidget {
     this.subtitleIcon,
     this.subtitleIconTooltip,
     this.watched = false,
+    this.downloaded = false,
     this.progress,
     this.placeholder = Icons.movie_outlined,
     this.favourite,
@@ -174,6 +212,9 @@ class PosterCard extends StatefulWidget {
   final String? imageUrl;
   final VoidCallback onTap;
   final bool watched;
+
+  /// The movie is downloaded: a "downloaded" mark below the watched ✓.
+  final bool downloaded;
 
   /// Watched fraction for a progress bar; null for none.
   final double? progress;
@@ -263,11 +304,19 @@ class _PosterCardState extends State<PosterCard> {
                         ColoredBox(
                           color: AppColors.textPrimary.withValues(alpha: 0.07),
                         ),
-                      if (widget.watched)
-                        const Positioned(
+                      if (widget.watched || widget.downloaded)
+                        Positioned(
                           top: 8,
                           right: 8,
-                          child: WatchedBadge(size: 14),
+                          child: Column(
+                            children: [
+                              if (widget.watched) const WatchedBadge(size: 14),
+                              if (widget.watched && widget.downloaded)
+                                const SizedBox(height: 4),
+                              if (widget.downloaded)
+                                const DownloadedBadge(size: 14, filled: true),
+                            ],
+                          ),
                         ),
                       if (widget.progress case final p? when !widget.watched)
                         Positioned(

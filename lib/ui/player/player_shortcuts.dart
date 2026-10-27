@@ -42,6 +42,7 @@ bool _focusInPanel() {
 /// - c: the channel list (live TV)
 /// - n: the next episode
 /// - l: go live (a replay, or live TV behind live)
+/// - r: record live TV, or stop recording
 ///
 /// A null callback leaves its key alone (e.g. no seeking on live TV), and
 /// no key is handled while a text field has focus; arrows and space are
@@ -61,6 +62,7 @@ class PlayerShortcuts extends StatelessWidget {
     this.onZap,
     this.onNextEpisode,
     this.onGoLive,
+    this.onRecord,
     this.onActivity,
     this.focusNode,
   });
@@ -86,6 +88,7 @@ class PlayerShortcuts extends StatelessWidget {
   final VoidCallback? onZap;
   final VoidCallback? onNextEpisode;
   final VoidCallback? onGoLive;
+  final VoidCallback? onRecord;
   final VoidCallback? onActivity;
 
   /// The node that has focus while no control has it.
@@ -116,6 +119,7 @@ class PlayerShortcuts extends StatelessWidget {
       LogicalKeyboardKey.keyC when !repeat => onZap,
       LogicalKeyboardKey.keyN when !repeat => onNextEpisode,
       LogicalKeyboardKey.keyL when !repeat => onGoLive,
+      LogicalKeyboardKey.keyR when !repeat => onRecord,
       _ => null,
     };
     if (action == null) return KeyEventResult.ignored;

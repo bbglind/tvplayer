@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -221,5 +222,28 @@ void main() {
     expect(back.fraction, 0.1);
     expect(DownloadItem.fromJson({'id': 'x'}), isNull);
     expect(DownloadItem.fromJson('nope'), isNull);
+  });
+
+  test('JsonFileDownloadsStore keeps the list in order', () async {
+    final dir = await Directory.systemTemp.createTemp('downloads_store');
+    addTearDown(() => dir.delete(recursive: true));
+    final store = JsonFileDownloadsStore(File('${dir.path}/d/key.json'));
+    expect(await store.load(), isEmpty);
+    final items = [
+      for (final id in ['b', 'a'])
+        DownloadItem(
+          id: id,
+          kind: DownloadKind.movie,
+          title: id,
+          sourceId: '1',
+          extension: 'mp4',
+          path: '/$id.mp4',
+          addedAt: DateTime.utc(2026),
+        ),
+    ];
+    await store.save(items);
+    expect((await store.load()).map((i) => i.id), ['b', 'a']);
+    await File('${dir.path}/d/key.json').writeAsString('{broken');
+    expect(await store.load(), isEmpty);
   });
 }

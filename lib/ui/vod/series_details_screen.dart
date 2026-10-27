@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -7,8 +9,11 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/errors.dart';
 import '../../format.dart';
 import '../../player/playback_request.dart';
+import '../../state/downloads_controller.dart';
 import '../../state/providers.dart';
 import '../../state/variants.dart';
+import '../downloads/download_actions.dart';
+import '../downloads/download_button.dart';
 import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
@@ -69,6 +74,38 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       .read(watchProvider.notifier)
       .markEpisodes(info, episodes, watched: watched);
 
+  void _download(SeriesInfo info, Episode episode) {
+    final item = ref
+        .read(downloadsProvider.notifier)
+        .addEpisode(info, episode, ref.read(providerTagsProvider));
+    if (item != null) showAddedToDownloads(context, ref, downloadName(item));
+  }
+
+  void _downloadSeason(SeriesInfo info, int season) {
+    final count = ref
+        .read(downloadsProvider.notifier)
+        .addSeason(info, season, ref.read(providerTagsProvider));
+    if (count == 0) return;
+    showAddedToDownloads(
+      context,
+      ref,
+      plainTitle(ref, info.series.name),
+      episodes: count,
+    );
+  }
+
+  void _episodeAction(SeriesInfo info, Episode e, EpisodeAction action) {
+    switch (action) {
+      case EpisodeAction.markWatched || EpisodeAction.markUnwatched:
+        _mark(info, [e], action == EpisodeAction.markWatched);
+      case EpisodeAction.download:
+        _download(info, e);
+      case EpisodeAction.cancelDownload || EpisodeAction.removeDownload:
+        final item = ref.read(downloadsProvider).forWatchKey(episodeKey(e.id));
+        if (item != null) unawaited(removeDownloadFlow(context, ref, item));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -120,6 +157,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     final episodes = season == null
         ? const <Episode>[]
         : info.episodesForSeason(season);
+    final downloads = ref.watch(downloadsProvider);
     return CustomScrollView(
       key: const Key('series.scroll'),
       slivers: [
@@ -148,8 +186,9 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
               meta: meta?.episode(e),
               fallbackImage: meta?.posterUrl ?? widget.series.coverUrl,
               progress: view.progress(e),
+              download: downloads.forWatchKey(episodeKey(e.id)),
               onPlay: () => _play(info, e),
-              onMark: (watched) => _mark(info, [e], watched),
+              onAction: (action) => _episodeAction(info, e, action),
             );
           },
         ),
@@ -330,23 +369,44 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
             ),
           ),
           if (selected != null && progress != null)
-            PopupMenuButton<bool>(
+            PopupMenuButton<_SeasonAction>(
               key: const Key('season.menu'),
               tooltip: 'Season options',
-              onSelected: (watched) =>
-                  _mark(info, info.episodesForSeason(selected), watched),
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: true,
-                  enabled: !progress.complete,
-                  child: const Text('Mark season as watched'),
+              onSelected: (action) => switch (action) {
+                _SeasonAction.markWatched ||
+                _SeasonAction.markUnwatched => _mark(
+                  info,
+                  info.episodesForSeason(selected),
+                  action == _SeasonAction.markWatched,
                 ),
-                PopupMenuItem(
-                  value: false,
-                  enabled: progress.watched > 0,
-                  child: const Text('Mark season as unwatched'),
-                ),
-              ],
+                _SeasonAction.download => _downloadSeason(info, selected),
+              },
+              itemBuilder: (context) {
+                final downloads = ref.read(downloadsProvider);
+                final missing = info
+                    .episodesForSeason(selected)
+                    .any(
+                      (e) => downloads.forWatchKey(episodeKey(e.id)) == null,
+                    );
+                return [
+                  PopupMenuItem(
+                    value: _SeasonAction.markWatched,
+                    enabled: !progress.complete,
+                    child: const Text('Mark season as watched'),
+                  ),
+                  PopupMenuItem(
+                    value: _SeasonAction.markUnwatched,
+                    enabled: progress.watched > 0,
+                    child: const Text('Mark season as unwatched'),
+                  ),
+                  PopupMenuItem(
+                    key: const Key('season.download'),
+                    value: _SeasonAction.download,
+                    enabled: missing,
+                    child: const Text('Download season'),
+                  ),
+                ];
+              },
             ),
         ],
       ),
@@ -377,6 +437,18 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
   }
 }
 
+/// The entries of the season menu.
+enum _SeasonAction { markWatched, markUnwatched, download }
+
+/// The entries of an episode's menu.
+enum EpisodeAction {
+  markWatched,
+  markUnwatched,
+  download,
+  cancelDownload,
+  removeDownload,
+}
+
 class _EpisodeTile extends StatelessWidget {
   const _EpisodeTile({
     super.key,
@@ -385,8 +457,9 @@ class _EpisodeTile extends StatelessWidget {
     required this.meta,
     required this.fallbackImage,
     required this.progress,
+    required this.download,
     required this.onPlay,
-    required this.onMark,
+    required this.onAction,
   });
 
   final Episode episode;
@@ -396,8 +469,11 @@ class _EpisodeTile extends StatelessWidget {
   final EpisodeMetadata? meta;
   final String? fallbackImage;
   final WatchProgress? progress;
+
+  /// Its entry in Downloads, if any.
+  final DownloadItem? download;
   final VoidCallback onPlay;
-  final ValueChanged<bool> onMark;
+  final ValueChanged<EpisodeAction> onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -442,13 +518,37 @@ class _EpisodeTile extends StatelessWidget {
     );
   }
 
-  /// "Mark as watched" or "Mark as unwatched".
-  static List<PopupMenuEntry<bool>> _menuItems(bool watched) => [
-    PopupMenuItem(
-      value: !watched,
-      child: Text(watched ? 'Mark as unwatched' : 'Mark as watched'),
-    ),
-  ];
+  /// "Mark as watched" or "Mark as unwatched", then "Download", "Cancel
+  /// download" or "Remove download".
+  List<PopupMenuEntry<EpisodeAction>> _menuItems(bool watched) {
+    final download = this.download;
+    return [
+      PopupMenuItem(
+        value: watched
+            ? EpisodeAction.markUnwatched
+            : EpisodeAction.markWatched,
+        child: Text(watched ? 'Mark as unwatched' : 'Mark as watched'),
+      ),
+      if (download == null)
+        const PopupMenuItem(
+          key: Key('episode.download'),
+          value: EpisodeAction.download,
+          child: Text('Download'),
+        )
+      else if (download.isDone)
+        const PopupMenuItem(
+          key: Key('episode.removeDownload'),
+          value: EpisodeAction.removeDownload,
+          child: Text('Remove download'),
+        )
+      else
+        const PopupMenuItem(
+          key: Key('episode.cancelDownload'),
+          value: EpisodeAction.cancelDownload,
+          child: Text('Cancel download'),
+        ),
+    ];
+  }
 
   /// Opens the episode menu at [position] (global), or at the row's top
   /// right when opened from the keyboard.
@@ -462,7 +562,7 @@ class _EpisodeTile extends StatelessWidget {
     final row = context.findRenderObject()! as RenderBox;
     final at = position ?? row.localToGlobal(row.size.topRight(Offset.zero));
     final local = overlay.globalToLocal(at);
-    final value = await showMenu<bool>(
+    final value = await showMenu<EpisodeAction>(
       context: context,
       position: RelativeRect.fromRect(
         local & Size.zero,
@@ -470,7 +570,7 @@ class _EpisodeTile extends StatelessWidget {
       ),
       items: _menuItems(watched),
     );
-    if (value != null) onMark(value);
+    if (value != null) onAction(value);
   }
 
   Widget _buildTile(
@@ -535,6 +635,21 @@ class _EpisodeTile extends StatelessWidget {
                       color: AppColors.success,
                     ),
                   ],
+                  if (download case final d?) ...[
+                    const SizedBox(width: 8),
+                    if (d.isDone)
+                      const DownloadedBadge(size: 18)
+                    else
+                      Tooltip(
+                        message: downloadButtonState(d).$1,
+                        child: Icon(
+                          downloadButtonState(d).$2,
+                          key: const Key('episode.downloading'),
+                          size: 18,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                  ],
                 ],
               ),
               if (duration != null)
@@ -553,9 +668,10 @@ class _EpisodeTile extends StatelessWidget {
             ],
           ),
         ),
-        PopupMenuButton<bool>(
+        PopupMenuButton<EpisodeAction>(
+          key: const Key('episode.menu'),
           tooltip: 'Episode options',
-          onSelected: onMark,
+          onSelected: onAction,
           itemBuilder: (context) => _menuItems(watched),
         ),
       ],

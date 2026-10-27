@@ -11,9 +11,11 @@ import 'package:http/http.dart' as http;
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/archive_epg_repository.dart';
 import 'package:tvplayer/data/epg_repository.dart';
+import 'package:tvplayer/data/free_space.dart';
 import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
 import 'package:tvplayer/data/vod_repository.dart';
+import 'package:tvplayer/state/downloads_controller.dart';
 import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/player/player_hint.dart';
@@ -474,6 +476,77 @@ const activeAccountJson = {
   'server_info': {'timezone': 'UTC'},
 };
 
+/// The downloads folder in tests; it doesn't exist.
+const testDownloadFolder = '/nonexistent/Videos/tvplayer';
+
+/// In-memory [DownloadsStore].
+class MemoryDownloadsStore implements DownloadsStore {
+  MemoryDownloadsStore([List<DownloadItem> items = const []])
+    : items = List.of(items);
+
+  List<DownloadItem> items;
+  var saves = 0;
+
+  @override
+  Future<List<DownloadItem>> load() async => items;
+
+  @override
+  Future<void> save(List<DownloadItem> items) async {
+    saves++;
+    this.items = List.of(items);
+  }
+}
+
+/// [FreeSpace] with a fixed number of [bytes] free (100 GB by default).
+class FakeFreeSpace implements FreeSpace {
+  FakeFreeSpace([this.bytes = 100 * bytesPerGb]);
+
+  int? bytes;
+
+  @override
+  Future<int?> at(String path) async => bytes;
+}
+
+/// One download started by [FakeTransfers]; the test reports progress and
+/// finishes it.
+class FakeTransfer {
+  FakeTransfer(this.item, this.control, this.progress);
+
+  final DownloadItem item;
+  final TransferControl control;
+  final void Function(TransferProgress) progress;
+  final result = Completer<TransferResult>();
+  var bytes = 0;
+
+  void report(int bytes, int? total, {bool restarted = false}) {
+    this.bytes = bytes;
+    progress(TransferProgress(bytes, total, restarted: restarted));
+  }
+
+  void finish() => result.complete(TransferDone(bytes));
+}
+
+/// Downloads that run until the test finishes them; stopping one ends it
+/// as stopped.
+class FakeTransfers {
+  final runs = <FakeTransfer>[];
+
+  Future<TransferResult> call(
+    DownloadItem item,
+    TransferControl control,
+    void Function(TransferProgress) progress,
+  ) {
+    final run = FakeTransfer(item, control, progress);
+    runs.add(run);
+    control.onStop.then((_) {
+      if (!run.result.isCompleted) {
+        run.result.complete(TransferStopped(run.bytes));
+      }
+    });
+    return run.result.future;
+  }
+}
+
 /// Wraps [child] in a ProviderScope (no automatic retries) and MaterialApp
 /// with the app's [InputModeScope].
 ///
@@ -494,9 +567,13 @@ Widget testApp({
   FavouritesStore? favourites,
   PlaylistStatusStore? playlistStatus,
   ArchiveEpgRepository? archive,
+  DownloadsStore? downloads,
+  FakeFreeSpace? freeSpace,
+  FakeTransfers? transfers,
   DateTime? now,
   Duration searchDebounce = Duration.zero,
 }) {
+  final downloadsStore = downloads ?? MemoryDownloadsStore();
   final watchStore = watch ?? MemoryWatchStore();
   final favouritesStore = favourites ?? MemoryFavouritesStore();
   final statusStore = playlistStatus ?? MemoryPlaylistStatusStore();
@@ -516,6 +593,12 @@ Widget testApp({
       watchStoreProvider.overrideWithValue((_) => watchStore),
       favouritesStoreProvider.overrideWithValue((_) => favouritesStore),
       playlistStatusStoreProvider.overrideWithValue((_) => statusStore),
+      downloadsStoreProvider.overrideWithValue((_) => downloadsStore),
+      freeSpaceProvider.overrideWithValue(freeSpace ?? FakeFreeSpace()),
+      transferRunnerProvider.overrideWithValue(
+        (transfers ?? FakeTransfers()).call,
+      ),
+      defaultDownloadFolderProvider.overrideWithValue(testDownloadFolder),
       posterLoaderProvider.overrideWithValue(FakePosterLoader()),
       // Background isolates don't finish inside fake-async widget tests.
       backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),

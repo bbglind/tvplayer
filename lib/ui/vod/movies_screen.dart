@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
+import '../../state/downloads_controller.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../../state/variants.dart';
@@ -39,6 +40,11 @@ Widget moviePoster(
       subtitleIconTooltip: lastPlayed ? 'Last played' : null,
       imageUrl: movie.posterUrl,
       watched: progress?.watched ?? false,
+      downloaded: ref.watch(
+        downloadsProvider.select(
+          (s) => s.doneFor(movieKey(movie.streamId)) != null,
+        ),
+      ),
       progress: isInProgress(progress) ? progress!.fraction : null,
       onTap: () => openMovie(context, movie),
     );

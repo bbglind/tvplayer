@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/app_settings.dart';
+import '../../state/downloads_controller.dart';
 import '../../state/navigation.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
+import '../downloads/downloads_screen.dart';
 import '../epg/guide_screen.dart';
 import '../home/home_screen.dart';
 import '../live/live_tv_screen.dart';
@@ -47,6 +49,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     (icon: Icons.calendar_view_week_outlined, label: 'TV Guide'),
     (icon: Icons.movie_outlined, label: 'Movies'),
     (icon: Icons.video_library_outlined, label: 'Series'),
+    (icon: Icons.download_outlined, label: 'Downloads'),
   ];
   static const _settings = (icon: Icons.settings_outlined, label: 'Settings');
 
@@ -114,6 +117,21 @@ class _AppShellState extends ConsumerState<AppShell> {
     ref.listen(autoRefreshFailureProvider, (_, failure) {
       if (failure != null) _showRefreshFailure(failure);
     });
+    // Keeps the downloads queue running while the app is open.
+    ref.listen(downloadsProvider, (_, _) {});
+    ref.listen(downloadNoticeProvider, (_, notice) {
+      if (notice != null) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              key: const Key('downloads.notice'),
+              duration: AppShell.noticeDuration,
+              content: Text(notice.text),
+            ),
+          );
+      }
+    });
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -154,6 +172,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                       AppSection.guide => const GuideScreen(),
                       AppSection.movies => const MoviesScreen(),
                       AppSection.series => const SeriesScreen(),
+                      AppSection.downloads => const DownloadsScreen(),
                       AppSection.settings => const SettingsScreen(),
                     },
                   ),

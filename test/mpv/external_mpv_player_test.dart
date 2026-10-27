@@ -483,6 +483,58 @@ void main() {
     });
   });
 
+  group('recording', () {
+    late Directory dir;
+
+    setUp(() async => dir = await Directory.systemTemp.createTemp('rec'));
+    tearDown(() => dir.delete(recursive: true));
+
+    Future<FakeMpv> playing() async {
+      player.open(_url, title: 'News');
+      await waitFor((s) => s.status == ExternalPlayerStatus.playing);
+      final mpv = started.single;
+      mpv.properties['time-pos'] = 12.5;
+      return mpv;
+    }
+
+    test(
+      'dumps the cache from the frame showing, without a new stream',
+      () async {
+        final mpv = await playing();
+        final path = '${dir.path}/Recordings/News.ts';
+        expect(await player.startRecording(path), isTrue);
+        expect(Directory('${dir.path}/Recordings').existsSync(), isTrue);
+        expect(mpv.asyncCommands, [
+          ['dump-cache', '12.500', 'no', path],
+        ]);
+        expect(mpv.commands.where((c) => c.first == 'loadfile'), hasLength(1));
+
+        await player.stopRecording();
+        expect(mpv.commands.last, ['dump-cache', 'no', 'no', '']);
+      },
+    );
+
+    test('falls back to stream-record', () async {
+      final mpv = await playing();
+      mpv.refused.add('dump-cache');
+      final path = '${dir.path}/News.ts';
+      expect(await player.startRecording(path), isTrue);
+      expect(mpv.commands.last, ['set_property', 'stream-record', path]);
+      await player.stopRecording();
+      expect(mpv.commands.last, ['set_property', 'stream-record', '']);
+    });
+
+    test('says when mpv can\'t record', () async {
+      final mpv = await playing();
+      mpv.refused.addAll({'dump-cache', 'set_property'});
+      expect(await player.startRecording('${dir.path}/News.ts'), isFalse);
+    });
+
+    test('nothing to record without mpv', () async {
+      expect(await player.startRecording('${dir.path}/News.ts'), isFalse);
+    });
+  });
+
   group('freezeFrame', () {
     test('saves the frame and shows it in place of the stream', () async {
       final first = player.open(_url, title: 'News');

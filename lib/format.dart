@@ -105,3 +105,33 @@ String formatUpdated(DateTime time, DateTime now) {
   return '${weekdayNames[time.weekday - 1]} ${time.day} '
       '${monthNames[time.month - 1]}$year $hm';
 }
+
+/// A size in decimal units, as file managers show it: `512 B`, `640 KB`,
+/// `4.2 MB`, `2.1 GB`, `12 GB` (one decimal below 10).
+String formatBytes(int bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  if (unit == 0) return '$bytes B';
+  final text = value < 10 ? value.toStringAsFixed(1) : '${value.round()}';
+  return '$text ${units[unit]}';
+}
+
+/// Whole gigabytes: `5 GB`.
+String formatGb(int bytes) => '${(bytes / 1e9).round()} GB';
+
+/// A transfer rate: `4.2 MB/s`.
+String formatSpeed(double bytesPerSecond) =>
+    '${formatBytes(bytesPerSecond.round())}/s';
+
+/// Elapsed time as `0:12:34`.
+String formatElapsed(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$h:$m:$s';
+}

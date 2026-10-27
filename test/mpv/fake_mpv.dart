@@ -46,6 +46,16 @@ class FakeMpv {
   /// Values returned for `get_property`; missing ones reply with an error,
   /// like mpv for an unavailable property.
   final properties = <String, Object?>{};
+
+  /// Commands sent with `async`, in order.
+  final asyncCommands = <List<Object?>>[];
+
+  /// Command names mpv refuses (replies with an error).
+  final refused = <String>{};
+
+  /// Command names that, sent `async`, get no reply until they end (like a
+  /// continuous `dump-cache`).
+  final longRunning = <String>{'dump-cache'};
   final _clients = <Socket>[];
   ServerSocket? _server;
   final _loaded = Completer<void>();
@@ -77,6 +87,15 @@ class FakeMpv {
     final msg = jsonDecode(line) as Map<String, Object?>;
     final command = (msg['command']! as List).cast<Object?>();
     commands.add(command);
+    final isAsync = msg['async'] == true;
+    if (isAsync) asyncCommands.add(command);
+    if (refused.contains(command.first)) {
+      client.write(
+        '${jsonEncode({'request_id': msg['request_id'], 'error': 'error running command'})}\n',
+      );
+      return;
+    }
+    if (isAsync && longRunning.contains(command.first)) return;
     final isGet = command.first == 'get_property';
     final known = !isGet || properties.containsKey(command[1]);
     client.write(

@@ -101,8 +101,7 @@ void main() {
     expect(runs.map((r) => r.item.id), ['a']);
   });
 
-  test('pausing for playback frees the stream and resumes after it',
-      () async {
+  test('pausing for playback frees the stream and resumes after it', () async {
     queue.add(_item('a'));
     await settle();
     queue.pauseForPlayback();
@@ -239,6 +238,20 @@ void main() {
     queue.pump();
     await settle();
     expect(runs.map((r) => r.item.id), ['a', 'r']);
+  });
+
+  test('a restored archive programme still waits for its end', () async {
+    await queue.dispose();
+    final to = now.add(const Duration(minutes: 5));
+    queue = make([_item('r', kind: DownloadKind.replay, from: now, to: to)]);
+    queue.pump();
+    await settle();
+    expect(runs, isEmpty);
+    expect(queue.byId('r')!.status, DownloadStatus.waiting);
+    now = to;
+    queue.pump();
+    await settle();
+    expect(runs.map((r) => r.item.id), ['r']);
   });
 
   test('restored entries continue from the queue', () async {

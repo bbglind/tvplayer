@@ -55,6 +55,19 @@ bool _focusIn(WidgetTester tester, Finder finder) {
 }
 
 void main() {
+  testWidgets('Downloads sits after Series and opens the Downloads page', (
+    tester,
+  ) async {
+    await _pump(tester);
+    final series = tester.getTopLeft(find.text('Series').first).dy;
+    final downloads = tester.getTopLeft(find.text('Downloads').first).dy;
+    final settings = tester.getTopLeft(find.text('Settings').first).dy;
+    expect(series < downloads && downloads < settings, isTrue);
+    await tester.tap(find.byKey(Key('nav.${AppSection.downloads.index}')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('downloads.empty')), findsOneWidget);
+  });
+
   group('Sidebar', () {
     testWidgets('the toggle collapses to icons only and back, remembered', (
       tester,

@@ -943,6 +943,8 @@ void main() {
       final gesture = await mouse(tester);
       expect(await hoverBar(tester, gesture), {
         'Back (stops playback)',
+        // No guide: the maximum length from the start.
+        'Record Channel 0 until 20:45 (r)',
         'Mute (m)',
         'Volume (↑ / ↓, or the mouse wheel on the video)',
         'Channels: switch channel (c)',

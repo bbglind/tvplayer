@@ -104,18 +104,17 @@ final class DownloadQueue {
   /// recording) and starts it when it is its turn.
   void add(DownloadItem item) {
     _items.removeWhere((i) => i.id == item.id);
-    final ready =
-        item.kind != DownloadKind.replay ||
-        item.to == null ||
-        !_clock().isBefore(item.to!);
-    _items.add(
-      item.status == DownloadStatus.queued && !ready
-          ? item.copyWith(status: DownloadStatus.waiting)
-          : item,
-    );
+    _items.add(item);
     _changed();
     pump();
   }
+
+  /// Whether [item] may start at [now]: an archive programme only once its
+  /// end (with the margin) has passed.
+  static bool _isReady(DownloadItem item, DateTime now) =>
+      item.kind != DownloadKind.replay ||
+      item.to == null ||
+      !now.isBefore(item.to!);
 
   /// Replaces the entry with [item]'s id (recordings update theirs).
   void update(DownloadItem item) {
@@ -205,9 +204,13 @@ final class DownloadQueue {
     final now = _clock();
     for (var i = 0; i < _items.length; i++) {
       final item = _items[i];
-      if (item.status == DownloadStatus.waiting &&
-          (item.to == null || !now.isBefore(item.to!))) {
+      final ready = _isReady(item, now);
+      if (item.status == DownloadStatus.waiting && ready) {
         _items[i] = item.copyWith(status: DownloadStatus.queued);
+        _changed();
+      } else if (item.status == DownloadStatus.queued && !ready) {
+        // E.g. restored, or put back by resume before its time.
+        _items[i] = item.copyWith(status: DownloadStatus.waiting);
         _changed();
       }
     }

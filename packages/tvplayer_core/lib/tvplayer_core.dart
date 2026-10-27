@@ -10,6 +10,7 @@ library;
 export 'src/downloads/disk_space.dart';
 export 'src/downloads/download_item.dart';
 export 'src/downloads/download_queue.dart';
+export 'src/downloads/downloads_store.dart';
 export 'src/downloads/file_names.dart';
 export 'src/downloads/http_download.dart';
 export 'src/downloads/replay_clip.dart';

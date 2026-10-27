@@ -10,13 +10,14 @@ import '../setup/setup_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'category_settings_screen.dart';
+import 'downloads_section.dart';
 import 'language_list_editor.dart';
 import 'playlist_section.dart';
 import 'settings_section.dart';
 import 'time_zone_picker.dart';
 
-/// Provider management, the playlist, TV guide settings and player
-/// options.
+/// Provider management, the playlist, TV guide settings, player options
+/// and downloads.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -316,6 +317,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+        const DownloadsSection(),
         SettingsSection(
           title: 'Categories',
           children: [

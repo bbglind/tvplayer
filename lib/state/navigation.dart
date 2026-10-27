@@ -6,7 +6,16 @@ import 'global_search.dart';
 import 'providers.dart';
 
 /// The sections of the sidebar, in order; Settings sits at the bottom.
-enum AppSection { home, search, live, guide, movies, series, settings }
+enum AppSection {
+  home,
+  search,
+  live,
+  guide,
+  movies,
+  series,
+  downloads,
+  settings,
+}
 
 /// The section the shell shows. The app opens on Home.
 final appSectionProvider = NotifierProvider<SelectedSection, AppSection>(

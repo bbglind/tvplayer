@@ -165,4 +165,45 @@ void main() {
     expect(bad.playNextSeconds, 30);
     expect(AppSettings.fromJson({'playerVolume': -3}).playerVolume, 0);
   });
+
+  test('download settings: defaults, round-trip, bad values', () {
+    const defaults = AppSettings();
+    expect(defaults.downloadFolder, isNull);
+    expect(defaults.endMargin, const Duration(minutes: 15));
+    expect(defaults.startMargin, const Duration(minutes: 2));
+    expect(defaults.maxRecordingLength, const Duration(hours: 4));
+    expect(defaults.minFreeGb, 5);
+
+    final changed = defaults.copyWith(
+      downloadFolder: () => '/media/videos',
+      endMarginMinutes: 30,
+      startMarginMinutes: 5,
+      maxRecordingHours: 8,
+      minFreeGb: 20,
+    );
+    final back = AppSettings.fromJson(changed.toJson());
+    expect(back.downloadFolder, '/media/videos');
+    expect(back.endMarginMinutes, 30);
+    expect(back.startMarginMinutes, 5);
+    expect(back.maxRecordingHours, 8);
+    expect(back.minFreeGb, 20);
+    expect(
+      AppSettings.fromJson(back.copyWith(downloadFolder: () => null).toJson())
+          .downloadFolder,
+      isNull,
+    );
+
+    final bad = AppSettings.fromJson({
+      'downloadFolder': '',
+      'endMarginMinutes': 7,
+      'startMarginMinutes': -1,
+      'maxRecordingHours': '4',
+      'minFreeGb': 3,
+    });
+    expect(bad.downloadFolder, isNull);
+    expect(bad.endMarginMinutes, 15);
+    expect(bad.startMarginMinutes, 2);
+    expect(bad.maxRecordingHours, 4);
+    expect(bad.minFreeGb, 5);
+  });
 }
