@@ -102,14 +102,15 @@ class PlayerSession extends ChangeNotifier {
     return platform is NativePlayer ? platform : null;
   }
 
-  Future<void> open(Uri url) async {
+  /// Opens [url], from [start] when given.
+  Future<void> open(Uri url, {Duration? start}) async {
     _redactor = UrlRedactor(url);
     _lastError = null;
     _props = const {};
     _seekable = false;
     _addLog('info', 'Opening stream');
     try {
-      await player.open(Media(url.toString()));
+      await player.open(Media(url.toString(), start: start));
     } catch (e) {
       // The exception may echo the URL; keep only its type.
       _lastError = 'Could not open stream (${e.runtimeType})';

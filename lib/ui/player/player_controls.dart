@@ -131,6 +131,7 @@ class PlayerSeekBar extends StatefulWidget {
     required this.onToggleRemaining,
     required this.onSeek,
     this.onDragging,
+    this.touch = false,
   });
 
   final Duration position;
@@ -140,7 +141,11 @@ class PlayerSeekBar extends StatefulWidget {
   final ValueChanged<Duration> onSeek;
   final ValueChanged<bool>? onDragging;
 
+  /// In the touch player: tooltips name taps instead of keys.
+  final bool touch;
+
   static const tooltip = 'Seek (← / →: 10 s, with Shift: 1 min)';
+  static const touchTooltip = 'Seek (or double-tap left or right: 10 s)';
 
   @override
   State<PlayerSeekBar> createState() => _PlayerSeekBarState();
@@ -170,7 +175,9 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
         Text(formatDuration(shown), key: const Key('mpv.position')),
         Expanded(
           child: PlayerTooltip(
-            message: PlayerSeekBar.tooltip,
+            message: widget.touch
+                ? PlayerSeekBar.touchTooltip
+                : PlayerSeekBar.tooltip,
             child: Slider(
               key: const Key('player.seek'),
               value: value,
@@ -194,6 +201,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
               : formatDuration(duration),
           showRemaining: widget.showRemaining,
           onToggle: widget.onToggleRemaining,
+          touch: widget.touch,
         ),
       ],
     );
@@ -208,18 +216,23 @@ class EndTime extends StatelessWidget {
     required this.text,
     required this.showRemaining,
     required this.onToggle,
+    this.touch = false,
   });
 
   final String text;
   final bool showRemaining;
   final VoidCallback onToggle;
 
+  /// See [PlayerSeekBar.touch].
+  final bool touch;
+
   @override
   Widget build(BuildContext context) {
+    final how = touch ? 'double-tap' : 'double-click or Enter';
     return PlayerTooltip(
       message: showRemaining
-          ? 'Show the duration (double-click or Enter)'
-          : 'Show the time left (double-click or Enter)',
+          ? 'Show the duration ($how)'
+          : 'Show the time left ($how)',
       child: FocusRing(
         radius: AppRadius.small,
         child: Focus(
@@ -318,6 +331,7 @@ class ReplaySeekBar extends StatefulWidget {
     this.behind,
     this.loading = false,
     this.onDragging,
+    this.touch = false,
   });
 
   final DateTime position;
@@ -328,6 +342,9 @@ class ReplaySeekBar extends StatefulWidget {
   final Duration? behind;
   final bool loading;
   final ValueChanged<bool>? onDragging;
+
+  /// See [PlayerSeekBar.touch].
+  final bool touch;
 
   @override
   State<ReplaySeekBar> createState() => _ReplaySeekBarState();
@@ -369,7 +386,9 @@ class _ReplaySeekBarState extends State<ReplaySeekBar> {
                   ),
                 )
               : PlayerTooltip(
-                  message: PlayerSeekBar.tooltip,
+                  message: widget.touch
+                      ? PlayerSeekBar.touchTooltip
+                      : PlayerSeekBar.tooltip,
                   child: Slider(
                     key: const Key('player.seek'),
                     value: value,

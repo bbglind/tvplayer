@@ -35,6 +35,13 @@ class ControlsVisibility extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hides now (a tap on the video), unless something holds them.
+  void hide() {
+    if (!_autoHide || _holds.isNotEmpty) return;
+    _timer?.cancel();
+    _hide();
+  }
+
   /// Keeps the controls up while [on] for [reason]; when the last hold
   /// ends they hide [hideAfter] later.
   void hold(Object reason, bool on) {

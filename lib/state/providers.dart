@@ -20,6 +20,9 @@ import '../data/provider_storage.dart';
 import '../data/vod_repository.dart';
 import '../player/mpv/external_mpv_player.dart';
 import '../player/mpv/video_embed.dart';
+import '../player/touch/device_controls.dart';
+import '../player/touch/media_kit_touch_player.dart';
+import '../player/touch/touch_player.dart';
 import 'category_selection.dart';
 import 'favourites_controller.dart';
 import 'guide_controller.dart';
@@ -663,6 +666,18 @@ class Hwdec extends Notifier<String> {
 /// media_kit player. On Linux the embedded player drops frames where plain
 /// `mpv --hwdec=vaapi` doesn't.
 final useExternalMpvProvider = Provider<bool>((ref) => Platform.isLinux);
+
+/// Creates the player of the touch player screen (Android). Overridden in
+/// tests.
+final touchPlayerFactoryProvider = Provider<TouchPlayerFactory>(
+  (ref) => MediaKitTouchPlayer.new,
+);
+
+/// Orientation, system bars, media volume and brightness around the touch
+/// player. Overridden in tests.
+final deviceControlsProvider = Provider<DeviceControls>(
+  (ref) => AndroidDeviceControls(),
+);
 
 /// The single external mpv; closed with the app.
 final externalMpvProvider = Provider<ExternalMpvPlayer>((ref) {

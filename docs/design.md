@@ -201,7 +201,9 @@ weights 400, 500, 600, 700.
   always kept, so the video never changes size. Windowed, the tooltips of
   the side panels and the next-episode card stay inside the panel column;
   in fullscreen they use the hint line too, which mpv shows with the bar
-  and which hides with it.
+  and which hides with it. In the touch player (Android) there is no hint
+  line: controls use ordinary tooltips, shown on long-press, without key
+  names ("Pause live TV", "Seek (or double-tap left or right: 10 s)").
 - **Player layout**: windowed, the video keeps its area; the controls bar
   (with its hint line) and now/next (live TV: titles plus the short descriptions, two lines for
   now, one for next where it fits) sit below it and panels beside it. The
@@ -252,6 +254,42 @@ weights 400, 500, 600, 700.
 - **Mouse on the video**: click = play/pause (live TV: pause on channels
   with an archive, else show the controls),
   double click = fullscreen (the click doesn't also fire), wheel = volume.
+- **Touch player** (Android; Linux keeps the mpv player above): always
+  landscape fullscreen, immersive (system bars hidden), back to portrait
+  with the bars on leaving; the screen stays on while playing. The video
+  fills the screen (`scrim` around it) and the controls are Flutter
+  widgets drawn over it, fading in and out (200 ms): they show on open
+  and on a tap, hide 3 s after the last touch or on a tap, and stay while
+  a side panel is open or the seek bar is dragged. Top row on a `scrim`
+  75 % → transparent gradient: back arrow, title (channel without the
+  provider's ◉, with the replay mark; REPLAY badge and programme in a
+  replay; movie/episode without the provider's tag), Subtitles and audio
+  (greyed out, "No subtitles or other audio", when there's nothing to
+  choose) and, only with Settings › Player › "Player debug info", Debug
+  info (`bug_report_outlined`). Middle: one large play/pause (56, on
+  `scrim` 60 %) where pausing is allowed (as in the controls bar), a
+  spinner instead while loading. Bottom row on the mirrored gradient:
+  the seek bar (replay: clock times + LIVE), on live TV the now line with
+  progress, or "Paused · Behind live 0:45" + LIVE. Everything inside the
+  safe area (camera cutout). Side panels (Subtitles and audio, Debug
+  info) slide in from the right edge, 360 wide (at most 70 % of the
+  screen), `surface`, over a `scrim` 40 % barrier that closes them on a
+  tap; Back closes them too.
+- **Touch gestures**: tap = show/hide the controls; double tap on the left
+  or right 40 % = back/forward 10 s where seeking is possible (movies,
+  episodes, recordings, replays; never live TV), each further tap on that
+  side within 0.7 s another 10 s; the middle 20 % never seeks. Where a
+  double tap can seek, a single tap waits 300 ms to know it isn't one;
+  elsewhere it acts at once. The seek hint is a `scrim` 85 % pill
+  (radius 24, `fast_rewind`/`fast_forward` + "−10 s"/"+30 s", tabular
+  figures) centred in that side's third, gone 0.6 s after the last tap.
+  Vertical swipe: right half = the phone's media volume (no Android
+  volume panel), left half = brightness of the app window only (reset to
+  the phone's when the player closes); the full height is 0–100 %, up is
+  more; swipes starting within 48 of the top or bottom edge are left to
+  the system. The level hint is the same pill near the top: icon
+  (`brightness_6_outlined`, `volume_up_outlined`/`volume_off_outlined` at
+  0), a 120-wide progress bar and "60 %".
 - **Channels panel** (zap, `c`): side panel 360 wide, my Live TV
   categories as toolbar chips, then compact channel rows (logo, name, the
   programme on now with progress); the current channel is the selected row

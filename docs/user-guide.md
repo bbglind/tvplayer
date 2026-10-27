@@ -670,6 +670,57 @@ below the video: "Show playback statistics" (dropped frames) and "Player
 debug info" (mpv details, a hardware-decoding selector and a log). They're
 meant for troubleshooting.
 
+### The player on Android
+
+On a phone the player is simpler and made for touch. Opening it turns the
+picture to **landscape, full screen** (the status and navigation bars hide;
+swipe from the edge to see them for a moment). Leaving it with the back
+arrow or Android's back button/gesture returns to portrait with the bars.
+The screen stays on while something plays.
+
+The controls are drawn over the video and hide 3 seconds after you last
+touched them; **tap the video** to show them, tap again to hide them.
+Long-press a button to see what it does.
+
+- **Top**: the back arrow ("Back (stops playback)"), the title (the
+  channel without the provider's ◉ mark, or the movie or episode),
+  **"Subtitles and audio"** and, with "Player debug info" on, **"Debug
+  info"**.
+- **Middle**: a large **Pause**/**Resume**: for movies, episodes,
+  recordings and replays; on live TV **"Pause live TV"** only on channels
+  with an archive, as on the desktop (see [Pause live TV](#pause-live-tv)).
+- **Bottom**: the seek bar (movies, episodes, recordings; replays in clock
+  times with "LIVE"), on live TV what's on now with its progress, or
+  "Paused · Behind live 0:45" with "LIVE" while paused. Double-tap the end
+  time to switch between the length and the time left.
+
+Gestures on the video:
+
+- **Double-tap the right or left side**: forward or back 10 seconds, with
+  a short "+10 s" / "−10 s" sign; keep tapping on that side to go further
+  ("+30 s"). Only where you can seek (movies, episodes, recordings,
+  replays), not on live TV.
+- **Swipe up or down on the right half**: the phone's media volume (the
+  same as the volume keys).
+- **Swipe up or down on the left half**: brightness, for this app only
+  while the player is open; leaving the player gives the phone its own
+  brightness back.
+
+A swipe that starts close to the top or bottom edge is left to Android.
+
+**"Subtitles and audio"** opens a panel on the right with the subtitle
+tracks (and "Off") and the audio tracks; tap beside it or press back to
+close it. The button is greyed out ("No subtitles or other audio") when
+there is nothing to choose. Tracks are picked from your preferred
+languages, and a choice made in a series is remembered, as on the desktop.
+
+Movies and episodes start where you left off and save their position as
+they play, so Continue watching follows what you watched on the phone. At
+the end of a movie or episode the player closes.
+
+Not on Android yet: the Channels panel, the next-episode card, recording,
+the volume slider and mute, and playback statistics.
+
 ---
 
 ## 9. Downloads and recording
@@ -867,7 +918,8 @@ part, the same way.
 - **"Show playback statistics"** (default off): dropped-frame counters
   below the video.
 - **"Player debug info"** (default off): mpv property overlay, hardware
-  decoding selector and log.
+  decoding selector and log. On Android it adds a "Debug info" button to
+  the player that opens them in a side panel.
 
 ### Downloads & recording
 
@@ -986,8 +1038,9 @@ just choose "Pause download" and it resumes when you stop.
 ### Android test builds
 
 Android builds are for testing. They can add a provider and download the
-playlist; the phone layout and the player are still being worked on.
-Differences from Linux so far:
+playlist, and the player is made for touch (see
+[The player on Android](#the-player-on-android)); the phone layout of the
+other screens is still being worked on. Differences from Linux so far:
 
 - Connection details are kept in the Android Keystore, not a keyring.
 - Plain `http://` providers work: Android normally blocks unencrypted

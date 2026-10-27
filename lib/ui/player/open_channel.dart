@@ -8,7 +8,7 @@ import '../../state/player_stream.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import 'mpv_player_screen.dart';
-import 'player_screen.dart';
+import 'touch_player_screen.dart';
 
 /// Opens the player for [channel] and adds it to "Recently viewed
 /// channels".
@@ -96,12 +96,13 @@ Future<bool> confirmPauseDownload(BuildContext context, WidgetRef ref) async {
   return yes == true;
 }
 
-/// The player route for [request]: mpv on Linux, media_kit elsewhere.
+/// The player route for [request]: mpv on Linux, the touch player (media_kit)
+/// elsewhere.
 Route<void> playbackRoute(WidgetRef ref, PlaybackRequest request) =>
     MaterialPageRoute<void>(
       builder: (_) => ref.read(useExternalMpvProvider)
           ? MpvPlayerScreen(request: request)
-          : PlayerScreen(request: request),
+          : TouchPlayerScreen(request: request),
     );
 
 /// The playback URL of [request], from the one source it needs. Contains
