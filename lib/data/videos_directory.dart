@@ -1,13 +1,13 @@
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+
 /// The default folder for downloads and recordings: `tvplayer` in the
 /// user's videos folder.
 ///
 /// The videos folder is `XDG_VIDEOS_DIR`, else the one set in
 /// `user-dirs.dirs` (in `XDG_CONFIG_HOME`, default `~/.config`), else
 /// `~/Videos`.
-// Android needs a platform folder (e.g. from path_provider); add it with
-// the Android build.
 String defaultDownloadFolder({
   Map<String, String>? environment,
   String? userDirsPath,
@@ -39,4 +39,14 @@ String defaultDownloadFolder({
     videos = '$home/Videos';
   }
   return '${videos.replaceFirst(RegExp(r'/+$'), '')}/tvplayer';
+}
+
+/// The default folder for downloads and recordings on Android: `tvplayer`
+/// in the app's own folder on shared storage, which needs no permission
+/// (and is removed with the app), else in its private documents folder.
+Future<String> androidDownloadFolder() async {
+  final dir =
+      await getExternalStorageDirectory() ??
+      await getApplicationDocumentsDirectory();
+  return '${dir.path}/tvplayer';
 }

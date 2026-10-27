@@ -1365,10 +1365,14 @@ void main() {
     setUp(() => dir = Directory.systemTemp.createTempSync('tz_test'));
     tearDown(() => dir.deleteSync(recursive: true));
 
-    String detect({Map<String, String> env = const {}}) => deviceTimeZone(
+    String detect({
+      Map<String, String> env = const {},
+      String? Function()? androidZone,
+    }) => deviceTimeZone(
       environment: env,
       localtimePath: '${dir.path}/localtime',
       timezonePath: '${dir.path}/timezone',
+      androidZone: androidZone,
     );
 
     test('from TZ', () {
@@ -1390,6 +1394,12 @@ void main() {
       expect(detect(), 'UTC');
       File('${dir.path}/timezone').writeAsStringSync('Europe/Oslo\n');
       expect(detect(), 'Europe/Oslo');
+    });
+
+    test("from Android's setting, else UTC", () {
+      expect(detect(androidZone: () => 'Europe/Brussels\n'), 'Europe/Brussels');
+      expect(detect(androidZone: () => 'Not/AZone'), 'UTC');
+      expect(detect(androidZone: () => null), 'UTC');
     });
   });
 }

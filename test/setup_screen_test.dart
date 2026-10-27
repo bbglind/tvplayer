@@ -39,6 +39,7 @@ Future<void> _pumpGate(
   WidgetTester tester, {
   required FakeProviderStorage storage,
   http.Client? client,
+  bool android = false,
 }) async {
   // Wide enough for the sidebar to show its labels.
   tester.view.physicalSize = const Size(1280, 800);
@@ -47,7 +48,10 @@ Future<void> _pumpGate(
   await tester.pumpWidget(
     testApp(
       providerStorage: storage,
-      overrides: [httpClientProvider.overrideWithValue(client ?? _panel())],
+      overrides: [
+        httpClientProvider.overrideWithValue(client ?? _panel()),
+        isAndroidProvider.overrideWithValue(android),
+      ],
       child: const RootGate(),
     ),
   );
@@ -262,6 +266,51 @@ void main() {
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(find.text('Add a provider'), findsOneWidget);
+  });
+
+  testWidgets('on Android, unavailable storage is not called a keyring', (
+    tester,
+  ) async {
+    final storage = FakeProviderStorage()
+      ..failure = const ProviderStorageException('Keystore failed.');
+    await _pumpGate(tester, storage: storage, android: true);
+
+    expect(find.text('Secure storage unavailable'), findsOneWidget);
+    expect(find.text('Keyring unavailable'), findsNothing);
+  });
+
+  testWidgets('settings say where the provider is stored', (tester) async {
+    for (final android in [false, true]) {
+      await _pumpGate(
+        tester,
+        storage: FakeProviderStorage(
+          const ProviderConfig.m3u(playlistUrl: 'http://example.com/list.m3u'),
+        ),
+        client: MockClient((_) async => http.Response('', 404)),
+        android: android,
+      );
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          android
+              ? 'Connection details are stored encrypted on this device.'
+              : 'Connection details are stored in the system keyring.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Remove provider'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          android
+              ? 'The saved connection details are deleted from this device.'
+              : 'The saved connection details are deleted from the keyring.',
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   testWidgets('removing the provider from settings returns to setup', (

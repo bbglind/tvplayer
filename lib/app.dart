@@ -32,7 +32,9 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
         }
         await recorder.stop();
       }
-      await ref.read(externalMpvProvider).stop();
+      if (ref.read(useExternalMpvProvider)) {
+        await ref.read(externalMpvProvider).stop();
+      }
       return AppExitResponse.exit;
     },
   );
@@ -64,7 +66,7 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
 }
 
 /// Shows setup when no provider is saved, the app (on Home) otherwise,
-/// and a keyring error with retry when the saved provider can't be read.
+/// and a storage (keyring) error with retry when the saved provider can't be read.
 class RootGate extends ConsumerWidget {
   const RootGate({super.key});
 
@@ -77,6 +79,9 @@ class RootGate extends ConsumerWidget {
           loading: () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
           error: (error, _) => _StorageErrorScreen(
+            title: ref.read(isAndroidProvider)
+                ? 'Secure storage unavailable'
+                : 'Keyring unavailable',
             message: error is ProviderStorageException
                 ? error.message
                 : 'Could not load the saved provider (${error.runtimeType}).',
@@ -89,8 +94,13 @@ class RootGate extends ConsumerWidget {
 }
 
 class _StorageErrorScreen extends StatelessWidget {
-  const _StorageErrorScreen({required this.message, required this.onRetry});
+  const _StorageErrorScreen({
+    required this.title,
+    required this.message,
+    required this.onRetry,
+  });
 
+  final String title;
   final String message;
   final VoidCallback onRetry;
 
@@ -109,10 +119,7 @@ class _StorageErrorScreen extends StatelessWidget {
                 color: Theme.of(context).colorScheme.error,
               ),
               const SizedBox(height: 12),
-              Text(
-                'Keyring unavailable',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 16),

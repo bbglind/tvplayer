@@ -45,6 +45,8 @@ class DownloadsScreen extends ConsumerWidget {
     ];
     final folder = ref.watch(downloadFolderProvider);
     final queueable = pending.any((i) => i.kind != DownloadKind.recording);
+    // xdg-open is desktop only.
+    final canOpenFolder = !ref.watch(isAndroidProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -66,16 +68,18 @@ class DownloadsScreen extends ConsumerWidget {
                   label: Text(state.paused ? 'Resume all' : 'Pause all'),
                 ),
               ),
-            if (state.paused || queueable) const SizedBox(width: 8),
-            Tooltip(
-              message: folder,
-              child: OutlinedButton.icon(
-                key: const Key('downloads.openFolder'),
-                onPressed: () => unawaited(_openFolder(folder)),
-                icon: const Icon(Icons.folder_open_outlined),
-                label: const Text('Open folder'),
+            if ((state.paused || queueable) && canOpenFolder)
+              const SizedBox(width: 8),
+            if (canOpenFolder)
+              Tooltip(
+                message: folder,
+                child: OutlinedButton.icon(
+                  key: const Key('downloads.openFolder'),
+                  onPressed: () => unawaited(_openFolder(folder)),
+                  icon: const Icon(Icons.folder_open_outlined),
+                  label: const Text('Open folder'),
+                ),
               ),
-            ),
           ],
         ),
         Expanded(

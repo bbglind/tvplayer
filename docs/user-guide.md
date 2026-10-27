@@ -37,8 +37,9 @@ downloads for offline viewing and recording of live TV.
 The app ships no content, playlists or providers of its own. Everything you
 see comes from your provider.
 
-Today it runs on **Linux desktop**. Android is planned; nothing else is
-supported yet.
+Today it runs on **Linux desktop**. **Android** is in early testing (see
+[Android test builds](#android-test-builds)); nothing else is supported
+yet.
 
 ---
 
@@ -693,7 +694,8 @@ Downloads") with **"Show"** to open the Downloads page.
 
 - **"Pause all"**: pauses the whole queue; nothing starts until you resume
   ("Resume all" then appears). Shown while something is in the queue.
-- **"Open folder"**: opens the downloads folder in your file manager.
+- **"Open folder"**: opens the downloads folder in your file manager. Not
+  shown on Android.
 
 Three sections:
 
@@ -756,7 +758,10 @@ archive land in the same "Recordings" section.
 
 By default: a `tvplayer` folder in your Videos folder (usually
 `~/Videos/tvplayer`). You can change it in
-[Settings › Downloads & recording](#downloads--recording). Files are saved
+[Settings › Downloads & recording](#downloads--recording). On Android it is
+a `tvplayer` folder in the app's own storage
+(`Android/data/io.github.bbglind.tvplayer/files/tvplayer`); it can't be
+changed yet, and uninstalling the app deletes it. Files are saved
 exactly as the provider sends them:
 
 ```
@@ -788,11 +793,15 @@ The "Minimum free disk space" setting (default 5 GB) protects your disk:
 ### Provider
 
 Shows the type ("Xtream" or "M3U playlist"); connection details are stored
-in the system keyring.
+in the system keyring ("Connection details are stored in the system
+keyring."). On Android they are stored encrypted in the Android Keystore
+("Connection details are stored encrypted on this device."), and if that
+can't be read the app shows "Secure storage unavailable" with "Retry".
 
 - **"Edit provider"**: the same form as when adding one.
 - **"Remove provider"**: deletes the saved connection details from the
-  keyring (asks first). The app then returns to "Add a provider".
+  keyring, or from the device on Android (asks first). The app then returns
+  to "Add a provider".
 
 ### Playlist
 
@@ -856,7 +865,8 @@ part, the same way.
 
 - **"Folder"**: where downloads and recordings go. "Change…" opens a
   folder picker; "Use default" appears when changed. Default:
-  `~/Videos/tvplayer` (your Videos folder).
+  `~/Videos/tvplayer` (your Videos folder). On Android the folder is fixed
+  (no "Change…"); see [Where files go](#where-files-go).
 - **"End margin"**: minutes recorded and saved after a programme ends, in
   case it runs late. None, 5, 10, **15** (default), 20, 30, 45, 60 min.
 - **"Start margin (replay)"**: minutes saved before a programme starts,
@@ -946,8 +956,8 @@ just choose "Pause download" and it resumes when you stop.
 
 ### Limitations
 
-- **Linux only for now.** Android is planned; no other platform is
-  supported.
+- **Linux only for now.** Android is in early testing (below); no other
+  platform is supported.
 - **The player needs X11.** On Wayland, video opens in a separate mpv
   window and the in-app controls, panels, fullscreen overlay and recording
   aren't available. Log in with an X11 ("Xorg") session.
@@ -964,6 +974,20 @@ just choose "Pause download" and it resumes when you stop.
 - **Replay** and **pause live TV** depend on the provider keeping an archive
   for that channel (the replay mark). How far back depends on the provider.
 - The UI is in **English** only.
+
+### Android test builds
+
+Android builds are for testing. They can add a provider and download the
+playlist; the phone layout and the player are still being worked on.
+Differences from Linux so far:
+
+- Connection details are kept in the Android Keystore, not a keyring.
+- Plain `http://` providers work: Android normally blocks unencrypted
+  connections, and the app allows them because most providers use them.
+- The downloads folder is fixed and there is no "Open folder" (see
+  [Where files go](#where-files-go)).
+- "Device time zone" is the time zone set in Android's settings.
+- No recording (it needs the Linux mpv player).
 
 ### Tips
 

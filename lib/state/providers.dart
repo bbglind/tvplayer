@@ -49,6 +49,11 @@ final searchDebounceProvider = Provider<Duration>(
   (ref) => const Duration(milliseconds: 200),
 );
 
+/// Whether the app runs on Android, where the provider is kept in the
+/// Keystore and the downloads folder can't be chosen or opened yet.
+/// Overridden in tests.
+final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);
+
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
   final client = http.Client();
@@ -59,10 +64,14 @@ final httpClientProvider = Provider<http.Client>((ref) {
 /// Where the provider config is persisted. Overridden in tests.
 final providerStorageProvider = Provider<ProviderStorage>(
   (ref) => SecureProviderStorage(
-    legacy: const LegacyKeyring(
-      read: readLegacyKeyring,
-      clear: clearLegacyKeyring,
-    ),
+    // Only Linux builds ever used the old application ID.
+    legacy: Platform.isLinux
+        ? const LegacyKeyring(
+            read: readLegacyKeyring,
+            clear: clearLegacyKeyring,
+          )
+        : null,
+    android: ref.watch(isAndroidProvider),
   ),
 );
 

@@ -26,8 +26,10 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove provider?'),
-        content: const Text(
-          'The saved connection details are deleted from the keyring.',
+        content: Text(
+          ref.read(isAndroidProvider)
+              ? 'The saved connection details are deleted from this device.'
+              : 'The saved connection details are deleted from the keyring.',
         ),
         actions: [
           TextButton(
@@ -129,8 +131,10 @@ class SettingsScreen extends ConsumerWidget {
                 ProviderType.m3u => 'M3U playlist',
                 null => 'None',
               }),
-              subtitle: const Text(
-                'Connection details are stored in the system keyring.',
+              subtitle: Text(
+                ref.watch(isAndroidProvider)
+                    ? 'Connection details are stored encrypted on this device.'
+                    : 'Connection details are stored in the system keyring.',
               ),
             ),
             Padding(

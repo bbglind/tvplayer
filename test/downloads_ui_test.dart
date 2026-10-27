@@ -859,6 +859,30 @@ void main() {
       expect(settings.saved.downloadFolder, isNull);
     });
 
+    testWidgets("on Android the folder can't be changed or opened", (
+      tester,
+    ) async {
+      final android = [isAndroidProvider.overrideWithValue(true)];
+      await pump(tester, section(), overrides: android);
+      expect(find.text(testDownloadFolder), findsOneWidget);
+      expect(
+        find.byKey(const Key('settings.downloadFolder.change')),
+        findsNothing,
+      );
+
+      await pump(
+        tester,
+        const Scaffold(body: DownloadsScreen()),
+        overrides: android,
+      );
+      expect(find.byKey(const Key('downloads.openFolder')), findsNothing);
+    });
+
+    testWidgets('on Linux the downloads folder can be opened', (tester) async {
+      await pump(tester, const Scaffold(body: DownloadsScreen()));
+      expect(find.byKey(const Key('downloads.openFolder')), findsOneWidget);
+    });
+
     for (final scale in [1.0, 1.4]) {
       testWidgets('fits at text scale $scale', (tester) async {
         await pump(tester, section(), scale: scale);

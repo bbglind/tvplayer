@@ -175,4 +175,41 @@ void main() {
       ]);
     });
   });
+
+  group('an unusable store', () {
+    Future<String> failure({required bool android}) async {
+      try {
+        await SecureProviderStorage(
+          storage: _FailingStorage(),
+          android: android,
+        ).load();
+      } on ProviderStorageException catch (e) {
+        return e.message;
+      }
+      fail('no error');
+    }
+
+    test('is described as the keyring on Linux', () async {
+      expect(
+        await failure(android: false),
+        startsWith('Could not access the system keyring.'),
+      );
+    });
+
+    test('is described as secure storage on Android', () async {
+      final message = await failure(android: true);
+      expect(
+        message,
+        startsWith('Could not access the secure storage of this device.'),
+      );
+      expect(message, isNot(contains('keyring')));
+    });
+  });
+}
+
+/// Fails every call, like a Keystore or keyring that can't be used.
+class _FailingStorage implements FlutterSecureStorage {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      Future<String?>.error(PlatformException(code: 'unavailable'));
 }

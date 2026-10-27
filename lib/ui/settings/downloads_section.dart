@@ -103,11 +103,13 @@ class DownloadsSection extends ConsumerWidget {
                   ),
                   child: const Text('Use default'),
                 ),
-              OutlinedButton(
-                key: const Key('settings.downloadFolder.change'),
-                onPressed: () => _pickFolder(context, ref, settings),
-                child: const Text('Change…'),
-              ),
+              // Android's folder picker gives a content URI, not a path.
+              if (!ref.watch(isAndroidProvider))
+                OutlinedButton(
+                  key: const Key('settings.downloadFolder.change'),
+                  onPressed: () => _pickFolder(context, ref, settings),
+                  child: const Text('Change…'),
+                ),
             ],
           ),
         ),

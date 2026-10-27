@@ -5,14 +5,14 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 /// The IANA name of the device's time zone, e.g. `Europe/Stockholm`, or
 /// `UTC` when it can't be determined.
 ///
-/// On Linux this checks `TZ`, then the `/etc/localtime` symlink, then
-/// `/etc/timezone`.
-// Android needs a platform plugin (e.g. flutter_timezone); add it with the
-// Android build.
+/// This checks `TZ`, then the `/etc/localtime` symlink, then
+/// `/etc/timezone` (Linux), then [androidZone]: by default the zone set in
+/// Android's settings, on Android only.
 String deviceTimeZone({
   Map<String, String>? environment,
   String localtimePath = '/etc/localtime',
   String timezonePath = '/etc/timezone',
+  String? Function()? androidZone,
 }) {
   String? valid(String? name) {
     final n = name?.trim();
@@ -39,7 +39,20 @@ String deviceTimeZone({
   } on FileSystemException {
     // Missing.
   }
+  final android = androidZone ?? (Platform.isAndroid ? _androidZone : null);
+  if (valid(android?.call()) case final zone?) return zone;
   return 'UTC';
+}
+
+/// The `persist.sys.timezone` system property, which Android's date and
+/// time settings set; null when it can't be read.
+String? _androidZone() {
+  try {
+    final result = Process.runSync('getprop', ['persist.sys.timezone']);
+    return result.exitCode == 0 ? result.stdout as String : null;
+  } on ProcessException {
+    return null;
+  }
 }
 
 String? _zoneFromPath(String? path) {

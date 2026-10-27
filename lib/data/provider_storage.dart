@@ -41,8 +41,11 @@ class LegacyKeyring {
 /// [ProviderStorage] in the platform keystore (Secret Service keyring on
 /// Linux, Keystore on Android). Nothing is written to plain files.
 class SecureProviderStorage implements ProviderStorage {
-  SecureProviderStorage({FlutterSecureStorage? storage, this.legacy})
-    : _storage = storage ?? const FlutterSecureStorage();
+  SecureProviderStorage({
+    FlutterSecureStorage? storage,
+    this.legacy,
+    this.android = false,
+  }) : _storage = storage ?? const FlutterSecureStorage();
 
   static const _key = 'provider_config_v1';
 
@@ -54,6 +57,10 @@ class SecureProviderStorage implements ProviderStorage {
   /// Where a provider saved under an earlier application ID is moved from,
   /// once, on the first [load] when nothing is saved.
   final LegacyKeyring? legacy;
+
+  /// Whether errors describe Android's secure storage instead of a
+  /// Secret Service keyring.
+  final bool android;
 
   /// The move from [legacy]; reset after a failure so a retry tries again.
   Future<void>? _migration;
@@ -121,21 +128,27 @@ class SecureProviderStorage implements ProviderStorage {
   @override
   Future<void> delete() => _guard(() => _storage.delete(key: _key));
 
-  static Future<T> _guard<T>(Future<T> Function() op) async {
+  Future<T> _guard<T>(Future<T> Function() op) async {
     try {
       return await op().timeout(_timeout);
     } on TimeoutException {
-      throw const ProviderStorageException(
-        'The system keyring did not respond. If an unlock prompt is open, '
-        'unlock it and retry.',
+      throw ProviderStorageException(
+        android
+            ? 'The secure storage of this device did not respond. Retry.'
+            : 'The system keyring did not respond. If an unlock prompt is '
+                  'open, unlock it and retry.',
       );
     } catch (e) {
-      // Errors come from libsecret/D-Bus and never contain the stored value.
+      // Errors come from libsecret/D-Bus or the Android Keystore and never
+      // contain the stored value.
       throw ProviderStorageException(
-        'Could not access the system keyring. tvplayer stores provider '
-        'credentials in a Secret Service keyring (e.g. GNOME Keyring or '
-        'KWallet); make sure one is installed, running and unlocked, then '
-        'retry. ($e)',
+        android
+            ? 'Could not access the secure storage of this device. Retry. '
+                  '($e)'
+            : 'Could not access the system keyring. tvplayer stores provider '
+                  'credentials in a Secret Service keyring (e.g. GNOME Keyring '
+                  'or KWallet); make sure one is installed, running and '
+                  'unlocked, then retry. ($e)',
       );
     }
   }
