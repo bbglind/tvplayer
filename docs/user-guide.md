@@ -109,7 +109,7 @@ together.
 3. Get the source and build:
 
    ```sh
-   git clone <repository-url> tvplayer
+   git clone https://github.com/bbglind/tvplayer.git tvplayer
    cd tvplayer
    flutter pub get
    flutter build linux --release
