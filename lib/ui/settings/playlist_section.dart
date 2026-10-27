@@ -41,6 +41,17 @@ String autoRefreshLabel(AutoRefresh mode) => switch (mode) {
   AutoRefresh.daily => 'Daily',
 };
 
+/// What the automatic refresh choice [mode] does, below the setting.
+String autoRefreshDescription(AutoRefresh mode) => switch (mode) {
+  AutoRefresh.daily =>
+    'Once a day: the first time tvplayer is open on a new day (your local '
+        'time), also when it stays open past midnight. Waits while '
+        'something is playing.',
+  _ =>
+    'Runs only while tvplayer is open, and on start when the time has '
+        'passed. Waits while something is playing.',
+};
+
 /// Settings › Playlist: when each part was last updated, "Refresh all"
 /// and the automatic refresh choice.
 class PlaylistSection extends ConsumerWidget {
@@ -84,10 +95,7 @@ class PlaylistSection extends ConsumerWidget {
         ListTile(
           leading: const Icon(Icons.autorenew),
           title: const Text('Automatic refresh'),
-          subtitle: const Text(
-            'Runs only while tvplayer is open, and on start when the time '
-            'has passed. Waits while something is playing.',
-          ),
+          subtitle: Text(autoRefreshDescription(status.autoRefresh)),
           trailing: DropdownButton<AutoRefresh>(
             key: const Key('settings.autoRefresh'),
             value: status.autoRefresh,

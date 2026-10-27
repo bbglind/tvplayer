@@ -3,9 +3,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 final _now = DateTime.utc(2026, 10, 26, 12);
+
+final _utc = GuideTime.named('UTC');
 
 DateTime _ago(Duration d) => _now.subtract(d);
 
@@ -34,6 +37,7 @@ void main() {
       status: _status(parts, mode: mode),
       available: available,
       now: _now,
+      deviceTime: _utc,
       atStart: atStart,
       freshSince: freshSince,
     );
@@ -61,7 +65,7 @@ void main() {
       expect(due(AutoRefresh.onStart, {}), isEmpty);
     });
 
-    test('timed modes refresh parts whose interval has passed', () {
+    test('every 6 hours refreshes parts whose 6 hours have passed', () {
       final parts = {
         PlaylistPart.channels: updated(const Duration(hours: 5)),
         PlaylistPart.movies: updated(const Duration(hours: 6)),
@@ -73,7 +77,20 @@ void main() {
         PlaylistPart.series,
         PlaylistPart.guide,
       ]);
-      expect(due(AutoRefresh.daily, parts), [PlaylistPart.guide]);
+    });
+
+    test('daily refreshes parts last updated on an earlier day', () {
+      // _now is 12:00 UTC.
+      final parts = {
+        PlaylistPart.channels: updated(const Duration(hours: 12)),
+        PlaylistPart.movies: updated(const Duration(hours: 12, minutes: 1)),
+        PlaylistPart.series: updated(const Duration(hours: 23, minutes: 59)),
+        PlaylistPart.guide: updated(const Duration(minutes: 1)),
+      };
+      expect(due(AutoRefresh.daily, parts), [
+        PlaylistPart.movies,
+        PlaylistPart.series,
+      ]);
     });
 
     test('parts never downloaded and a clock that went back are due', () {
@@ -163,6 +180,107 @@ void main() {
         ),
         [PlaylistPart.movies],
       );
+    });
+  });
+
+  group('dueParts daily, by the calendar day of the device', () {
+    final stockholm = GuideTime.named('Europe/Stockholm');
+
+    DateTime local(int month, int day, int hour, [int minute = 0]) =>
+        tz.TZDateTime(
+          stockholm.location,
+          2026,
+          month,
+          day,
+          hour,
+          minute,
+        ).toUtc();
+
+    bool movieDue(
+      DateTime updated,
+      DateTime now, {
+      DateTime? failedAt,
+      DateTime? freshSince,
+    }) => dueParts(
+      mode: AutoRefresh.daily,
+      status: _status({
+        PlaylistPart.movies: PartStatus(
+          updatedAt: updated,
+          failedAt: failedAt,
+          error: failedAt == null ? null : 'x',
+        ),
+      }),
+      available: {PlaylistPart.movies},
+      now: now,
+      deviceTime: stockholm,
+      freshSince: freshSince,
+    ).isNotEmpty;
+
+    test('just after midnight: due; late the same day: not', () {
+      // 2 minutes apart, but on different days.
+      expect(movieDue(local(6, 9, 23, 59), local(6, 10, 0, 1)), isTrue);
+      // Almost 24 hours apart, on the same day.
+      expect(movieDue(local(6, 10, 0, 1), local(6, 10, 23, 59)), isFalse);
+      expect(movieDue(local(6, 10, 3), local(6, 10, 23)), isFalse);
+      expect(movieDue(local(6, 8, 12), local(6, 10, 12)), isTrue);
+    });
+
+    test('goes by local time, not UTC', () {
+      // 23:30 UTC on the 9th is 01:30 on the 10th in Stockholm (summer).
+      final updated = DateTime.utc(2026, 6, 9, 23, 30);
+      expect(movieDue(updated, local(6, 10, 22)), isFalse);
+      expect(movieDue(updated, local(6, 11, 0, 5)), isTrue);
+      // In UTC the same times are on different days.
+      expect(
+        dueParts(
+          mode: AutoRefresh.daily,
+          status: _status({
+            PlaylistPart.movies: PartStatus(updatedAt: updated),
+          }),
+          available: {PlaylistPart.movies},
+          now: local(6, 10, 22),
+          deviceTime: _utc,
+        ),
+        [PlaylistPart.movies],
+      );
+    });
+
+    test('daylight saving days (23 and 25 hours long)', () {
+      // 29 March 2026: clocks go forward at 02:00.
+      expect(movieDue(local(3, 29, 0, 30), local(3, 29, 23, 30)), isFalse);
+      expect(movieDue(local(3, 29, 0, 30), local(3, 30, 0, 10)), isTrue);
+      expect(movieDue(local(3, 28, 23, 50), local(3, 29, 0, 10)), isTrue);
+      // 25 October 2026: clocks go back at 03:00; 23:30 to 23:30 the next
+      // day is 25 hours.
+      expect(movieDue(local(10, 25, 0, 30), local(10, 25, 23, 30)), isFalse);
+      expect(movieDue(local(10, 24, 23, 30), local(10, 25, 0, 10)), isTrue);
+      expect(movieDue(local(10, 25, 0, 30), local(10, 26, 0, 10)), isTrue);
+    });
+
+    test('a failure still waits an hour, also on a new day', () {
+      final now = local(6, 10, 0, 30);
+      expect(
+        movieDue(local(6, 9, 20), now, failedAt: local(6, 10, 0, 5)),
+        isFalse,
+      );
+      expect(
+        movieDue(
+          local(6, 9, 20),
+          local(6, 10, 1, 5),
+          failedAt: local(6, 10, 0, 5),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a download since the app started is fresh; a clock that went '
+        'back is due', () {
+      final now = local(6, 10, 9);
+      expect(
+        movieDue(local(6, 10, 8, 59), now, freshSince: local(6, 10, 8, 58)),
+        isFalse,
+      );
+      expect(movieDue(local(6, 11, 9), now), isTrue);
     });
   });
 

@@ -363,11 +363,14 @@ English for now.
 - Episodes with a next one get a "Next episode (n)" button after
   play/pause; it marks the current episode watched and plays the next.
 - "Automatic refresh" (Settings › Playlist, kept per provider): Off, On
-  app start, Every 6 hours, Daily (default). It runs only while the app is
+  app start, Every 6 hours, Daily (default). Daily means once per
+  calendar day in the device's time zone: a part is refreshed when its
+  last update was on an earlier day, so the first start of a day (or the
+  first check after midnight) refreshes it. It runs only while the app is
   open (checked every 15 min, and at start when the time has passed),
   waits while something plays, and after a failure tries again an hour
   later at the earliest. Off still downloads a part that has never been
-  downloaded.
+  downloaded. Channels are downloaded on every start in any mode.
 - "Play next episode" (Settings › Player): Off, 15, 20, 30 (default), 45,
   60, 90 or 120 s before the end. The card reads "Next episode in 12 s";
   after a season finale it is the next season's first episode, after the

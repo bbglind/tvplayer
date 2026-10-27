@@ -306,6 +306,7 @@ class PlaylistRefreshController extends Notifier<PlaylistRefreshState> {
         status: status,
         available: available,
         now: ref.read(clockProvider),
+        deviceTime: ref.read(deviceTimeProvider),
         atStart: atStart,
         freshSince: freshSince,
       );

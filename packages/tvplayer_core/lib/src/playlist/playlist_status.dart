@@ -29,11 +29,11 @@ enum AutoRefresh {
 
   static const defaultMode = daily;
 
-  /// How long a part stays fresh; null when not timed.
+  /// How long a part stays fresh; null when not timed by an interval
+  /// (daily goes by the calendar day, see `dueParts`).
   Duration? get interval => switch (this) {
     every6Hours => const Duration(hours: 6),
-    daily => const Duration(days: 1),
-    off || onStart => null,
+    off || onStart || daily => null,
   };
 
   static AutoRefresh? byName(String? name) {

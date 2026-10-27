@@ -179,7 +179,24 @@ void main() {
       );
       expect(find.text('Refresh all'), findsOneWidget);
       expect(find.text('Off'), findsOneWidget);
+      expect(find.textContaining('Runs only while tvplayer'), findsOneWidget);
       // No overflow at 1.4: the test fails on layout errors.
+      expect(tester.takeException(), isNull);
+
+      // Daily says it goes by the calendar day.
+      await tester.ensureVisible(find.byKey(const Key('settings.autoRefresh')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settings.autoRefresh')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Daily').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(
+          'Once a day: the first time tvplayer is open on '
+          'a new day',
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
 
@@ -426,12 +443,17 @@ void main() {
       required Duration moviesAge,
       required Duration seriesAge,
       AutoRefresh mode = AutoRefresh.daily,
+      DateTime? now,
     }) async {
+      final start = now ?? _now;
       final vod = FakeVodRepository()
-        ..movies['test'] = syntheticMovies(count: 3, fetchedAt: _ago(moviesAge))
+        ..movies['test'] = syntheticMovies(
+          count: 3,
+          fetchedAt: start.subtract(moviesAge),
+        )
         ..series['test'] = syntheticSeries(
           count: 3,
-          fetchedAt: _ago(seriesAge),
+          fetchedAt: start.subtract(seriesAge),
         );
       final source = FakeVodSource(
         movies: syntheticMovies(count: 5),
@@ -449,7 +471,7 @@ void main() {
           playlistStatus: MemoryPlaylistStatusStore(
             PlaylistStatus.empty.withAutoRefresh(mode),
           ),
-          now: _now,
+          now: start,
           child: const Scaffold(body: AutoRefreshHost(child: SizedBox())),
         ),
       );
@@ -457,7 +479,9 @@ void main() {
       return (source, live);
     }
 
-    testWidgets('daily: on start, only what is over a day old', (tester) async {
+    testWidgets('daily: on start, what was updated on an earlier day', (
+      tester,
+    ) async {
       final (source, live) = await pump(
         tester,
         moviesAge: const Duration(days: 2),
@@ -511,6 +535,30 @@ void main() {
       expect(source.movieLoads, 0);
 
       playback.end();
+      await tester.pumpAndSettle();
+      expect(source.movieLoads, 1);
+      expect(source.seriesLoads, 1);
+    });
+    testWidgets('daily: open past midnight, the next check refreshes', (
+      tester,
+    ) async {
+      // 23:50 in Stockholm (the test device's zone), updated at 20:50.
+      final evening = DateTime.utc(2026, 10, 26, 22, 50);
+      final (source, _) = await pump(
+        tester,
+        moviesAge: const Duration(hours: 3),
+        seriesAge: const Duration(hours: 3),
+        now: evening,
+      );
+      expect(source.movieLoads, 0);
+      final clock = _container(tester).read(clockProvider.notifier);
+      (clock as FixedClock).set(evening.add(const Duration(minutes: 5)));
+      await tester.pump(PlaylistRefreshController.checkInterval);
+      await tester.pumpAndSettle();
+      expect(source.movieLoads, 0, reason: 'still the same day');
+      // 00:05: a new day.
+      clock.set(evening.add(const Duration(minutes: 15)));
+      await tester.pump(PlaylistRefreshController.checkInterval);
       await tester.pumpAndSettle();
       expect(source.movieLoads, 1);
       expect(source.seriesLoads, 1);
