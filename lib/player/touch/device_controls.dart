@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FlutterView;
 
 import 'package:flutter/services.dart';
 
@@ -24,8 +25,32 @@ abstract interface class DeviceControls {
 }
 
 /// [DeviceControls] of the Android app (see MainActivity.kt).
+///
+/// On a phone ([portraitOnly]) the app stays in portrait outside the
+/// player; on a tablet it turns with the device.
 class AndroidDeviceControls implements DeviceControls {
+  AndroidDeviceControls({this.portraitOnly = false});
+
   static const _channel = MethodChannel('tvplayer/device');
+
+  /// Below this shortest side (dp) the device is a phone.
+  static const phoneShortestSide = 600.0;
+
+  /// Whether [view] is a phone's screen: its shortest side is below
+  /// [phoneShortestSide], whichever way it is turned.
+  static bool isPhone(FlutterView view) =>
+      (view.physicalSize / view.devicePixelRatio).shortestSide <
+      phoneShortestSide;
+
+  final bool portraitOnly;
+
+  /// Keeps a phone in portrait; call once at start.
+  Future<void> lockPortrait() async {
+    if (!portraitOnly) return;
+    await SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+    ]);
+  }
 
   /// How long the turn to portrait may take before the app may turn with
   /// the phone again.
@@ -50,7 +75,8 @@ class AndroidDeviceControls implements DeviceControls {
     await SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
     ]);
-    // Then as before the player: the other screens turn with the phone.
+    // A phone stays in portrait; a tablet turns with the device again.
+    if (portraitOnly) return;
     _release?.cancel();
     _release = Timer(
       _turnBack,

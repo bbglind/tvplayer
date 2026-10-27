@@ -668,34 +668,55 @@ void main() {
     expect(find.byKey(const Key('home.featured')), findsOneWidget);
   });
 
-  testWidgets('fits at text scale 1.4 in a small window', (tester) async {
-    tester.platformDispatcher.textScaleFactorTestValue = 1.4;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    final (withCategory, _) = createCategory(
-      _hidden(),
-      kind: ContentKind.movie,
-      name: 'Favourite films with a long name',
-      icon: 'movie',
-      now: _now,
-    );
-    await _pump(
-      tester,
-      size: const Size(1000, 700),
-      setup: _Setup(
-        favourites: withCategory,
-        watch: recordChannel(WatchData.empty, '1', _now).withItems({
-          movieKey(1): WatchProgress(
-            position: const Duration(minutes: 30),
-            duration: const Duration(minutes: 90),
-            updatedAt: _now,
-          ),
-        }),
-      ),
-    );
-    for (final id in HomeRowId.values) {
+  for (final (size, scale) in [
+    (const Size(1000, 700), 1.4),
+    // A phone in portrait: the phone layout.
+    (const Size(412, 915), 1.4),
+    (const Size(412, 915), 2.0),
+  ]) {
+    testWidgets('fits at text scale $scale in a ${size.width.round()} wide '
+        'window', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final (withCategory, _) = createCategory(
+        _hidden(),
+        kind: ContentKind.movie,
+        name: 'Favourite films with a long name',
+        icon: 'movie',
+        now: _now,
+      );
+      await _pump(
+        tester,
+        size: size,
+        setup: _Setup(
+          favourites: withCategory,
+          watch: recordChannel(WatchData.empty, '1', _now).withItems({
+            movieKey(1): WatchProgress(
+              position: const Duration(minutes: 30),
+              duration: const Duration(minutes: 90),
+              updatedAt: _now,
+            ),
+          }),
+        ),
+      );
+      for (final id in HomeRowId.values) {
+        await tester.scrollUntilVisible(
+          _row(id.name),
+          200,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const Key('home.scroll')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: id.name);
+      }
+      // The series has a backdrop: the other banner layout.
       await tester.scrollUntilVisible(
-        _row(id.name),
-        200,
+        find.byKey(const Key('home.featured.dot.1')),
+        -200,
         scrollable: find
             .descendant(
               of: find.byKey(const Key('home.scroll')),
@@ -703,28 +724,15 @@ void main() {
             )
             .first,
       );
+      // Fully on screen, so the tap hits it.
+      await tester.ensureVisible(find.byKey(const Key('home.featured.dot.1')));
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: id.name);
-    }
-    // The series has a backdrop: the other banner layout.
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('home.featured.dot.1')),
-      -200,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('home.scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    // Fully on screen, so the tap hits it.
-    await tester.ensureVisible(find.byKey(const Key('home.featured.dot.1')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('home.featured.dot.1')));
-    await tester.pumpAndSettle();
-    expect(_featuredTitle(tester), 'Delta');
-    expect(tester.takeException(), isNull);
-  });
+      await tester.tap(find.byKey(const Key('home.featured.dot.1')));
+      await tester.pumpAndSettle();
+      expect(_featuredTitle(tester), 'Delta');
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 /// [FakeVodSource] whose catalogues arrive on [release].

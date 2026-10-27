@@ -6,7 +6,9 @@ import '../../data/app_settings.dart';
 import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
+import 'category_list.dart';
 
 /// A section's category [list] beside its [content]. A "Categories" header
 /// above the list hides it; while hidden, [content] takes the full width
@@ -14,18 +16,26 @@ import '../theme/widgets.dart';
 /// remembered per [section] (`live`, `movies`, `series`). The list's right
 /// edge can be dragged to resize it; the width is shared by all sections.
 /// [headerAction] goes to the right of the header (e.g. an edit button).
+///
+/// In the phone layout ([isCompact]) the content takes the full width
+/// under a button naming the [selectedLabel]; it opens the list in a
+/// bottom sheet ([CategorySheetScope] closes it on a choice).
 class CategoryLayout extends ConsumerStatefulWidget {
   const CategoryLayout({
     super.key,
     required this.section,
     required this.list,
     required this.content,
+    required this.selectedLabel,
     this.headerAction,
   });
 
   final String section;
   final Widget list;
   final Widget content;
+
+  /// The name of the selected category ("All movies", …).
+  final String selectedLabel;
   final Widget? headerAction;
 
   @override
@@ -81,8 +91,64 @@ class _CategoryLayoutState extends ConsumerState<CategoryLayout> {
     AppSettings.maxCategoryListWidth,
   );
 
+  Future<void> _openSheet() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (context) => SizedBox(
+      key: Key('${widget.section}.categories.sheetBody'),
+      height: MediaQuery.sizeOf(context).height * 0.85,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(compactPagePadding, 0, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Categories',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ?widget.headerAction,
+              ],
+            ),
+          ),
+          Expanded(
+            child: CategorySheetScope(
+              onPicked: () => Navigator.of(context).pop(),
+              child: widget.list,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _buildCompact() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          compactPagePadding,
+          0,
+          compactPagePadding,
+          8,
+        ),
+        child: _CategorySheetButton(
+          key: Key('${widget.section}.categories.sheet'),
+          label: widget.selectedLabel,
+          onTap: _openSheet,
+        ),
+      ),
+      Expanded(child: widget.content),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (isCompact(context)) return _buildCompact();
     final settings =
         ref.watch(appSettingsProvider).value ?? const AppSettings();
     final hidden = settings.hiddenCategoryLists.contains(widget.section);
@@ -221,6 +287,70 @@ class _CategoriesHeader extends StatelessWidget {
   }
 }
 
+/// The phone layout's category button: the selected category's name with
+/// a dropdown arrow, full width, opening the category sheet.
+class _CategorySheetButton extends StatelessWidget {
+  const _CategorySheetButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      hint: 'Choose a category',
+      child: FocusRing(
+        radius: AppRadius.small,
+        child: Material(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.small),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.category_outlined,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Brings back a hidden category list: put it at the start of the
 /// content's top row inside a [CategoryLayout]. Takes no space while the
 /// list is shown.
@@ -234,7 +364,9 @@ class ShowCategoriesButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final scope = context
         .dependOnInheritedWidgetOfExactType<_CategoryLayoutScope>();
-    if (scope == null || !scope.hidden) return const SizedBox.shrink();
+    if (scope == null || !scope.hidden || isCompact(context)) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton(

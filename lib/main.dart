@@ -7,6 +7,8 @@ import 'package:media_kit/media_kit.dart';
 import 'app.dart';
 import 'data/legacy_data.dart';
 import 'data/videos_directory.dart';
+import 'player/touch/device_controls.dart';
+import 'state/providers.dart';
 import 'state/downloads_controller.dart';
 
 Future<void> main() async {
@@ -18,6 +20,15 @@ Future<void> main() async {
       ? await androidDownloadFolder()
       : null;
   MediaKit.ensureInitialized();
+  // Phones browse in portrait; the player turns to landscape by itself.
+  final device = Platform.isAndroid
+      ? AndroidDeviceControls(
+          portraitOnly: AndroidDeviceControls.isPhone(
+            WidgetsBinding.instance.platformDispatcher.views.first,
+          ),
+        )
+      : null;
+  await device?.lockPortrait();
   // No automatic retries: failures surface immediately with a retry button.
   runApp(
     ProviderScope(
@@ -25,6 +36,7 @@ Future<void> main() async {
       overrides: [
         if (downloadFolder != null)
           defaultDownloadFolderProvider.overrideWithValue(downloadFolder),
+        if (device != null) deviceControlsProvider.overrideWithValue(device),
       ],
       child: const TvPlayerApp(),
     ),

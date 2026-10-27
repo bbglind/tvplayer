@@ -13,6 +13,7 @@ import '../epg/guide_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/compact.dart';
 import '../vod/poster.dart';
 import '../vod/provider_title.dart';
 import 'download_actions.dart';
@@ -47,40 +48,63 @@ class DownloadsScreen extends ConsumerWidget {
     final queueable = pending.any((i) => i.kind != DownloadKind.recording);
     // xdg-open is desktop only.
     final canOpenFolder = !ref.watch(isAndroidProvider);
+    final compact = isCompact(context);
+    void pauseOrResume() {
+      final downloads = ref.read(downloadsProvider.notifier);
+      state.paused ? downloads.resumeAll() : downloads.pauseAll();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PageHeader(
           title: 'Downloads',
-          actions: [
-            if (state.paused || queueable)
-              Tooltip(
-                message: state.paused
-                    ? 'Downloads are paused. Resume the queue'
-                    : 'Pause all downloads; none starts until you resume',
-                child: OutlinedButton.icon(
-                  key: const Key('downloads.pauseAll'),
-                  onPressed: () {
-                    final downloads = ref.read(downloadsProvider.notifier);
-                    state.paused ? downloads.resumeAll() : downloads.pauseAll();
-                  },
-                  icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
-                  label: Text(state.paused ? 'Resume all' : 'Pause all'),
-                ),
-              ),
-            if ((state.paused || queueable) && canOpenFolder)
-              const SizedBox(width: 8),
-            if (canOpenFolder)
-              Tooltip(
-                message: folder,
-                child: OutlinedButton.icon(
-                  key: const Key('downloads.openFolder'),
-                  onPressed: () => unawaited(_openFolder(folder)),
-                  icon: const Icon(Icons.folder_open_outlined),
-                  label: const Text('Open folder'),
-                ),
-              ),
-          ],
+          actions: compact
+              ? [
+                  // Icons only, so the title keeps its width.
+                  if (state.paused || queueable)
+                    IconButton(
+                      key: const Key('downloads.pauseAll'),
+                      tooltip: state.paused ? 'Resume all' : 'Pause all',
+                      icon: Icon(state.paused ? Icons.play_arrow : Icons.pause),
+                      onPressed: pauseOrResume,
+                    ),
+                  if (canOpenFolder)
+                    IconButton(
+                      key: const Key('downloads.openFolder'),
+                      tooltip: 'Open folder',
+                      icon: const Icon(Icons.folder_open_outlined),
+                      onPressed: () => unawaited(_openFolder(folder)),
+                    ),
+                ]
+              : [
+                  if (state.paused || queueable)
+                    Tooltip(
+                      message: state.paused
+                          ? 'Downloads are paused. Resume the queue'
+                          : 'Pause all downloads; none starts until you resume',
+                      child: OutlinedButton.icon(
+                        key: const Key('downloads.pauseAll'),
+                        onPressed: pauseOrResume,
+                        icon: Icon(
+                          state.paused ? Icons.play_arrow : Icons.pause,
+                        ),
+                        label: Text(state.paused ? 'Resume all' : 'Pause all'),
+                      ),
+                    ),
+                  if ((state.paused || queueable) && canOpenFolder)
+                    const SizedBox(width: 8),
+                  if (canOpenFolder)
+                    Tooltip(
+                      message: folder,
+                      child: OutlinedButton.icon(
+                        key: const Key('downloads.openFolder'),
+                        onPressed: () => unawaited(_openFolder(folder)),
+                        icon: const Icon(Icons.folder_open_outlined),
+                        label: const Text('Open folder'),
+                      ),
+                    ),
+                ],
         ),
         Expanded(
           child: !state.loaded
@@ -89,7 +113,12 @@ class DownloadsScreen extends ConsumerWidget {
               ? const _Empty()
               : ListView(
                   key: const Key('downloads.list'),
-                  padding: const EdgeInsets.fromLTRB(40, 0, 40, 28),
+                  padding: EdgeInsets.fromLTRB(
+                    pageSide(context),
+                    0,
+                    pageSide(context),
+                    28,
+                  ),
                   children: [
                     if (pending.isNotEmpty)
                       _Section(
@@ -136,9 +165,10 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Scrolls when large text doesn't fit.
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(pageSide(context)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

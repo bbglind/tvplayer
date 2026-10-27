@@ -407,6 +407,12 @@ void main() {
       await tester.dragFrom(const Offset(800, 20), const Offset(0, 150));
       await tester.pump(const Duration(seconds: 1));
       expect(device.volume, volume);
+      // So is one at the side, where Android's back gesture starts.
+      final width =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+      await tester.dragFrom(Offset(width - 10, 200), const Offset(0, -150));
+      await tester.pump();
+      expect(device.volume, volume);
 
       await back(tester);
       expect(device.windowBrightness, isNull);

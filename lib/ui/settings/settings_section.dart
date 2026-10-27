@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 
 /// A settings group: an overline title and a panel with its rows,
@@ -15,8 +16,42 @@ class SettingsSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
+  /// Whether [trailing] is small enough to stay beside the text in the
+  /// phone layout: icons, switches, a spinner.
+  static bool _small(Widget trailing) => switch (trailing) {
+    Icon() || IconButton() || Tooltip() || Switch() || Checkbox() => true,
+    SizedBox() || ProgressIndicator() => true,
+    _ => false,
+  };
+
+  /// In the phone layout a tile's control (a dropdown, buttons) goes below
+  /// its title and description, so the text keeps the row's width.
+  static Widget stackControl(Widget tile) {
+    if (tile is! ListTile) return tile;
+    final trailing = tile.trailing;
+    if (trailing == null || _small(trailing)) return tile;
+    return ListTile(
+      key: tile.key,
+      leading: tile.leading,
+      title: tile.title,
+      enabled: tile.enabled,
+      onTap: tile.onTap,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ?tile.subtitle,
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Align(alignment: Alignment.centerLeft, child: trailing),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final compact = isCompact(context);
     return Align(
       alignment: Alignment.topLeft,
       child: ConstrainedBox(
@@ -44,7 +79,7 @@ class SettingsSection extends StatelessWidget {
                         FocusRing(
                           radius: AppRadius.small,
                           inset: true,
-                          child: child,
+                          child: compact ? stackControl(child) : child,
                         )
                       else
                         child,

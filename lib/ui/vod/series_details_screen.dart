@@ -19,6 +19,8 @@ import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/compact.dart';
+import 'details_picture.dart';
 import 'other_sources.dart';
 import 'poster.dart';
 import 'provider_title.dart';
@@ -238,98 +240,111 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       null => null,
     };
     final lastPlayed = sources.lastPlayed == series.seriesId;
-    return Padding(
-      padding: AppSpacing.page.copyWith(bottom: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 180,
-            child: AspectRatio(
-              aspectRatio: 2 / 3,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                child: Poster(
-                  url: meta?.posterUrl ?? series.coverUrl,
-                  decodeWidth: 360,
-                  placeholder: Icons.tv,
-                ),
-              ),
-            ),
+    final poster = SizedBox(
+      width: 180,
+      child: AspectRatio(
+        aspectRatio: 2 / 3,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: Poster(
+            url: meta?.posterUrl ?? series.coverUrl,
+            decodeWidth: 360,
+            placeholder: Icons.tv,
           ),
-          const SizedBox(width: 32),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ProviderTitle(
-                  series.name,
-                  key: const Key('series.title'),
-                  title: switch (meta?.title) {
-                    final t? => tags.display(t).title,
-                    null => null,
-                  },
-                  maxLines: 3,
-                  large: true,
-                  style: theme.textTheme.headlineMedium,
-                ),
-                if (facts.isNotEmpty || lastPlayed) ...[
-                  const SizedBox(height: 6),
-                  FactsLine(
-                    facts,
-                    lastPlayed: lastPlayed,
-                    key: const Key('series.facts'),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    if (next != null)
-                      FilledButton.icon(
-                        key: const Key('series.playNext'),
-                        autofocus: true,
-                        onPressed: () => _play(info, next),
-                        icon: const Icon(Icons.play_arrow),
-                        label: Text(
-                          '${resume != null ? 'Resume' : 'Play'} '
-                          '${formatEpisodeCode(next.season, next.episodeNumber)}'
-                          '${resume != null ? ' from ${formatDuration(resume)}' : ''}'
-                          '${from != null ? ' (from $from)' : ''}',
-                        ),
-                      ),
-                    FavouriteButton(
-                      item: seriesItemRef(series),
-                      name: series.name,
-                      labelled: true,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                if ((meta?.plot ?? series.plot) case final plot?)
-                  Text(
-                    plot,
-                    maxLines: 6,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                if ((meta?.cast ?? series.cast) case final cast?) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Cast: $cast',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ],
-            ),
+        ),
+      ),
+    );
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProviderTitle(
+          series.name,
+          key: const Key('series.title'),
+          title: switch (meta?.title) {
+            final t? => tags.display(t).title,
+            null => null,
+          },
+          maxLines: 3,
+          large: true,
+          style: theme.textTheme.headlineMedium,
+        ),
+        if (facts.isNotEmpty || lastPlayed) ...[
+          const SizedBox(height: 6),
+          FactsLine(
+            facts,
+            lastPlayed: lastPlayed,
+            key: const Key('series.facts'),
           ),
         ],
-      ),
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (next != null)
+              FilledButton.icon(
+                key: const Key('series.playNext'),
+                autofocus: true,
+                onPressed: () => _play(info, next),
+                icon: const Icon(Icons.play_arrow),
+                label: Text(
+                  '${resume != null ? 'Resume' : 'Play'} '
+                  '${formatEpisodeCode(next.season, next.episodeNumber)}'
+                  '${resume != null ? ' from ${formatDuration(resume)}' : ''}'
+                  '${from != null ? ' (from $from)' : ''}',
+                ),
+              ),
+            FavouriteButton(
+              item: seriesItemRef(series),
+              name: series.name,
+              labelled: true,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        if ((meta?.plot ?? series.plot) case final plot?)
+          Text(
+            plot,
+            maxLines: 6,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        if ((meta?.cast ?? series.cast) case final cast?) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Cast: $cast',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ],
+    );
+    return Padding(
+      padding: pagePadding(context).copyWith(bottom: 24),
+      // Phone layout: the picture on top, the details below it.
+      child: isCompact(context)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DetailsPicture(
+                  backdropUrl: meta?.backdropUrls.firstOrNull,
+                  poster: poster,
+                ),
+                const SizedBox(height: 16),
+                details,
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                poster,
+                const SizedBox(width: 32),
+                Expanded(child: details),
+              ],
+            ),
     );
   }
 
@@ -349,7 +364,9 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
         ? null
         : seasonProgress(info, selected, watch, group: _view);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(36, 8, 36, 16),
+      padding: isCompact(context)
+          ? const EdgeInsets.fromLTRB(compactPagePadding - 6, 0, 4, 8)
+          : const EdgeInsets.fromLTRB(36, 8, 36, 16),
       child: Row(
         children: [
           Expanded(
@@ -486,7 +503,12 @@ class _EpisodeTile extends StatelessWidget {
       // Watched episodes step back.
       opacity: watched ? 0.55 : 1,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(40, 0, 40, 8),
+        padding: EdgeInsets.fromLTRB(
+          pageSide(context),
+          0,
+          pageSide(context),
+          8,
+        ),
         // The same menu as the ⋮ button: right click, long press (touch),
         // or the Menu key / Shift+F10 on the focused row.
         child: Builder(

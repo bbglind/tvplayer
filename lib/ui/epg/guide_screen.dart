@@ -20,6 +20,7 @@ import '../live/replay_mark.dart';
 import '../live/separator_header.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 import '../player/open_channel.dart';
 import 'programme_panel.dart';
@@ -127,100 +128,129 @@ class _Toolbar extends ConsumerWidget {
     final favourites = ref.watch(favouritesProvider);
     final hidden = favourites.hiddenIds(ContentKind.live);
     final guide = state.guide;
+    final category = DropdownButton<CategorySelection>(
+      key: const Key('guide.category'),
+      value: selected,
+      isExpanded: true,
+      underline: const SizedBox.shrink(),
+      dropdownColor: AppColors.card,
+      borderRadius: BorderRadius.circular(AppRadius.small),
+      focusColor: AppColors.hover,
+      style: Theme.of(context).textTheme.titleMedium,
+      items: [
+        for (final c in favourites.categoriesOf(ContentKind.live))
+          DropdownMenuItem(
+            value: MyCategory(c.id),
+            child: Row(
+              children: [
+                Icon(categoryIcon(c.icon), size: 18),
+                const SizedBox(width: 10),
+                Flexible(child: Text(c.name, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+          ),
+        const DropdownMenuItem(
+          value: AllCategories(),
+          child: Text('All channels'),
+        ),
+        for (final c in favourites.orderedCategories(
+          ContentKind.live,
+          catalog.categories,
+        ))
+          if (!hidden.contains(c.id))
+            DropdownMenuItem(
+              value: ProviderCategory(c.id),
+              child: Text(c.name, overflow: TextOverflow.ellipsis),
+            ),
+      ],
+      onChanged: (s) {
+        if (s != null) {
+          ref.read(selectedCategoryProvider.notifier).select(s);
+        }
+      },
+    );
+    final now = ToolbarChip(
+      key: const Key('guide.now'),
+      label: 'Now',
+      icon: Icons.schedule_outlined,
+      tooltip: 'Go to the current time',
+      onPressed: onNow,
+    );
+    final tonightChip = ToolbarChip(
+      key: const Key('guide.tonight'),
+      label: 'Tonight',
+      icon: Icons.bedtime_outlined,
+      tooltip: reachesTonight
+          ? 'Go to $evening, '
+                '${GuideTime.eveningHour.toString().padLeft(2, '0')}:00'
+          : 'No TV guide for $evening yet',
+      onPressed: reachesTonight ? onTonight : null,
+    );
+    final warning = switch (state.error) {
+      final error? => Tooltip(
+        message: 'Last update failed: $error',
+        child: Icon(
+          Icons.warning_amber,
+          color: Theme.of(context).colorScheme.error,
+        ),
+      ),
+      null => null,
+    };
+    final updated = guide == null
+        ? null
+        : TruncatedText(
+            'Updated ${formatGuideDate(time, guide.fetchedAt)} '
+            '${time.formatLocalHm(guide.fetchedAt)} · ${time.zoneName}'
+            '${time.shiftHours == 0 ? '' : ' (${formatShift(time.shiftHours)})'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          );
+    final refresh = IconButton(
+      tooltip: 'Refresh TV guide',
+      icon: const Icon(Icons.refresh),
+      onPressed: state.loading
+          ? null
+          : () => refreshPlaylistPart(ref, PlaylistPart.guide),
+    );
+    // The phone layout puts the category on a row of its own and lets the
+    // chips wrap.
+    if (isCompact(context)) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(compactPagePadding, 0, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            category,
+            Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [now, tonightChip, ?updated],
+                  ),
+                ),
+                ?warning,
+                refresh,
+              ],
+            ),
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 20, 20, 12),
       child: Row(
         children: [
-          Flexible(
-            child: DropdownButton<CategorySelection>(
-              key: const Key('guide.category'),
-              value: selected,
-              isExpanded: true,
-              underline: const SizedBox.shrink(),
-              dropdownColor: AppColors.card,
-              borderRadius: BorderRadius.circular(AppRadius.small),
-              focusColor: AppColors.hover,
-              style: Theme.of(context).textTheme.titleMedium,
-              items: [
-                for (final c in favourites.categoriesOf(ContentKind.live))
-                  DropdownMenuItem(
-                    value: MyCategory(c.id),
-                    child: Row(
-                      children: [
-                        Icon(categoryIcon(c.icon), size: 18),
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(c.name, overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                  ),
-                const DropdownMenuItem(
-                  value: AllCategories(),
-                  child: Text('All channels'),
-                ),
-                for (final c in favourites.orderedCategories(
-                  ContentKind.live,
-                  catalog.categories,
-                ))
-                  if (!hidden.contains(c.id))
-                    DropdownMenuItem(
-                      value: ProviderCategory(c.id),
-                      child: Text(c.name, overflow: TextOverflow.ellipsis),
-                    ),
-              ],
-              onChanged: (s) {
-                if (s != null) {
-                  ref.read(selectedCategoryProvider.notifier).select(s);
-                }
-              },
-            ),
-          ),
+          Flexible(child: category),
           const SizedBox(width: 12),
-          ToolbarChip(
-            key: const Key('guide.now'),
-            label: 'Now',
-            icon: Icons.schedule_outlined,
-            tooltip: 'Go to the current time',
-            onPressed: onNow,
-          ),
+          now,
           const SizedBox(width: 8),
-          ToolbarChip(
-            key: const Key('guide.tonight'),
-            label: 'Tonight',
-            icon: Icons.bedtime_outlined,
-            tooltip: reachesTonight
-                ? 'Go to $evening, '
-                      '${GuideTime.eveningHour.toString().padLeft(2, '0')}:00'
-                : 'No TV guide for $evening yet',
-            onPressed: reachesTonight ? onTonight : null,
-          ),
+          tonightChip,
           const Spacer(),
-          if (state.error case final error?)
-            Tooltip(
-              message: 'Last update failed: $error',
-              child: Icon(
-                Icons.warning_amber,
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
+          ?warning,
           const SizedBox(width: 8),
-          if (guide != null)
-            Flexible(
-              child: TruncatedText(
-                'Updated ${formatGuideDate(time, guide.fetchedAt)} '
-                '${time.formatLocalHm(guide.fetchedAt)} · ${time.zoneName}'
-                '${time.shiftHours == 0 ? '' : ' (${formatShift(time.shiftHours)})'}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          IconButton(
-            tooltip: 'Refresh TV guide',
-            icon: const Icon(Icons.refresh),
-            onPressed: state.loading
-                ? null
-                : () => refreshPlaylistPart(ref, PlaylistPart.guide),
-          ),
+          if (updated != null) Flexible(child: updated),
+          refresh,
         ],
       ),
     );
@@ -515,6 +545,9 @@ class GuideGridState extends ConsumerState<GuideGrid> {
         .remember((s) => s.copyWith(guideChannelWidth: _clampWidth(width)));
   }
 
+  /// Width of the channel column in the phone layout, at text scale 1.
+  static const _compactChannelWidth = 84.0;
+
   static double _clampWidth(double width) => width.clamp(
     AppSettings.minGuideChannelWidth,
     AppSettings.maxGuideChannelWidth,
@@ -576,11 +609,16 @@ class GuideGridState extends ConsumerState<GuideGrid> {
     final maxSpan = GuideGrid.maxSpan + _past;
     if (span > maxSpan) span = maxSpan;
     final width = span.inMinutes * _px;
-    final channelWidth = _clampWidth(
-      _dragWidth ??
-          ref.watch(appSettingsProvider).value?.guideChannelWidth ??
-          AppSettings.defaultGuideChannelWidth,
-    );
+    final compact = isCompact(context);
+    // The phone layout's column is narrow (number over a short name) and
+    // can't be resized, so the programmes get the width.
+    final channelWidth = compact
+        ? MediaQuery.textScalerOf(context).scale(_compactChannelWidth)
+        : _clampWidth(
+            _dragWidth ??
+                ref.watch(appSettingsProvider).value?.guideChannelWidth ??
+                AppSettings.defaultGuideChannelWidth,
+          );
     final rowHeight = GuideGrid.rowHeight(context);
     final headerHeight = GuideGrid.headerHeight(context);
 
@@ -645,7 +683,10 @@ class GuideGridState extends ConsumerState<GuideGrid> {
                         itemBuilder: (context, i) => _signals(
                           widget.channels[i].isSeparator
                               ? SeparatorHeader(channel: widget.channels[i])
-                              : _ChannelCell(channel: widget.channels[i]),
+                              : _ChannelCell(
+                                  channel: widget.channels[i],
+                                  compact: compact,
+                                ),
                         ),
                       ),
                     ),
@@ -731,20 +772,21 @@ class GuideGridState extends ConsumerState<GuideGrid> {
             child: Stack(
               children: [
                 grid,
-                Positioned(
-                  left: channelWidth + 0.5 - ResizeHandle.width / 2,
-                  top: 0,
-                  bottom: 0,
-                  width: ResizeHandle.width,
-                  child: ResizeHandle(
-                    key: const Key('guide.channels.resize'),
-                    onStart: () => setState(() => _dragWidth = channelWidth),
-                    onUpdate: (dx) => setState(
-                      () => _dragWidth = (_dragWidth ?? channelWidth) + dx,
+                if (!compact)
+                  Positioned(
+                    left: channelWidth + 0.5 - ResizeHandle.width / 2,
+                    top: 0,
+                    bottom: 0,
+                    width: ResizeHandle.width,
+                    child: ResizeHandle(
+                      key: const Key('guide.channels.resize'),
+                      onStart: () => setState(() => _dragWidth = channelWidth),
+                      onUpdate: (dx) => setState(
+                        () => _dragWidth = (_dragWidth ?? channelWidth) + dx,
+                      ),
+                      onEnd: _endDrag,
                     ),
-                    onEnd: _endDrag,
                   ),
-                ),
               ],
             ),
           ),
@@ -930,9 +972,36 @@ class _TimeHeader extends StatelessWidget {
 }
 
 class _ChannelCell extends ConsumerWidget {
-  const _ChannelCell({required this.channel});
+  const _ChannelCell({required this.channel, this.compact = false});
 
   final LiveStream channel;
+
+  /// The phone layout's narrow cell: the number above a short name.
+  final bool compact;
+
+  Widget _buildCompact(ThemeData theme) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      if (channel.number case final number?)
+        Text(
+          '$number',
+          maxLines: 1,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ChannelName(
+        channel,
+        maxLines: channel.number == null ? 2 : 1,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -947,20 +1016,22 @@ class _ChannelCell extends ConsumerWidget {
             border: Border(bottom: BorderSide(color: theme.dividerColor)),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                if (channel.number case final number?)
-                  ChannelNumber(number, style: theme.textTheme.bodySmall),
-                Expanded(
-                  child: ChannelName(
-                    channel,
-                    maxLines: 2,
-                    format: keepLastWordAttached,
+            padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
+            child: compact
+                ? _buildCompact(theme)
+                : Row(
+                    children: [
+                      if (channel.number case final number?)
+                        ChannelNumber(number, style: theme.textTheme.bodySmall),
+                      Expanded(
+                        child: ChannelName(
+                          channel,
+                          maxLines: 2,
+                          format: keepLastWordAttached,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

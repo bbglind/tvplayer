@@ -7,6 +7,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import '../../data/errors.dart';
 import '../../format.dart';
 import '../../state/category_selection.dart';
+import '../../state/navigation.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
 import '../epg/now_next.dart';
@@ -18,6 +19,7 @@ import '../shell/category_list.dart';
 import '../vod/poster.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 import 'replay_mark.dart';
 import 'separator_header.dart';
@@ -68,6 +70,16 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
             hintText: 'Search channels',
           ),
           actions: [
+            // The phone layout has no TV Guide tab: it opens from here.
+            if (isCompact(context))
+              IconButton(
+                key: const Key('live.guide'),
+                tooltip: 'TV Guide',
+                icon: const Icon(Icons.calendar_view_week_outlined),
+                onPressed: () => ref
+                    .read(appSectionProvider.notifier)
+                    .select(AppSection.guide),
+              ),
             IconButton(
               tooltip: 'Reload channels',
               icon: const Icon(Icons.refresh),
@@ -97,6 +109,7 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
             ),
             data: (catalog) => CategoryLayout(
               section: 'live',
+              selectedLabel: _selectionName(ref, catalog),
               headerAction: const CategoryEditButton(section: 'live'),
               list: _CategoryList(catalog: catalog, onSelect: _selectCategory),
               content: _ChannelPane(
@@ -113,6 +126,16 @@ class _LiveTvScreenState extends ConsumerState<LiveTvScreen> {
     );
   }
 }
+
+/// The name of the selected Live TV category.
+String _selectionName(WidgetRef ref, LiveCatalog catalog) =>
+    switch (ref.watch(liveSelectionProvider)) {
+      AllCategories() => 'All channels',
+      ProviderCategory(:final id) =>
+        catalog.categories.where((c) => c.id == id).firstOrNull?.name ?? '',
+      MyCategory(:final id) =>
+        ref.watch(favouritesProvider).category(id)?.name ?? '',
+    };
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
@@ -194,16 +217,6 @@ class _ChannelPane extends ConsumerWidget {
     ];
   }
 
-  /// The name of the selected category.
-  String _selectionName(WidgetRef ref) =>
-      switch (ref.watch(liveSelectionProvider)) {
-        AllCategories() => 'All channels',
-        ProviderCategory(:final id) =>
-          catalog.categories.where((c) => c.id == id).firstOrNull?.name ?? '',
-        MyCategory(:final id) =>
-          ref.watch(favouritesProvider).category(id)?.name ?? '',
-      };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final channels = ref.watch(visibleChannelsProvider).value ?? const [];
@@ -221,7 +234,14 @@ class _ChannelPane extends ConsumerWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
+          padding: isCompact(context)
+              ? const EdgeInsets.fromLTRB(
+                  compactPagePadding,
+                  0,
+                  compactPagePadding,
+                  8,
+                )
+              : const EdgeInsets.fromLTRB(28, 4, 28, 12),
           child: Row(
             children: [
               const ShowCategoriesButton(section: 'live'),
@@ -251,7 +271,7 @@ class _ChannelPane extends ConsumerWidget {
                         tooltip: inCategory
                             ? 'Search all channels'
                             : 'Search only in this category',
-                        label: 'Only in ${_selectionName(ref)}',
+                        label: 'Only in ${_selectionName(ref, catalog)}',
                         onPressed: () => ref
                             .read(channelSearchInCategoryProvider.notifier)
                             .set(!inCategory),
@@ -280,7 +300,14 @@ class _ChannelPane extends ConsumerWidget {
               ? ReorderItemsList(
                   section: 'live',
                   categoryId: category.id,
-                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                  padding: isCompact(context)
+                      ? const EdgeInsets.fromLTRB(
+                          compactPagePadding,
+                          0,
+                          compactPagePadding,
+                          28,
+                        )
+                      : const EdgeInsets.fromLTRB(28, 0, 28, 28),
                   leading: (context, m) =>
                       ChannelLogo(catalog.byStableId(m.item.id)?.logoUrl),
                   subtitle: (m) => catalog.byStableId(m.item.id) == null
@@ -303,7 +330,14 @@ class _ChannelPane extends ConsumerWidget {
                   channels,
                   ListView.builder(
                     key: const Key('live.channels'),
-                    padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                    padding: isCompact(context)
+                        ? const EdgeInsets.fromLTRB(
+                            compactPagePadding,
+                            0,
+                            compactPagePadding,
+                            28,
+                          )
+                        : const EdgeInsets.fromLTRB(28, 0, 28, 28),
                     itemExtent: ChannelRow.extent(context),
                     itemCount: channels.length + missing.length,
                     // Rows keep their state (and keyboard focus) when

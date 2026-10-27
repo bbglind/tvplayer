@@ -152,6 +152,14 @@ void main() {
       expect(swipeTarget(const Offset(800, 48), size), SwipeTarget.volume);
     });
 
+    test('swipes near the sides are left to the back gesture', () {
+      expect(swipeTarget(const Offset(31, 200), size), isNull);
+      expect(swipeTarget(const Offset(869, 200), size), isNull);
+      expect(swipeTarget(const Offset(32, 200), size), SwipeTarget.brightness);
+      expect(swipeTarget(const Offset(868, 200), size), SwipeTarget.volume);
+      expect(swipeTarget(const Offset(50, 200), size, sideEdge: 60), isNull);
+    });
+
     test('the full height is the whole range; up is more', () {
       expect(levelAfterSwipe(0.5, -100, 400), 0.75);
       expect(levelAfterSwipe(0.5, 100, 400), 0.25);

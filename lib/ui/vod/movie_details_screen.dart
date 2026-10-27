@@ -14,6 +14,8 @@ import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
+import 'details_picture.dart';
 import 'other_sources.dart';
 import 'poster.dart';
 import 'provider_title.dart';
@@ -83,7 +85,7 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
       if (meta?.duration case final d?) formatRuntime(d),
     ];
     return SingleChildScrollView(
-      padding: AppSpacing.page,
+      padding: pagePadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -124,167 +126,176 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
   }) {
     final theme = Theme.of(context);
     final movie = widget.movie;
+    final poster = SizedBox(
+      width: 260,
+      child: Column(
+        children: [
+          AspectRatio(
+            aspectRatio: 2 / 3,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Poster(
+                    url: meta?.posterUrl ?? movie.posterUrl,
+                    decodeWidth: 520,
+                  ),
+                  if (isInProgress(progress) && progress!.fraction != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: WatchProgressBar(progress.fraction!),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Flexible(
+              child: ProviderTitle(
+                movie.name,
+                key: const Key('movie.title'),
+                title: switch (meta?.title) {
+                  final t? => tags.display(t).title,
+                  null => null,
+                },
+                maxLines: 3,
+                large: true,
+                style: theme.textTheme.headlineMedium,
+              ),
+            ),
+            if (watched) ...[const SizedBox(width: 12), const WatchedBadge()],
+            if (ref.watch(
+              downloadsProvider.select(
+                (s) => s.doneFor(movieKey(movie.streamId)) != null,
+              ),
+            )) ...[
+              const SizedBox(width: 12),
+              const DownloadedBadge(filled: true),
+            ],
+          ],
+        ),
+        if (facts.isNotEmpty || lastPlayed) ...[
+          const SizedBox(height: 6),
+          FactsLine(
+            facts,
+            lastPlayed: lastPlayed,
+            key: const Key('movie.facts'),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (resume != null) ...[
+              FilledButton.icon(
+                key: const Key('movie.resume'),
+                autofocus: true,
+                onPressed: () => _play(start: resume),
+                icon: const Icon(Icons.play_arrow),
+                label: Text(
+                  'Resume from ${formatDuration(resume)}'
+                  '${from == null ? '' : ' (from $from)'}',
+                ),
+              ),
+              OutlinedButton.icon(
+                key: const Key('movie.restart'),
+                onPressed: _play,
+                icon: const Icon(Icons.replay),
+                label: const Text('Play from start'),
+              ),
+            ] else
+              FilledButton.icon(
+                key: const Key('movie.play'),
+                autofocus: true,
+                onPressed: _play,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Play'),
+              ),
+            OutlinedButton.icon(
+              key: const Key('movie.markWatched'),
+              onPressed: () => ref
+                  .read(watchProvider.notifier)
+                  .markMovie(movie, watched: !watched),
+              icon: Icon(watched ? Icons.remove_done : Icons.done_all),
+              label: Text(watched ? 'Mark as unwatched' : 'Mark as watched'),
+            ),
+            DownloadButton(
+              watchKey: movieKey(movie.streamId),
+              onDownload: () {
+                final item = ref
+                    .read(downloadsProvider.notifier)
+                    .addMovie(movie, ref.read(providerTagsProvider));
+                if (item != null) {
+                  showAddedToDownloads(context, ref, item.title);
+                }
+              },
+            ),
+            FavouriteButton(
+              item: movieItemRef(movie),
+              name: movie.name,
+              labelled: true,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        if (loading)
+          const LinearProgressIndicator()
+        else if (error != null)
+          Text(
+            'Details unavailable: ${describeProviderError(error)}',
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        if (meta?.plot case final plot?) ...[
+          Text(
+            plot,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (meta?.cast case final cast?) _Fact('Cast', cast),
+        if (meta?.director case final director?) _Fact('Director', director),
+        if (error != null)
+          TextButton.icon(
+            onPressed: () => setState(() => _details = _load()),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+      ],
+    );
+    if (isCompact(context)) {
+      // Phone layout: the picture on top, the details below it.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DetailsPicture(
+            backdropUrl: meta?.backdropUrls.firstOrNull,
+            poster: poster,
+            progress: isInProgress(progress) ? progress!.fraction : null,
+          ),
+          const SizedBox(height: 16),
+          details,
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 260,
-          child: Column(
-            children: [
-              AspectRatio(
-                aspectRatio: 2 / 3,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Poster(
-                        url: meta?.posterUrl ?? movie.posterUrl,
-                        decodeWidth: 520,
-                      ),
-                      if (isInProgress(progress) && progress!.fraction != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: WatchProgressBar(progress.fraction!),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        poster,
         const SizedBox(width: 32),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: ProviderTitle(
-                      movie.name,
-                      key: const Key('movie.title'),
-                      title: switch (meta?.title) {
-                        final t? => tags.display(t).title,
-                        null => null,
-                      },
-                      maxLines: 3,
-                      large: true,
-                      style: theme.textTheme.headlineMedium,
-                    ),
-                  ),
-                  if (watched) ...[
-                    const SizedBox(width: 12),
-                    const WatchedBadge(),
-                  ],
-                  if (ref.watch(
-                    downloadsProvider.select(
-                      (s) => s.doneFor(movieKey(movie.streamId)) != null,
-                    ),
-                  )) ...[
-                    const SizedBox(width: 12),
-                    const DownloadedBadge(filled: true),
-                  ],
-                ],
-              ),
-              if (facts.isNotEmpty || lastPlayed) ...[
-                const SizedBox(height: 6),
-                FactsLine(
-                  facts,
-                  lastPlayed: lastPlayed,
-                  key: const Key('movie.facts'),
-                ),
-              ],
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  if (resume != null) ...[
-                    FilledButton.icon(
-                      key: const Key('movie.resume'),
-                      autofocus: true,
-                      onPressed: () => _play(start: resume),
-                      icon: const Icon(Icons.play_arrow),
-                      label: Text(
-                        'Resume from ${formatDuration(resume)}'
-                        '${from == null ? '' : ' (from $from)'}',
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      key: const Key('movie.restart'),
-                      onPressed: _play,
-                      icon: const Icon(Icons.replay),
-                      label: const Text('Play from start'),
-                    ),
-                  ] else
-                    FilledButton.icon(
-                      key: const Key('movie.play'),
-                      autofocus: true,
-                      onPressed: _play,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Play'),
-                    ),
-                  OutlinedButton.icon(
-                    key: const Key('movie.markWatched'),
-                    onPressed: () => ref
-                        .read(watchProvider.notifier)
-                        .markMovie(movie, watched: !watched),
-                    icon: Icon(watched ? Icons.remove_done : Icons.done_all),
-                    label: Text(
-                      watched ? 'Mark as unwatched' : 'Mark as watched',
-                    ),
-                  ),
-                  DownloadButton(
-                    watchKey: movieKey(movie.streamId),
-                    onDownload: () {
-                      final item = ref
-                          .read(downloadsProvider.notifier)
-                          .addMovie(movie, ref.read(providerTagsProvider));
-                      if (item != null) {
-                        showAddedToDownloads(context, ref, item.title);
-                      }
-                    },
-                  ),
-                  FavouriteButton(
-                    item: movieItemRef(movie),
-                    name: movie.name,
-                    labelled: true,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              if (loading)
-                const LinearProgressIndicator()
-              else if (error != null)
-                Text(
-                  'Details unavailable: ${describeProviderError(error)}',
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              if (meta?.plot case final plot?) ...[
-                Text(
-                  plot,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (meta?.cast case final cast?) _Fact('Cast', cast),
-              if (meta?.director case final director?)
-                _Fact('Director', director),
-              if (error != null)
-                TextButton.icon(
-                  onPressed: () => setState(() => _details = _load()),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                ),
-            ],
-          ),
-        ),
+        Expanded(child: details),
       ],
     );
   }

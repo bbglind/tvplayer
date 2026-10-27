@@ -15,14 +15,17 @@ import '../settings/playlist_section.dart';
 import '../settings/settings_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 import '../vod/movies_screen.dart';
+import 'more_screen.dart';
 import '../vod/series_screen.dart';
 
 /// Main layout: the sidebar plus the selected section.
 ///
 /// The sidebar can be collapsed to icons only and resized by dragging its
-/// right edge; both are remembered in [AppSettings].
+/// right edge; both are remembered in [AppSettings]. Below
+/// [compactBreakpoint] (a phone in portrait) a bottom bar takes its place.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -132,6 +135,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           );
       }
     });
+    if (isCompact(context)) return _buildPhone(section);
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -164,18 +168,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     items: _sections,
                     bottomItem: _settings,
                   ),
-                  Expanded(
-                    child: switch (section) {
-                      AppSection.home => const HomeScreen(),
-                      AppSection.search => const SearchScreen(),
-                      AppSection.live => const LiveTvScreen(),
-                      AppSection.guide => const GuideScreen(),
-                      AppSection.movies => const MoviesScreen(),
-                      AppSection.series => const SeriesScreen(),
-                      AppSection.downloads => const DownloadsScreen(),
-                      AppSection.settings => const SettingsScreen(),
-                    },
-                  ),
+                  Expanded(child: _page(section)),
                 ],
               ),
               if (!forced)
@@ -195,6 +188,101 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  static Widget _page(AppSection section) => switch (section) {
+    AppSection.home => const HomeScreen(),
+    AppSection.search => const SearchScreen(),
+    AppSection.live => const LiveTvScreen(),
+    AppSection.guide => const GuideScreen(),
+    AppSection.movies => const MoviesScreen(),
+    AppSection.series => const SeriesScreen(),
+    AppSection.downloads => const DownloadsScreen(),
+    AppSection.settings => const SettingsScreen(),
+    AppSection.more => const MoreScreen(),
+  };
+
+  /// The phone layout's bottom bar, in order; [AppSection.more] lists the
+  /// rest.
+  static const _tabs = [
+    (section: AppSection.home, icon: Icons.home_outlined, label: 'Home'),
+    (section: AppSection.live, icon: Icons.live_tv_outlined, label: 'Live TV'),
+    (section: AppSection.movies, icon: Icons.movie_outlined, label: 'Movies'),
+    (
+      section: AppSection.series,
+      icon: Icons.video_library_outlined,
+      label: 'Series',
+    ),
+    (section: AppSection.more, icon: Icons.more_horiz, label: 'More'),
+  ];
+
+  /// The tab of [section]: its own, else that of the page it was opened
+  /// from (Search, the guide from Live TV), else More.
+  static int _tabOf(AppSection section, List<AppSection> history) {
+    for (final s in [section, ...history.reversed]) {
+      final i = _tabs.indexWhere((t) => t.section == s);
+      if (i >= 0) return i;
+    }
+    return section == AppSection.search ? 0 : _tabs.length - 1;
+  }
+
+  /// The phone layout ([isCompact]): the page above a bottom bar with
+  /// Home, Live TV, Movies, Series and More. Pages without a tab have a
+  /// back arrow, which Android's Back does too.
+  Widget _buildPhone(AppSection section) {
+    final nav = ref.read(appSectionProvider.notifier);
+    final history = nav.history;
+    final tab = _tabOf(section, history);
+    final isTab = _tabs.any((t) => t.section == section);
+    final canGoBack = !isTab && history.isNotEmpty;
+    final page = _page(section);
+    return PopScope(
+      canPop: section == AppSection.home,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (!nav.back()) nav.open(AppSection.home);
+      },
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: CompactNav(
+            onSearch: section == AppSection.search
+                ? null
+                : () => openSearch(ref, ''),
+            onBack: canGoBack ? () => nav.back() : null,
+            child: switch (section) {
+              // Pages that have no title row of their own get one.
+              AppSection.guide || AppSection.settings => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PageHeader(
+                    title: section == AppSection.guide
+                        ? 'TV Guide'
+                        : 'Settings',
+                  ),
+                  Expanded(child: page),
+                ],
+              ),
+              _ => page,
+            },
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          key: const Key('phoneNav'),
+          selectedIndex: tab,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          onDestinationSelected: (i) => nav.open(_tabs[i].section),
+          destinations: [
+            for (final t in _tabs)
+              NavigationDestination(
+                key: Key('phoneNav.${t.section.name}'),
+                icon: Icon(t.icon),
+                label: t.label,
+              ),
+          ],
+        ),
       ),
     );
   }

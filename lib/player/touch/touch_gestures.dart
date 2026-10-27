@@ -133,11 +133,22 @@ enum SwipeTarget { brightness, volume }
 /// are left to the system (notification shade, home gesture).
 const swipeEdge = 48.0;
 
+/// Width of the strips at the left and right of the video where swipes
+/// are left to the system (Android's back gesture); wider where the
+/// phone's own gesture area is.
+const swipeSideEdge = 32.0;
+
 /// What a vertical swipe starting at [start] on a video of [size]
 /// changes: brightness on the left half, volume on the right; null near the
-/// top and bottom edges.
-SwipeTarget? swipeTarget(Offset start, Size size, {double edge = swipeEdge}) {
+/// edges ([edge] at the top and bottom, [sideEdge] at the sides).
+SwipeTarget? swipeTarget(
+  Offset start,
+  Size size, {
+  double edge = swipeEdge,
+  double sideEdge = swipeSideEdge,
+}) {
   if (start.dy < edge || start.dy > size.height - edge) return null;
+  if (start.dx < sideEdge || start.dx > size.width - sideEdge) return null;
   return start.dx < size.width / 2
       ? SwipeTarget.brightness
       : SwipeTarget.volume;

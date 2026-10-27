@@ -13,6 +13,7 @@ import '../favourites/favourite_menu.dart';
 import '../favourites/reorder_list.dart';
 import '../shell/category_list.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 import 'poster.dart';
 import 'provider_title.dart';
@@ -336,6 +337,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     }
     return CategoryLayout(
       section: what,
+      selectedLabel: _selectionName(catalog),
       headerAction: CategoryEditButton(section: what),
       list: CategoryList(
         section: what,
@@ -366,7 +368,14 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     };
     final reordering = _reordering != null;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 4, 28, 12),
+      padding: isCompact(context)
+          ? const EdgeInsets.fromLTRB(
+              compactPagePadding,
+              0,
+              compactPagePadding,
+              8,
+            )
+          : const EdgeInsets.fromLTRB(28, 4, 28, 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -456,6 +465,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     final mine = _selection is MyCategory && !_searchAll;
     final filtering = !widget.filter.filters.isEmpty;
     final favourites = ref.watch(favouritesProvider);
+    final compact = isCompact(context);
     final continueCards = _searching || filtering
         ? const <Widget>[]
         : _continueCards(favourites);
@@ -469,7 +479,14 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
             child: ReorderItemsList(
               section: what,
               categoryId: reordering.id,
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+              padding: compact
+                  ? const EdgeInsets.fromLTRB(
+                      compactPagePadding,
+                      0,
+                      compactPagePadding,
+                      28,
+                    )
+                  : const EdgeInsets.fromLTRB(28, 0, 28, 28),
               leading: (context, m) {
                 final item = catalog.byId(int.tryParse(m.item.id) ?? m.item.id);
                 return SizedBox(
@@ -515,13 +532,20 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
           SliverToBoxAdapter(
             child: SizedBox(
               key: Key('$what.continue'),
-              height: 270,
+              // In the phone layout as tall as the cards at the text scale.
+              height: compact
+                  ? PhonePosterGridDelegate(context).cardHeight(_phoneCard)
+                  : 270,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact
+                      ? PhonePosterGridDelegate.sidePadding
+                      : 22,
+                ),
                 children: [
                   for (final card in continueCards)
-                    SizedBox(width: 150, child: card),
+                    SizedBox(width: compact ? _phoneCard : 150, child: card),
                 ],
               ),
             ),
@@ -544,13 +568,22 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+            padding: compact
+                ? const EdgeInsets.fromLTRB(
+                    PhonePosterGridDelegate.sidePadding,
+                    4,
+                    PhonePosterGridDelegate.sidePadding,
+                    28,
+                  )
+                : const EdgeInsets.fromLTRB(22, 4, 22, 28),
             // Only the visible posters are built.
             sliver: SliverGrid.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 160,
-                childAspectRatio: 0.52,
-              ),
+              gridDelegate: compact
+                  ? PhonePosterGridDelegate(context)
+                  : const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 160,
+                      childAspectRatio: 0.52,
+                    ),
               itemCount: items.length + missing.length,
               // Posters keep their state (and keyboard focus) when
               // they move.
@@ -613,9 +646,14 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
         ),
       );
 
+  /// Width of a Continue watching card in the phone layout.
+  static const _phoneCard = 120.0;
+
   Widget _sectionTitle(BuildContext context, String text) => SliverToBoxAdapter(
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(28, 12, 28, 12),
+      padding: isCompact(context)
+          ? const EdgeInsets.fromLTRB(compactPagePadding, 8, 16, 8)
+          : const EdgeInsets.fromLTRB(28, 12, 28, 12),
       child: Text(text, style: Theme.of(context).textTheme.titleLarge),
     ),
   );

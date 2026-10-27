@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
+import '../player_errors.dart';
 import '../url_redactor.dart';
 import 'mpv_ipc.dart';
 import 'mpv_launcher.dart';
@@ -441,12 +442,12 @@ class ExternalMpvPlayer extends ChangeNotifier {
       case 'end-file' when event.fields['reason'] == 'eof':
         state = _state.copyWith(endedAtEof: true);
       case 'end-file' when event.fields['reason'] == 'error':
+        // mpv's own wording (file_error) never reaches the UI.
         final detail = event.fields['file_error'];
         state = _state.copyWith(
-          error: run.redactor.redact(
-            'mpv could not play the stream'
-            '${detail is String ? ' ($detail)' : ''}.',
-          ),
+          error: detail is String
+              ? friendlyPlayerError(detail) ?? "The stream couldn't be played."
+              : "The stream couldn't be played.",
         );
     }
   }

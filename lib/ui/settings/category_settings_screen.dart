@@ -7,8 +7,8 @@ import '../favourites/category_dialogs.dart';
 import '../favourites/category_icons.dart';
 import '../favourites/order_actions.dart';
 import '../theme/app_colors.dart';
-import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/compact.dart';
 import 'settings_section.dart';
 
 /// "My categories: 2 · 5 hidden", for the settings overview.
@@ -111,7 +111,7 @@ class _CategorySettingsScreenState
     return Scaffold(
       appBar: AppBar(title: Text(_title(kind))),
       body: ListView(
-        padding: AppSpacing.page,
+        padding: pagePadding(context),
         children: [
           SettingsSection(
             title: 'My categories',

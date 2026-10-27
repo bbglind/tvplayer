@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -369,4 +370,61 @@ class _PosterCardState extends State<PosterCard> {
       ),
     );
   }
+}
+
+/// The poster grid of the phone layout: two or three columns of 2:3
+/// posters (as many as fit at about 130 wide), each cell tall enough for
+/// a [PosterCard]'s two title lines and its subtitle at the current text
+/// scale, so labels are never cut.
+class PhonePosterGridDelegate extends SliverGridDelegate {
+  PhonePosterGridDelegate(BuildContext context)
+    : labelHeight = _labelHeight(context);
+
+  /// Height of the title and subtitle under a poster.
+  final double labelHeight;
+
+  /// Side padding to put around the grid; the cards add their own 6.
+  static const sidePadding = 10.0;
+
+  static double _labelHeight(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+    final scaler = MediaQuery.textScalerOf(context);
+    double height(TextStyle? style, String text) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+      )..layout();
+      final h = painter.height;
+      painter.dispose();
+      return h;
+    }
+
+    return height(theme.titleSmall, 'A\nA') + height(theme.bodySmall, 'A');
+  }
+
+  /// Height of a [PosterCard] [width] wide.
+  double cardHeight(double width) =>
+      // The card's padding (6 all round), the 2:3 poster, 8 above the title.
+      (width - 12) * 1.5 + 12 + 8 + labelHeight;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final width = constraints.crossAxisExtent;
+    final count = (width / 130).floor().clamp(2, 3);
+    final cell = width / count;
+    final extent = cardHeight(cell);
+    return SliverGridRegularTileLayout(
+      crossAxisCount: count,
+      mainAxisStride: extent,
+      crossAxisStride: cell,
+      childMainAxisExtent: extent,
+      childCrossAxisExtent: cell,
+      reverseCrossAxis: false,
+    );
+  }
+
+  @override
+  bool shouldRelayout(PhonePosterGridDelegate oldDelegate) =>
+      labelHeight != oldDelegate.labelHeight;
 }

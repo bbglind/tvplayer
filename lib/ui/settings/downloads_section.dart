@@ -7,6 +7,7 @@ import '../../state/downloads_controller.dart';
 import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import 'settings_section.dart';
 
 /// Asks for a folder, starting in [initial]; null when cancelled.
@@ -66,6 +67,8 @@ class DownloadsSection extends ConsumerWidget {
     }) => DropdownButton<int>(
       key: Key('settings.$key'),
       value: value,
+      // Under the text in the phone layout, as wide as the row.
+      isExpanded: isCompact(context),
       underline: const SizedBox.shrink(),
       dropdownColor: AppColors.card,
       borderRadius: BorderRadius.circular(AppRadius.small),

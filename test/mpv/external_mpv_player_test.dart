@@ -367,7 +367,7 @@ void main() {
     });
     mpv.process.exit();
     final s = await waitFor((s) => s.status == ExternalPlayerStatus.failed);
-    expect(s.error, contains('mpv could not play the stream'));
+    expect(s.error, "The stream couldn't be loaded.");
     expect(s.error, isNot(contains('192.0.2.1')));
     expect(s.error, isNot(contains('pass')));
   });

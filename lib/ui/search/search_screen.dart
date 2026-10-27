@@ -9,7 +9,9 @@ import '../../state/providers.dart';
 import '../live/live_tv_screen.dart';
 import '../theme/app_colors.dart';
 import '../vod/movies_screen.dart';
+import '../vod/poster.dart';
 import '../vod/series_screen.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 
 /// A group of results on the Search page.
@@ -83,6 +85,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         PageHeader(
           title: 'Search',
           searchWidth: 560,
+          compactSearch: true,
           search: SearchField(
             key: const Key('search.field'),
             controller: _search,
@@ -208,7 +211,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final status = _status(results, g);
     final count = _count(results, g);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(40, 20, 40, 12),
+      padding: EdgeInsets.fromLTRB(
+        pageSide(context),
+        20,
+        pageSide(context),
+        12,
+      ),
       child: Row(
         children: [
           Text(g.title, style: text.titleLarge),
@@ -263,7 +271,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (message is SizedBox) return null;
     return Padding(
       key: Key('search.${g.name}.message'),
-      padding: const EdgeInsets.fromLTRB(40, 0, 40, 8),
+      padding: EdgeInsets.fromLTRB(pageSide(context), 0, pageSide(context), 8),
       child: message,
     );
   }
@@ -285,7 +293,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             .toList();
         return [
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
+            padding: EdgeInsets.symmetric(horizontal: pageSide(context)),
             sliver: SliverFixedExtentList.builder(
               itemExtent: ChannelRow.extent(context),
               itemCount: channels.length,
@@ -355,7 +363,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final Widget list = switch (g) {
       _Group.live => ListView.builder(
         key: const Key('search.all'),
-        padding: const EdgeInsets.fromLTRB(40, 0, 40, 28),
+        padding: EdgeInsets.fromLTRB(
+          pageSide(context),
+          0,
+          pageSide(context),
+          28,
+        ),
         itemExtent: ChannelRow.extent(context),
         itemCount: count,
         itemBuilder: (context, i) => Padding(
@@ -369,11 +382,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
       _Group.movies || _Group.series => GridView.builder(
         key: const Key('search.all'),
-        padding: const EdgeInsets.fromLTRB(34, 0, 34, 28),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 160,
-          childAspectRatio: 0.52,
-        ),
+        padding: isCompact(context)
+            ? const EdgeInsets.fromLTRB(
+                PhonePosterGridDelegate.sidePadding,
+                0,
+                PhonePosterGridDelegate.sidePadding,
+                28,
+              )
+            : const EdgeInsets.fromLTRB(34, 0, 34, 28),
+        gridDelegate: isCompact(context)
+            ? PhonePosterGridDelegate(context)
+            : const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 160,
+                childAspectRatio: 0.52,
+              ),
         itemCount: count,
         itemBuilder: (context, i) => g == _Group.movies
             ? moviePoster(

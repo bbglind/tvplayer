@@ -178,6 +178,38 @@ its edge can be dragged too.
 Right click (or long press, or the Menu key, or Shift+F10) on a channel,
 movie, series, episode or category opens its **context menu**.
 
+### On a phone
+
+On a phone (or any window narrower than 600 points) the app uses a layout
+made for one hand in portrait:
+
+- A **bar at the bottom** instead of the sidebar: **Home**, **Live TV**,
+  **Movies**, **Series** and **More**. More lists **TV Guide**,
+  **Downloads** and **Settings**; the TV Guide also opens from the guide
+  button ("TV Guide") at the top of Live TV.
+- The **magnifier** at the top right of each page opens the
+  [Search page](#the-search-page-everything). The search fields of Live
+  TV, Movies and Series aren't shown on a phone.
+- Pages opened from another one (TV Guide, Downloads, Settings, Search)
+  have a **back arrow** at the top left; Android's back gesture does the
+  same. From a tab, back goes to Home, and from Home it leaves the app.
+- Live TV, Movies and Series show the selected category in a button at
+  the top ("All movies" ▾). Tap it for the **category list**: my
+  categories, then "All …" and the provider's categories with their
+  counts. Tapping one closes the list. The pencil ("Edit categories") at
+  the top of the list turns on the edit mode, as in the category column
+  on the desktop (see [Hiding and ordering provider
+  categories](#hiding-and-ordering-provider-categories)).
+- Movies and series are shown two or three posters across; details pages
+  show the picture on top with the title, buttons and plot below it.
+- The TV Guide's channel column is narrow (number and name); the
+  category, "Now" and "Tonight" sit above the guide.
+- In Settings a dropdown or button goes below its title and description.
+- Long press opens context menus. Resizing columns by dragging isn't
+  available on a phone.
+- The app stays in **portrait**; only the player turns to landscape. On a
+  tablet the app turns with the device.
+
 ---
 
 ## 3. Home
@@ -675,7 +707,8 @@ meant for troubleshooting.
 On a phone the player is simpler and made for touch. Opening it turns the
 picture to **landscape, full screen** (the status and navigation bars hide;
 swipe from the edge to see them for a moment). Leaving it with the back
-arrow or Android's back button/gesture returns to portrait with the bars.
+arrow or Android's back button/gesture returns to portrait with the bars,
+and a phone stays in portrait after that.
 The screen stays on while something plays.
 
 The controls are drawn over the video and hide 3 seconds after you last
@@ -706,7 +739,15 @@ Gestures on the video:
   while the player is open; leaving the player gives the phone its own
   brightness back.
 
-A swipe that starts close to the top or bottom edge is left to Android.
+A swipe that starts close to an edge of the screen is left to Android:
+from the top or bottom (the status and navigation bars) and from the left
+or right edge, so Android's **back gesture** (a swipe in from the side)
+always leaves the player, or closes an open panel first.
+
+If something goes wrong, a message at the top says what happened in plain
+words, such as "The provider refused the stream (HTTP 403)." or
+"Couldn't connect to the stream."; the technical message from the player
+is only in the debug log ("Player debug info").
 
 **"Subtitles and audio"** opens a panel on the right with the subtitle
 tracks (and "Off") and the audio tracks; tap beside it or press back to
@@ -742,12 +783,15 @@ Downloads") with **"Show"** to open the Downloads page.
 
 ### The Downloads page
 
-**Downloads** in the sidebar. At the top:
+**Downloads** in the sidebar (on a phone: More › Downloads). At the top:
 
 - **"Pause all"**: pauses the whole queue; nothing starts until you resume
   ("Resume all" then appears). Shown while something is in the queue.
 - **"Open folder"**: opens the downloads folder in your file manager. Not
   shown on Android.
+
+On a phone both are icon buttons ("Pause all" / "Resume all", "Open
+folder"); long-press one to see its name.
 
 Three sections:
 
@@ -1038,9 +1082,9 @@ just choose "Pause download" and it resumes when you stop.
 ### Android test builds
 
 Android builds are for testing. They can add a provider and download the
-playlist, and the player is made for touch (see
-[The player on Android](#the-player-on-android)); the phone layout of the
-other screens is still being worked on. Differences from Linux so far:
+playlist, the player is made for touch (see
+[The player on Android](#the-player-on-android)) and phones get their own
+layout (see [On a phone](#on-a-phone)). Differences from Linux so far:
 
 - Connection details are kept in the Android Keystore, not a keyring.
 - Plain `http://` providers work: Android normally blocks unencrypted

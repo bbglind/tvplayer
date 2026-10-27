@@ -10,6 +10,7 @@ import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/compact.dart';
 import '../vod/movies_screen.dart';
 import '../vod/series_screen.dart';
 import 'continue_watching_screen.dart';
@@ -136,7 +137,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (featured.isEmpty) return empty();
         return section(
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
+            padding: EdgeInsets.symmetric(horizontal: pageSide(context)),
             child: featured.items.isEmpty
                 ? LayoutBuilder(
                     builder: (context, c) => Container(
@@ -253,7 +254,7 @@ class _EmptyNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 40),
+    padding: EdgeInsets.symmetric(horizontal: pageSide(context)),
     child: Text(
       'Nothing to show yet',
       style: Theme.of(context).textTheme.bodySmall,
@@ -269,7 +270,7 @@ class _CategoriesHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: EdgeInsets.symmetric(horizontal: pageSide(context)),
       child: Panel(
         child: Row(
           children: [

@@ -10,6 +10,7 @@ import '../../format.dart';
 import '../../state/home.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import '../theme/widgets.dart';
 import '../vod/movies_screen.dart';
 import '../vod/poster.dart';
@@ -34,9 +35,10 @@ class FeaturedBanner extends ConsumerStatefulWidget {
   /// always fit.
   static double height(BuildContext context, double width) {
     final text = Theme.of(context).textTheme;
+    final compact = isCompact(context);
     final content =
-        2 * _padding +
-        lineHeight(context, text.displayMedium) +
+        2 * _paddingOf(context) +
+        lineHeight(context, _titleStyle(context)) +
         6 +
         lineHeight(context, text.bodyMedium) +
         10 +
@@ -48,10 +50,25 @@ class FeaturedBanner extends ConsumerStatefulWidget {
         _dotSize +
         // Rounding of line metrics.
         8;
+    // On a phone just what it shows; the picture fills the rest.
+    if (compact) return math.max(content, width * 0.75).ceilToDouble();
     return math.max(content, math.min(width * 0.4, 460.0)).ceilToDouble();
   }
 
   static const _padding = 28.0;
+
+  /// The padding around the text: smaller in the phone layout.
+  static double _paddingOf(BuildContext context) =>
+      isCompact(context) ? compactPagePadding : _padding;
+
+  /// The hero title, smaller in the phone layout.
+  static TextStyle? _titleStyle(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return isCompact(context)
+        ? text.headlineMedium?.copyWith(fontSize: 26)
+        : text.displayMedium;
+  }
+
   static const _gap = 16.0;
   static const _dotSize = 28.0;
 
@@ -135,11 +152,17 @@ class _FeaturedBannerState extends ConsumerState<FeaturedBanner> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final height = FeaturedBanner.height(context, constraints.maxWidth);
-        const pad = FeaturedBanner._padding;
-        final posterWidth = view.backdrop == null
+        final pad = FeaturedBanner._paddingOf(context);
+        final compact = isCompact(context);
+        // On a phone the poster fills the banner like a backdrop.
+        final posterWidth = view.backdrop == null && !compact
             ? (height - 2 * pad) * 2 / 3
             : 0.0;
-        final textLeft = view.backdrop == null ? pad + posterWidth + 32 : 40.0;
+        final textLeft = compact
+            ? pad
+            : view.backdrop == null
+            ? pad + posterWidth + 32
+            : 40.0;
         return MouseRegion(
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
@@ -165,7 +188,12 @@ class _FeaturedBannerState extends ConsumerState<FeaturedBanner> {
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.fromLTRB(textLeft, pad, 40, pad),
+                      padding: EdgeInsets.fromLTRB(
+                        textLeft,
+                        pad,
+                        compact ? pad : 40,
+                        pad,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,7 +335,8 @@ class _Background extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backdrop = view.backdrop;
+    // Without a backdrop, a phone shows the poster in its place.
+    final backdrop = view.backdrop ?? (posterWidth == 0 ? view.poster : null);
     if (backdrop == null) {
       return ColoredBox(
         color: AppColors.card,
@@ -375,7 +404,7 @@ class _Info extends StatelessWidget {
           key: const Key('home.featured.title'),
           maxLines: 2,
           large: true,
-          style: text.displayMedium,
+          style: FeaturedBanner._titleStyle(context),
         ),
         if (view.facts.isNotEmpty) ...[
           const SizedBox(height: 6),

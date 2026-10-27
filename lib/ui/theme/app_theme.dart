@@ -458,6 +458,46 @@ abstract final class AppTheme {
         dividerColor: AppColors.hover,
         overlayColor: _neutralOverlay,
       ),
+      // The phone layout's bottom bar, like the sidebar: `hover` behind the
+      // selected icon, unselected entries in `textSecondary`.
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        indicatorColor: AppColors.hover,
+        overlayColor: _neutralOverlay,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (s) => IconThemeData(
+            size: 22,
+            color: s.contains(WidgetState.selected)
+                ? AppColors.textPrimary
+                : AppColors.textSecondary,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (s) => textTheme.labelLarge?.copyWith(
+            fontSize: 12,
+            color: s.contains(WidgetState.selected)
+                ? AppColors.textPrimary
+                : AppColors.textSecondary,
+            fontWeight: s.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w500,
+          ),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        showDragHandle: true,
+        dragHandleColor: AppColors.textDisabled,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.large),
+          ),
+        ),
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,

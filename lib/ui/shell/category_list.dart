@@ -96,6 +96,13 @@ class CategoryList extends ConsumerWidget {
     Widget pad(Widget child) =>
         Padding(padding: const EdgeInsets.only(bottom: 4), child: child);
 
+    // In the phone layout's sheet a choice also closes the sheet.
+    final sheet = CategorySheetScope.maybeOf(context);
+    void pick(CategorySelection selection) {
+      onSelect(selection);
+      if (!editing) sheet?.onPicked();
+    }
+
     return CustomScrollView(
       key: Key('$section.categories'),
       slivers: [
@@ -136,7 +143,7 @@ class CategoryList extends ConsumerWidget {
                           label: c.name,
                           count: favourites.countIn(c.id),
                           selected: selected == MyCategory(c.id),
-                          onTap: () => onSelect(MyCategory(c.id)),
+                          onTap: () => pick(MyCategory(c.id)),
                         ),
                       ),
                   ],
@@ -193,7 +200,7 @@ class CategoryList extends ConsumerWidget {
                       label: allLabel,
                       count: allCount(hidden),
                       selected: selected == const AllCategories(),
-                      onTap: () => onSelect(const AllCategories()),
+                      onTap: () => pick(const AllCategories()),
                     ),
                   ),
                 ),
@@ -264,7 +271,7 @@ class CategoryList extends ConsumerWidget {
                           label: c.name,
                           count: countIn(c.id),
                           selected: selected == ProviderCategory(c.id),
-                          onTap: () => onSelect(ProviderCategory(c.id)),
+                          onTap: () => pick(ProviderCategory(c.id)),
                         ),
                       ),
                     );
@@ -279,6 +286,24 @@ class CategoryList extends ConsumerWidget {
 }
 
 /// Switches the category list of [section] in and out of edit mode.
+/// Put around a [CategoryList] in a sheet: [onPicked] runs after a
+/// category was chosen (and closes the sheet).
+class CategorySheetScope extends InheritedWidget {
+  const CategorySheetScope({
+    super.key,
+    required this.onPicked,
+    required super.child,
+  });
+
+  final VoidCallback onPicked;
+
+  static CategorySheetScope? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<CategorySheetScope>();
+
+  @override
+  bool updateShouldNotify(CategorySheetScope old) => false;
+}
+
 class CategoryEditButton extends ConsumerWidget {
   const CategoryEditButton({super.key, required this.section});
 

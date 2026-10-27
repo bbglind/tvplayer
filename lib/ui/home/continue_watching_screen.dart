@@ -7,6 +7,7 @@ import '../../state/home.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
+import '../theme/compact.dart';
 import 'home_cards.dart';
 import 'home_row.dart';
 
@@ -60,7 +61,12 @@ class _ContinueWatchingScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(40, 8, 40, 16),
+            padding: EdgeInsets.fromLTRB(
+              pageSide(context),
+              8,
+              pageSide(context),
+              16,
+            ),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -100,7 +106,12 @@ class _ContinueWatchingScreenState
     List<ContinueItem> items,
     bool placeholder,
   ) {
-    const padding = EdgeInsets.fromLTRB(40, 0, 40, 28);
+    final padding = EdgeInsets.fromLTRB(
+      pageSide(context),
+      0,
+      pageSide(context),
+      28,
+    );
     final inner = width - padding.horizontal;
     final columns = math.max(
       1,

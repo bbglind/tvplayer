@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import 'player_errors.dart';
 import 'url_redactor.dart';
 
 /// mpv properties polled for the debug overlay.
@@ -39,7 +40,8 @@ class PlayerLogEntry {
 /// properties, errors and log lines.
 ///
 /// The stream URL is treated as secret: it is never logged, and log/error
-/// text from mpv is redacted before it is stored.
+/// text from mpv is redacted before it is stored. Errors shown to the user
+/// are mpv's in plain words ([friendlyPlayerError]), never mpv's own text.
 class PlayerSession extends ChangeNotifier {
   PlayerSession({required String hwdec}) : _hwdec = hwdec {
     player = Player(
@@ -57,8 +59,12 @@ class PlayerSession extends ChangeNotifier {
         (log) => _addLog(log.level, '[${log.prefix}] ${log.text.trim()}'),
       ),
       player.stream.error.listen((error) {
-        _lastError = _redact(error);
+        // mpv's wording only goes to the log; harmless errors no further.
         _addLog('error', error);
+        if (friendlyPlayerError(error) case final text?) {
+          _lastError = text;
+          notifyListeners();
+        }
       }),
       player.stream.playing.listen(_onPlaying),
       player.stream.completed.listen((completed) {
@@ -113,8 +119,8 @@ class PlayerSession extends ChangeNotifier {
       await player.open(Media(url.toString(), start: start));
     } catch (e) {
       // The exception may echo the URL; keep only its type.
-      _lastError = 'Could not open stream (${e.runtimeType})';
-      _addLog('error', _lastError!);
+      _addLog('error', 'Could not open stream (${e.runtimeType})');
+      _lastError = "Couldn't open the stream.";
     }
   }
 

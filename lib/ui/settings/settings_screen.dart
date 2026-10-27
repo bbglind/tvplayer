@@ -9,6 +9,7 @@ import '../epg/guide_screen.dart' show formatShift;
 import '../setup/setup_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 import 'category_settings_screen.dart';
 import 'downloads_section.dart';
 import 'language_list_editor.dart';
@@ -131,7 +132,7 @@ class SettingsScreen extends ConsumerWidget {
         ref.watch(appSettingsProvider).value ?? const AppSettings();
     final favourites = ref.watch(favouritesProvider);
     return ListView(
-      padding: AppSpacing.page,
+      padding: pagePadding(context),
       children: [
         SettingsSection(
           title: 'Provider',
@@ -201,6 +202,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
               trailing: DropdownButton<int>(
                 key: const Key('settings.shift'),
+                // Under the text in the phone layout, as wide as the row.
+                isExpanded: isCompact(context),
                 value: settings.guideShiftHours,
                 underline: const SizedBox.shrink(),
                 dropdownColor: AppColors.card,
@@ -288,6 +291,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
               trailing: DropdownButton<int>(
                 key: const Key('settings.playNext'),
+                // Under the text in the phone layout, as wide as the row.
+                isExpanded: isCompact(context),
                 // 0 stands for off.
                 value: settings.playNextSeconds ?? 0,
                 underline: const SizedBox.shrink(),

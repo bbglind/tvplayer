@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/home_layout.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/compact.dart';
 
 /// Height of one line of [style] at the current text scale.
 double lineHeight(BuildContext context, TextStyle? style) =>
@@ -58,13 +59,13 @@ class HomeSection extends StatelessWidget {
     final child = this.child;
     final key = 'home.row.${id.name}';
     final heading = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: EdgeInsets.symmetric(horizontal: pageSide(context)),
       child: Row(
         children: [
           Expanded(
             child: Text(
               id.title,
-              maxLines: 1,
+              maxLines: isCompact(context) ? 2 : 1,
               overflow: TextOverflow.ellipsis,
               style: dimmed
                   ? text.titleLarge?.copyWith(color: AppColors.textDisabled)
@@ -186,7 +187,7 @@ class _HorizontalRowState extends State<HorizontalRow> {
     final list = ListView.separated(
       controller: _controller,
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: EdgeInsets.symmetric(horizontal: pageSide(context)),
       itemCount: count,
       separatorBuilder: (_, _) => SizedBox(width: widget.spacing),
       itemBuilder: (context, i) => SizedBox(

@@ -64,7 +64,8 @@ weights 400, 500, 600, 700.
 
 ## Layout
 
-- **Left sidebar**, width ~220–240, background `surface`, padding 24/16.
+- **Left sidebar** (not on phones, see Phone layout), width ~220–240,
+  background `surface`, padding 24/16.
   - Top: app mark (32×32, radius 8, accent fill) + app name (19, 700).
   - Items: icon (20, outline/stroke style) + label (15), height 44,
     radius 10, gap 12.
@@ -79,6 +80,54 @@ weights 400, 500, 600, 700.
   page actions such as reload), then sections stacked vertically. On
   pages with a category list the title row spans the full width above the
   list and the content. The TV Guide keeps its own toolbar.
+
+## Phone layout (compact width)
+
+Below **600** wide (a phone in portrait) the app switches layout by the
+window width, never by platform, so desktop windows keep the layout above
+(a desktop window made that narrow gets the phone layout too). The aim is
+clean and simple over every desktop feature.
+
+- **Bottom bar** (`NavigationBar`, `surface`, `hover` indicator,
+  selected `textPrimary` 600, others `textSecondary`): Home, Live TV,
+  Movies, Series, More. **More** is a page of 56-high rows: TV Guide,
+  Downloads, Settings. No sidebar, no side menu. Pages without a tab
+  (TV Guide, Downloads, Settings, Search) get a back arrow before the
+  title; Android Back does the same, then goes to Home, then leaves.
+  The TV Guide also opens from a guide button in Live TV's header.
+- **Page header**: page padding 16; back arrow, title (24/700, takes the
+  remaining width, one line), icon actions, then the **magnifier**
+  ("Search") that opens the Search page. Inline search fields are left
+  out (the Search page keeps its own, full width under the title).
+  Outlined header buttons become icon buttons with a tooltip.
+- **Categories**: a full-width button (48 high, `surface`, radius 10:
+  category icon, the selected category's name, dropdown arrow) above the
+  content, which takes the full width. It opens a bottom sheet (`surface`,
+  top radius 16, drag handle, 85 % of the height): "Categories" with the
+  edit button, then the same list as the column (my categories, All …,
+  provider categories with counts). A choice closes it (not in edit mode).
+- **Posters**: 2–3 columns (about 130 wide each), 2:3 posters; each cell
+  is as tall as the poster plus two title lines and the subtitle at the
+  current text scale, so labels are never cut.
+- **Details** (movie, series): stacked: the backdrop across the width
+  (16:9, radius 12, bottom fade) or, without one, the poster centred (at
+  most 180 wide); then title, meta line, buttons (wrapping), plot.
+- **Featured banner**: 16 padding, title 26/700, as tall as its content
+  or ¾ of its width; without a backdrop the poster fills it with the fade.
+- **TV guide**: channel column 84 wide (scaled with the text): number
+  (`textMuted`, 600) over the name (13/600, one line), not resizable. The
+  category dropdown gets its own row; "Now", "Tonight" and "Updated …"
+  wrap beside ⟳.
+- **Settings rows**: a row's dropdown or buttons go **below** its title
+  and description (dropdowns as wide as the row); icons, switches and
+  spinners stay at the end.
+- **Touch**: tap targets at least 48 (toolbar chips get a padded target,
+  category rows are 48 high). Nothing works by hover or drag only: resize
+  handles aren't built, and long press opens the context menus.
+- **Text scale**: every page must fit from 1.0 up to Android's largest
+  font size (2.0) without clipping: no fixed heights for text.
+- **Orientation**: phones (shortest side below 600) stay in portrait
+  outside the player and after leaving it; tablets turn with the device.
 
 ## Components
 
@@ -256,7 +305,7 @@ weights 400, 500, 600, 700.
   double click = fullscreen (the click doesn't also fire), wheel = volume.
 - **Touch player** (Android; Linux keeps the mpv player above): always
   landscape fullscreen, immersive (system bars hidden), back to portrait
-  with the bars on leaving; the screen stays on while playing. The video
+  with the bars on leaving (a phone stays in portrait); the screen stays on while playing. The video
   fills the screen (`scrim` around it) and the controls are Flutter
   widgets drawn over it, fading in and out (200 ms): they show on open
   and on a tap, hide 3 s after the last touch or on a tap, and stay while
@@ -275,6 +324,12 @@ weights 400, 500, 600, 700.
   info) slide in from the right edge, 360 wide (at most 70 % of the
   screen), `surface`, over a `scrim` 40 % barrier that closes them on a
   tap; Back closes them too.
+- **Player errors** (standing rule): never mpv's own text in the UI. A
+  known message gets plain words ("The provider refused the stream (HTTP
+  403).", "Couldn't connect to the stream.", "This video or audio format
+  can't be played."), anything else "The stream couldn't be played.";
+  harmless ones (a seek on a live stream that can't seek) show nothing.
+  The original stays in the player log, redacted.
 - **Touch gestures**: tap = show/hide the controls; double tap on the left
   or right 40 % = back/forward 10 s where seeking is possible (movies,
   episodes, recordings, replays; never live TV), each further tap on that
@@ -286,8 +341,10 @@ weights 400, 500, 600, 700.
   Vertical swipe: right half = the phone's media volume (no Android
   volume panel), left half = brightness of the app window only (reset to
   the phone's when the player closes); the full height is 0–100 %, up is
-  more; swipes starting within 48 of the top or bottom edge are left to
-  the system. The level hint is the same pill near the top: icon
+  more; swipes starting within 48 of the top or bottom edge, or within
+  32 (or the phone's gesture inset, if wider) of the left or right edge,
+  are left to the system (notification shade, home and back gestures).
+  The level hint is the same pill near the top: icon
   (`brightness_6_outlined`, `volume_up_outlined`/`volume_off_outlined` at
   0), a 120-wide progress bar and "60 %".
 - **Channels panel** (zap, `c`): side panel 360 wide, my Live TV
@@ -463,6 +520,7 @@ English for now.
 | Paused (live TV) | Live TV paused on a channel with an archive; resumes from the archive |
 | Tonight (TV guide) | Goes to 20:00 this evening, from 23:00 on tomorrow evening; disabled while the TV guide doesn't reach that far |
 | Downloads | The page and list of downloads and recordings |
+| More | The phone layout's last tab: TV Guide, Downloads, Settings |
 | Download | Saves a movie, an episode or a past programme (from the archive) to the downloads folder |
 | Download season | Downloads the season's episodes that aren't in Downloads yet |
 | Downloaded | A movie or episode whose file is complete; it plays offline |

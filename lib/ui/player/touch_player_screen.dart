@@ -486,7 +486,12 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
   }
 
   Future<void> _startSwipe(Offset at, Size size) async {
-    final target = swipeTarget(at, size);
+    final gestures = MediaQuery.systemGestureInsetsOf(context);
+    final target = swipeTarget(
+      at,
+      size,
+      sideEdge: [swipeSideEdge, gestures.left, gestures.right].reduce(math.max),
+    );
     _swipe = target;
     _swipeStart = null;
     _swipeDy = 0;

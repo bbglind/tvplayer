@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_theme.dart';
+import 'compact.dart';
 
 /// Draws the accent focus ring around (or inside) [child] while it or one
 /// of its descendants has keyboard focus, or always when [visible].
@@ -238,7 +239,8 @@ class CategoryPill extends StatelessWidget {
             ? AppColors.accentHover
             : AppColors.textPrimary.withValues(alpha: 0.07),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 40),
+          // 48 for a finger in the phone layout.
+          constraints: BoxConstraints(minHeight: isCompact(context) ? 48 : 40),
           child: Padding(
             padding: EdgeInsets.only(left: icon == null ? 16 : 12, right: 16),
             child: Row(
@@ -401,6 +403,11 @@ class _SearchFieldState extends State<SearchField> {
 /// The title row of a page: the page title (h1) on the left, and on the
 /// right an optional [search] field (up to [searchWidth] wide) followed by
 /// [actions]. Page padding: 28 at the top, 40 at the sides.
+///
+/// In the phone layout ([isCompact]) the title takes the width left by
+/// [actions] and the [CompactNav] buttons (back arrow before the title,
+/// magnifier last); [search] shows only with [compactSearch], as a
+/// full-width row below the title.
 class PageHeader extends StatelessWidget {
   const PageHeader({
     super.key,
@@ -408,6 +415,7 @@ class PageHeader extends StatelessWidget {
     this.search,
     this.actions = const [],
     this.searchWidth = 380,
+    this.compactSearch = false,
   });
 
   final String title;
@@ -415,8 +423,13 @@ class PageHeader extends StatelessWidget {
   final List<Widget> actions;
   final double searchWidth;
 
+  /// Whether [search] stays in the phone layout (the Search page's own
+  /// field); other pages search through the magnifier there.
+  final bool compactSearch;
+
   @override
   Widget build(BuildContext context) {
+    if (isCompact(context)) return _buildCompact(context);
     final search = this.search;
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 28, 40, 16),
@@ -448,10 +461,69 @@ class PageHeader extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildCompact(BuildContext context) {
+    final nav = CompactNav.maybeOf(context);
+    final search = compactSearch ? this.search : null;
+    final onBack = nav?.onBack;
+    final onSearch = compactSearch ? null : nav?.onSearch;
+    final style = Theme.of(context).textTheme.headlineMedium;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        onBack == null ? compactPagePadding : 4,
+        12,
+        8,
+        search == null ? 4 : 8,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              if (onBack != null)
+                IconButton(
+                  key: const Key('page.back'),
+                  tooltip: 'Back',
+                  icon: const BackButtonIcon(),
+                  onPressed: onBack,
+                ),
+              Expanded(
+                child: Text(
+                  title,
+                  key: const Key('page.title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style?.copyWith(fontSize: 24),
+                ),
+              ),
+              ...actions,
+              if (onSearch != null)
+                IconButton(
+                  key: const Key('page.search'),
+                  tooltip: 'Search',
+                  icon: const Icon(Icons.search),
+                  onPressed: onSearch,
+                ),
+            ],
+          ),
+          if (search != null)
+            Padding(
+              padding: EdgeInsets.only(
+                top: 8,
+                left: onBack == null ? 0 : compactPagePadding - 4,
+                right: compactPagePadding - 8,
+              ),
+              child: search,
+            ),
+        ],
+      ),
+    );
+  }
 }
 
-/// A chip in a toolbar (sort, filters, search scope): pill, height 40,
-/// `surface` normally and accent while [selected]. With [dropdown] it shows
+/// A chip in a toolbar (sort, filters, search scope): pill, height 40
+/// (a 48 tap target in the phone layout), `surface` normally and accent
+/// while [selected]. With [dropdown] it shows
 /// an arrow, for chips that open a menu. Long labels are cut off at
 /// [maxLabelWidth].
 class ToolbarChip extends StatelessWidget {
@@ -480,8 +552,11 @@ class ToolbarChip extends StatelessWidget {
     final chip = FocusRing(
       radius: AppRadius.pill,
       child: FilterChip(
-        // No padded tap target, so the ring hugs the chip.
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        // No padded tap target, so the ring hugs the chip; a finger gets
+        // 48 in the phone layout.
+        materialTapTargetSize: isCompact(context)
+            ? MaterialTapTargetSize.padded
+            : MaterialTapTargetSize.shrinkWrap,
         selected: selected,
         avatar: icon == null ? null : Icon(icon, color: color),
         label: Row(
