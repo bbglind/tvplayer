@@ -597,7 +597,7 @@ void main() {
       expect(find.byType(SeriesDetailsScreen), findsOneWidget);
     });
 
-    testWidgets('catalogues load on demand, with a loading state', (
+    testWidgets('catalogues load one after another, with a loading state', (
       tester,
     ) async {
       final live = FakeLiveSource(_live())..gate = Completer<void>();
@@ -616,12 +616,14 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text('Loading channels…'), findsOneWidget);
-      expect(find.text('Harbour Lights'), findsOneWidget);
+      // Movies download after the channels, not at the same time.
+      expect(find.text('Harbour Lights'), findsNothing);
 
       live.gate!.complete();
       await tester.pumpAndSettle();
       expect(find.text('Loading channels…'), findsNothing);
       expect(find.text('Harbour TV'), findsOneWidget);
+      expect(find.text('Harbour Lights'), findsOneWidget);
     });
   });
 

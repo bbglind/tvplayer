@@ -310,6 +310,9 @@ class PlaylistRefreshController extends Notifier<PlaylistRefreshState> {
         atStart: atStart,
         freshSince: freshSince,
       );
+      // Parts already queued (by hand, or a first download) run anyway;
+      // their failures aren't automatic refresh failures.
+      due.removeWhere(_pending.containsKey);
       if (due.isEmpty) return;
       final results = await Future.wait([for (final p in due) refresh(p)]);
       if (!ref.mounted) return;

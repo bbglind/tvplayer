@@ -71,7 +71,11 @@ class GuideController extends Notifier<GuideState> {
     }
     if (!ref.mounted) return started.complete();
     if (cached == null) {
-      final download = refresh();
+      // Through the queue, one part at a time; the download itself waits
+      // for the channels.
+      final download = ref
+          .read(playlistRefreshProvider.notifier)
+          .refresh(PlaylistPart.guide);
       started.complete();
       await download;
       return;

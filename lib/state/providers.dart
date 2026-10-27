@@ -376,8 +376,14 @@ class LiveCatalogController extends AsyncNotifier<LiveCatalog> {
     }
   }
 
-  Future<LiveCatalog> _download(LiveSource source) async {
+  /// Downloads the channels; a list without any is a failure.
+  Future<LiveCatalog> _download(LiveSource source, {int before = 0}) async {
     final catalog = await source.load();
+    checkNotEmpty(
+      before: before,
+      after: catalog.channelCount,
+      emptyAllowed: false,
+    );
     catalog.attachSearchIndex(
       await buildSearchIndex(ref.read(backgroundRunnerProvider), catalog.names),
     );
@@ -396,10 +402,9 @@ class LiveCatalogController extends AsyncNotifier<LiveCatalog> {
     // With nothing loaded yet (it failed) the page shows loading again.
     if (current == null) state = const AsyncLoading();
     try {
-      final catalog = await _download(source);
-      checkNotEmptied(
+      final catalog = await _download(
+        source,
         before: current?.channelCount ?? 0,
-        after: catalog.channelCount,
       );
       if (!ref.mounted) return null;
       state = AsyncData(catalog);

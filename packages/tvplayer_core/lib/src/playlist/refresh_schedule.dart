@@ -61,8 +61,10 @@ List<PlaylistPart> dueParts({
 DateTime _date(DateTime local) =>
     DateTime.utc(local.year, local.month, local.day);
 
-/// A refresh returned nothing where there was data before. Providers
-/// sometimes answer an outage with an empty list; the old data is kept.
+/// A refresh returned nothing where that is clearly wrong: there was data
+/// before, the provider lists categories, or the list can't be empty.
+/// Providers sometimes answer an outage or overload with an empty list; it
+/// counts as a failure and the old data, if any, is kept.
 class EmptyResultException implements Exception {
   const EmptyResultException();
 
@@ -70,8 +72,18 @@ class EmptyResultException implements Exception {
   String toString() => 'EmptyResultException: the provider sent nothing';
 }
 
-/// Throws [EmptyResultException] when a refresh would replace [before]
-/// items with none.
-void checkNotEmptied({required int before, required int after}) {
-  if (before > 0 && after == 0) throw const EmptyResultException();
+/// Throws [EmptyResultException] when a download of [after] items is
+/// clearly wrong: it would replace [before] items with none, it has none
+/// while the provider lists [categories] for them, or it has none and
+/// [emptyAllowed] is false (channels: a playlist without any is useless).
+void checkNotEmpty({
+  required int before,
+  required int after,
+  int categories = 0,
+  bool emptyAllowed = true,
+}) {
+  if (after > 0) return;
+  if (before > 0 || categories > 0 || !emptyAllowed) {
+    throw const EmptyResultException();
+  }
 }

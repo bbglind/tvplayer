@@ -80,7 +80,15 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
     if (cached != null) await _prepareSearch(cached);
     if (!ref.mounted) return started.complete();
     if (cached == null) {
-      final download = refresh();
+      // One part at a time, like every other download: after the channels
+      // (loaded when the provider is selected, outside the queue), then
+      // through the queue. Providers may answer parallel requests with an
+      // empty list.
+      await ref
+          .read(liveCatalogProvider.future)
+          .then((_) {}, onError: (Object _) {});
+      if (!ref.mounted) return started.complete();
+      final download = ref.read(playlistRefreshProvider.notifier).refresh(part);
       started.complete();
       await download;
       return;
@@ -113,9 +121,10 @@ abstract class VodController<T extends Object> extends Notifier<VodState<T>> {
     state = VodState<T>(catalog: current, loading: true);
     try {
       final catalog = await download(source, ref.read(clockProvider));
-      checkNotEmptied(
+      checkNotEmpty(
         before: current?.items.length ?? 0,
         after: catalog.items.length,
+        categories: catalog.categories.length,
       );
       await _prepareSearch(catalog);
       if (!ref.mounted) return null;

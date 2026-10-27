@@ -18,7 +18,7 @@ String describeProviderError(Object error) => switch (error) {
 /// technical detail beyond an HTTP status, and never a host, credential or
 /// URL.
 String describeRefreshError(Object error) => switch (error) {
-  EmptyResultException() => 'The provider sent an empty list.',
+  EmptyResultException() => 'The provider sent an empty list. Try again later.',
   XtreamException(:final kind, :final statusCode) ||
   M3uException(:final kind, :final statusCode) => switch (kind) {
     ProviderFailure.timeout => "The provider didn't respond in time.",

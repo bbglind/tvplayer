@@ -132,7 +132,7 @@ void main() {
     });
 
     testWidgets('download errors show a retry', (tester) async {
-      final source = FakeVodSource()
+      final source = FakeVodSource(movies: syntheticMovies(count: 3))
         ..failure = const XtreamException(
           'Request timed out (get_vod_streams)',
           kind: ProviderFailure.timeout,

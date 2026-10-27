@@ -108,7 +108,7 @@ void main() {
     );
     expect(
       describeRefreshError(const EmptyResultException()),
-      'The provider sent an empty list.',
+      'The provider sent an empty list. Try again later.',
     );
   });
 
@@ -432,7 +432,7 @@ void main() {
             .read(playlistStatusProvider)
             .part(PlaylistPart.channels)
             .error,
-        'The provider sent an empty list.',
+        'The provider sent an empty list. Try again later.',
       );
     });
   });
@@ -562,6 +562,100 @@ void main() {
       await tester.pumpAndSettle();
       expect(source.movieLoads, 1);
       expect(source.seriesLoads, 1);
+    });
+  });
+
+  group('first start', () {
+    /// A panel whose list requests take [delay]; records the most list
+    /// downloads (channels, movies, series) running at once.
+    ({MockClient client, int Function() maxParallel}) panel({
+      List<Object> movies = const [
+        {'stream_id': 10, 'name': 'Movie', 'category_id': '1'},
+      ],
+      Duration delay = const Duration(milliseconds: 200),
+    }) {
+      var running = 0, max = 0;
+      final client = MockClient((request) async {
+        final action = request.url.queryParameters['action'];
+        final list = switch (action) {
+          'get_live_streams' || 'get_vod_streams' || 'get_series' => true,
+          _ => false,
+        };
+        if (list) {
+          running++;
+          if (running > max) max = running;
+          await Future<void>.delayed(delay);
+          running--;
+        }
+        final body = switch (action) {
+          null => activeAccountJson,
+          'get_live_categories' ||
+          'get_vod_categories' ||
+          'get_series_categories' => [
+            {'category_id': '1', 'category_name': 'Category'},
+          ],
+          'get_live_streams' => [
+            {'stream_id': 1, 'name': 'One', 'category_id': '1'},
+          ],
+          'get_vod_streams' => movies,
+          'get_series' => [
+            {'series_id': 20, 'name': 'Show', 'category_id': '1'},
+          ],
+          _ => <Object>[],
+        };
+        return http.Response.bytes(utf8.encode(jsonEncode(body)), 200);
+      });
+      return (client: client, maxParallel: () => max);
+    }
+
+    Future<MemoryPlaylistStatusStore> pump(
+      WidgetTester tester,
+      MockClient client,
+    ) async {
+      final status = MemoryPlaylistStatusStore();
+      await tester.pumpWidget(
+        testApp(
+          overrides: [httpClientProvider.overrideWithValue(client)],
+          providerStorage: FakeProviderStorage(_config),
+          playlistStatus: status,
+          now: _now,
+          child: const Scaffold(body: AutoRefreshHost(child: SizedBox())),
+        ),
+      );
+      await _frames(tester, 40);
+      await tester.pumpAndSettle();
+      return status;
+    }
+
+    testWidgets('without caches, the parts download one after another', (
+      tester,
+    ) async {
+      final (:client, :maxParallel) = panel();
+      await pump(tester, client);
+      final container = _container(tester);
+      expect(container.read(liveCatalogProvider).value?.channelCount, 1);
+      expect(container.read(movieCatalogProvider).catalog?.items, hasLength(1));
+      expect(
+        container.read(seriesCatalogProvider).catalog?.items,
+        hasLength(1),
+      );
+      expect(maxParallel(), 1);
+    });
+
+    testWidgets('no movies while the provider lists movie categories is a '
+        'failure, not an empty catalogue', (tester) async {
+      final (:client, maxParallel: _) = panel(movies: const []);
+      await pump(tester, client);
+      final container = _container(tester);
+      final movies = container.read(movieCatalogProvider);
+      expect(movies.catalog, isNull);
+      expect(movies.error, 'The provider sent an empty list. Try again later.');
+      final part = container
+          .read(playlistStatusProvider)
+          .part(PlaylistPart.movies);
+      expect(part.updatedAt, isNull);
+      expect(part.failedAt, _now);
+      expect(part.error, 'The provider sent an empty list. Try again later.');
     });
   });
 

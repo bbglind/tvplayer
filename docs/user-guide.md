@@ -149,10 +149,11 @@ You can change or remove the provider later in
 
 ### The first playlist download
 
-Right after saving, the app downloads the playlist in parts: channels,
-movies, series and the TV guide. Channels come first and are usually quick;
-a large TV guide can take a while ("The first download can take a while for
-large guides."). You can start browsing as soon as channels are in.
+Right after saving, the app downloads the playlist in parts, one after
+another: channels, then movies, series and the TV guide. Channels come
+first and are usually quick; a large TV guide can take a while ("The first
+download can take a while for large guides."). You can start browsing as
+soon as channels are in.
 
 To watch progress, open **Settings › Playlist**: each part shows
 "Updating…", "Waiting…" or when it was last updated and how much it holds
@@ -811,6 +812,11 @@ when it was last updated and how much it holds ("Updated Today 12:40 ·
 fails, the row says why in plain words, that the previous list is kept,
 and when the last successful update was. Parts your provider doesn't have
 say "Not available for this provider".
+
+An empty list counts as a failure when it can't be right: no channels at
+all, no movies or series while the provider lists categories for them, or
+nothing where there was a list before ("The provider sent an empty list.
+Try again later."). It is tried again like any other failure.
 
 - **"Automatic refresh"**: Off, On app start, Every 6 hours, **Daily**
   (default).

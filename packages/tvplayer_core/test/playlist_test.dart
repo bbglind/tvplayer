@@ -384,14 +384,20 @@ void main() {
     });
   });
 
-  test('checkNotEmptied rejects only an emptied list', () {
-    checkNotEmptied(before: 0, after: 0);
-    checkNotEmptied(before: 10, after: 3);
-    checkNotEmptied(before: 0, after: 3);
-    expect(
-      () => checkNotEmptied(before: 10, after: 0),
-      throwsA(isA<EmptyResultException>()),
-    );
+  test('checkNotEmpty rejects an empty list only when it is clearly wrong', () {
+    // A provider with no movies or series at all.
+    checkNotEmpty(before: 0, after: 0);
+    checkNotEmpty(before: 10, after: 3);
+    checkNotEmpty(before: 0, after: 3, categories: 5, emptyAllowed: false);
+    for (final wrong in [
+      () => checkNotEmpty(before: 10, after: 0),
+      // Categories listed, but no items in them.
+      () => checkNotEmpty(before: 0, after: 0, categories: 5),
+      // No channels at all.
+      () => checkNotEmpty(before: 0, after: 0, emptyAllowed: false),
+    ]) {
+      expect(wrong, throwsA(isA<EmptyResultException>()));
+    }
   });
 
   group('failure kinds', () {
