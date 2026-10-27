@@ -35,6 +35,10 @@ Before committing, check the staged diff for anything that looks personal.
 ### UI
 - UI styling follows docs/design.md; use the tokens in lib/ui/theme/ instead of hard-coded colours.
 
+### User guide
+- Every new feature or behaviour change updates docs/user-guide.md in the
+  same branch, with labels exactly as in the app.
+
 ### Environment
 - Don't use `sudo`. If something needs root, stop and give the user the exact
   command to run.
