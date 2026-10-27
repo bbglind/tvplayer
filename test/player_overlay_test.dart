@@ -672,6 +672,89 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
     });
+
+    testWidgets('after zapping with the keyboard the controls hide again', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        LivePlayback(_catalog.channels[0]),
+        favourites: _favourites(),
+      );
+      emit();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(player.opened.last.title, 'Channel 1');
+      expect(find.byKey(const Key('zap.channels')), findsNothing);
+      // The new channel's now/next shows, then everything hides.
+      expect(find.text('About show 1'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+      expect(findPlayerTooltip('Stop and go back'), findsNothing);
+      expect(embed.cursorCalls.last, isFalse);
+      expect(embed.rects.last, Offset.zero & const Size(1600, 900));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+    });
+
+    testWidgets('after zapping with the mouse the controls hide again', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        LivePlayback(_catalog.channels[0]),
+        favourites: _favourites(),
+      );
+      emit();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.pumpAndSettle();
+      // In fullscreen clicks arrive through mpv's window.
+      final row = tester.getCenter(find.byKey(const Key('zap.channel.1')));
+      embed.pointer(VideoPointerMove(row));
+      embed.pointer(VideoPointerDown(row));
+      embed.pointer(VideoPointerUp(row));
+      await settleClick(tester);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(player.opened.last.title, 'Channel 1');
+      expect(find.byKey(const Key('zap.channels')), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      expect(findPlayerTooltip('Stop and go back'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+    });
+
+    testWidgets('zapping in a window, then fullscreen: the controls hide', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        LivePlayback(_catalog.channels[0]),
+        favourites: _favourites(),
+      );
+      emit();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('zap.channel.1')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(player.opened.last.title, 'Channel 1');
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(findPlayerTooltip('Stop and go back'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+    });
   });
 
   testWidgets('fits at text scale 1.4', (tester) async {

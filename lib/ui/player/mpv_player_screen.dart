@@ -448,8 +448,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   /// Switches to [channel] without leaving the player: live, also from a
   /// replay.
   void _zapTo(LiveStream channel) {
-    setState(() => _panel = _Panel.none);
-    _shortcutsFocus.requestFocus();
+    _showPanel(_Panel.none);
+    // The new channel's now/next shows, then hides like after any key.
+    _controls.activity();
     if (_request case LivePlayback(channel: final c) when c.id == channel.id) {
       return;
     }
@@ -475,6 +476,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     if (url == null) return;
     if (save && _playing) _saveProgress();
     _needListing(request);
+    if (_panel == _Panel.zap) _showPanel(_Panel.none);
     setState(() {
       _request = request;
       _url = url;
@@ -492,7 +494,6 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       if (!reuse) _manualTracks = false;
       _lastSave = DateTime.now();
       _loadedAt = _now();
-      if (_panel == _Panel.zap) _panel = _Panel.none;
       final title = request.title(ref.read(providerTagsProvider));
       final keepOpen = request is ReplayPlayback;
       _session = reuse
@@ -744,10 +745,17 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   void _updateCursor() =>
       unawaited(_embed?.setCursorVisible(!_fullscreen || _controls.visible));
 
-  void _setPanel(_Panel panel) {
-    setState(() => _panel = _panel == panel ? _Panel.none : panel);
-    _controls.hold(#panel, _panel != _Panel.none);
-    if (_panel == _Panel.none) _shortcutsFocus.requestFocus();
+  /// Opens [panel], or closes it when it is open.
+  void _setPanel(_Panel panel) =>
+      _showPanel(_panel == panel ? _Panel.none : panel);
+
+  /// Shows [panel] (or none). Every change of [_panel] goes through here,
+  /// so the hold that keeps the controls up while a panel is open always
+  /// ends with it.
+  void _showPanel(_Panel panel) {
+    setState(() => _panel = panel);
+    _controls.hold(#panel, panel != _Panel.none);
+    if (panel == _Panel.none) _shortcutsFocus.requestFocus();
   }
 
   void _setFullscreen(bool value) {
