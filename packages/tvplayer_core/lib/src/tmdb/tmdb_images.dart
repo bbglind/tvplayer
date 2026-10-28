@@ -21,10 +21,23 @@ enum TmdbImageSize {
 
 const tmdbImageBase = 'https://image.tmdb.org/t/p/';
 
-/// The address of the TMDB image at [path] (e.g. `/abc.jpg`) in [size].
-String tmdbImageUrl(String path, TmdbImageSize size) =>
-    '$tmdbImageBase${size.name}${path.startsWith('/') ? '' : '/'}$path';
+/// Start of a [tmdbImageRef].
+const tmdbImageRefPrefix = 'tmdb:';
 
-/// [tmdbImageUrl] for an optional [path].
-String? tmdbImageUrlOrNull(String? path, TmdbImageSize size) =>
-    path == null ? null : tmdbImageUrl(path, size);
+/// A reference to the TMDB image at [path] (e.g. `/abc.jpg`) in [size]:
+/// `tmdb:w342/abc.jpg`. Images from TMDB are passed around this way so
+/// they can be told apart from provider images, which may be hosted on
+/// TMDB too; [tmdbImageRefToUrl] gives the address to download.
+String tmdbImageRef(String path, TmdbImageSize size) =>
+    '$tmdbImageRefPrefix${size.name}${path.startsWith('/') ? '' : '/'}$path';
+
+/// [tmdbImageRef] for an optional [path].
+String? tmdbImageRefOrNull(String? path, TmdbImageSize size) =>
+    path == null ? null : tmdbImageRef(path, size);
+
+/// Whether [image] is a [tmdbImageRef] rather than a provider address.
+bool isTmdbImageRef(String image) => image.startsWith(tmdbImageRefPrefix);
+
+/// The download address of the [tmdbImageRef] [ref].
+String tmdbImageRefToUrl(String ref) =>
+    '$tmdbImageBase${ref.substring(tmdbImageRefPrefix.length)}';

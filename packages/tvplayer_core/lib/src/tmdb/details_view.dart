@@ -11,7 +11,7 @@ List<String> posterChoices({
   required bool preferTmdb,
   TmdbImageSize size = TmdbImageSize.w342,
 }) {
-  final tmdb = tmdbImageUrlOrNull(tmdbPath, size);
+  final tmdb = tmdbImageRefOrNull(tmdbPath, size);
   final ordered = preferTmdb ? [tmdb, provider] : [provider, tmdb];
   return [
     for (final url in ordered)
@@ -25,7 +25,7 @@ String? backdropChoice({
   required Iterable<String> provider,
   bool compact = false,
 }) =>
-    tmdbImageUrlOrNull(
+    tmdbImageRefOrNull(
       tmdbPath,
       compact ? TmdbImageSize.w780 : TmdbImageSize.w1280,
     ) ??
@@ -128,7 +128,7 @@ EpisodeMetadata? withTmdbEpisode(EpisodeMetadata? provider, TmdbEpisode? tmdb) {
   final fromTmdb = EpisodeMetadata(
     title: tmdb.name,
     plot: tmdb.overview,
-    stillUrl: tmdbImageUrlOrNull(tmdb.stillPath, TmdbImageSize.w300),
+    stillUrl: tmdbImageRefOrNull(tmdb.stillPath, TmdbImageSize.w300),
     airDate: tmdb.airDate,
     duration: switch (tmdb.runtimeMinutes) {
       final m? when m > 0 => Duration(minutes: m),

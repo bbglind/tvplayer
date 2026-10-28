@@ -218,7 +218,9 @@ clean and simple over every desktop feature.
   lists and rows, `w500` on detail pages and Featured; backdrops `w1280`
   (desktop, Featured) and `w780` (phone, 16:9 cards); cast `w185`;
   episode stills `w300`; person photo `w342`. Their own disk cache, apart
-  from the provider's posters.
+  from the provider's posters. The cache follows where an image comes
+  from, not its host: provider images on TMDB's server go to the
+  provider's cache. Nothing is loaded from TMDB while it is off.
 - **Replay mark**: on channels whose provider keeps an archive (Xtream
   `tv_archive`), a history icon (outline, 16, `textSecondary`) right after
   the name in Live TV, search, the guide's channel column, the Channels

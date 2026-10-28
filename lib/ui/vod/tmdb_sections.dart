@@ -92,7 +92,7 @@ class _CastMember extends StatelessWidget {
                 child: SizedBox.square(
                   dimension: castPhotoSize,
                   child: Poster(
-                    url: tmdbImageUrlOrNull(
+                    url: tmdbImageRefOrNull(
                       cast.profilePath,
                       TmdbImageSize.w185,
                     ),

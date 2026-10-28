@@ -37,7 +37,7 @@ class PersonScreen extends ConsumerWidget {
         dimension: photoSize,
         child: Poster(
           key: const Key('person.photo'),
-          url: tmdbImageUrlOrNull(
+          url: tmdbImageRefOrNull(
             data?.profilePath ?? profilePath,
             TmdbImageSize.w342,
           ),

@@ -196,7 +196,10 @@ void main() {
         ),
         tmdb: tmdb,
       );
-      expect(v.backdropUrl, '${tmdbImageBase}w1280/backdrop-plain-high.jpg');
+      expect(
+        v.backdropUrl,
+        '${tmdbImageRefPrefix}w1280/backdrop-plain-high.jpg',
+      );
       expect(
         DetailsView.combine(
           provider: const MediaMetadata(
@@ -208,6 +211,17 @@ void main() {
       expect(DetailsView.combine().backdropUrl, isNull);
     });
 
+    test('TMDB image references', () {
+      final ref = tmdbImageRef('/a.jpg', TmdbImageSize.w342);
+      expect(ref, 'tmdb:w342/a.jpg');
+      expect(tmdbImageRef('a.jpg', TmdbImageSize.w342), ref);
+      expect(isTmdbImageRef(ref), isTrue);
+      expect(tmdbImageRefToUrl(ref), '${tmdbImageBase}w342/a.jpg');
+      // A provider image on TMDB's server is not one.
+      expect(isTmdbImageRef('${tmdbImageBase}w342/a.jpg'), isFalse);
+      expect(tmdbImageRefOrNull(null, TmdbImageSize.w342), isNull);
+    });
+
     test('posters follow the preference', () {
       const provider = 'http://example.com/p.jpg';
       expect(
@@ -216,11 +230,11 @@ void main() {
           tmdbPath: '/t.jpg',
           preferTmdb: false,
         ),
-        [provider, '${tmdbImageBase}w342/t.jpg'],
+        [provider, '${tmdbImageRefPrefix}w342/t.jpg'],
       );
       expect(
         posterChoices(provider: provider, tmdbPath: '/t.jpg', preferTmdb: true),
-        ['${tmdbImageBase}w342/t.jpg', provider],
+        ['${tmdbImageRefPrefix}w342/t.jpg', provider],
       );
       expect(
         posterChoices(provider: null, tmdbPath: null, preferTmdb: true),
@@ -241,7 +255,7 @@ void main() {
       )!;
       expect(filled.title, 'Provider title');
       expect(filled.plot, 'TMDB overview');
-      expect(filled.stillUrl, '${tmdbImageBase}w300/still.jpg');
+      expect(filled.stillUrl, '${tmdbImageRefPrefix}w300/still.jpg');
       expect(
         withTmdbEpisode(const EpisodeMetadata(plot: 'Mine'), tmdbEpisode)!.plot,
         'Mine',

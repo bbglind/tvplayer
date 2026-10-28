@@ -101,11 +101,19 @@ class Poster extends ConsumerWidget {
             background: background,
           );
     if (url == null || url.isEmpty) return onError;
-    final loader = url.startsWith(tmdbImageBase)
-        ? ref.watch(tmdbImageLoaderProvider)
-        : ref.watch(posterLoaderProvider);
+    // Decided by where the image comes from, not its host: provider images
+    // on TMDB's servers belong in the provider's cache. Nothing is fetched
+    // from TMDB while it is off.
+    final tmdb = isTmdbImageRef(url);
+    if (tmdb && !ref.watch(tmdbEnabledProvider)) return onError;
+    final image = tmdb
+        ? PosterImage(
+            tmdbImageRefToUrl(url),
+            ref.watch(tmdbImageLoaderProvider),
+          )
+        : PosterImage(url, ref.watch(posterLoaderProvider));
     return Image(
-      image: ResizeImage(PosterImage(url, loader), width: decodeWidth),
+      image: ResizeImage(image, width: decodeWidth),
       fit: fit,
       alignment: alignment,
       gaplessPlayback: true,

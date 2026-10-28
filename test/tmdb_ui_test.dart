@@ -429,13 +429,61 @@ void main() {
     testWidgets('the provider poster first, TMDB as fallback', (tester) async {
       final c = await card(tester, prefer: false);
       expect(c.imageUrl, 'http://192.0.2.1/poster.jpg');
-      expect(c.imageFallbackUrl, '${tmdbImageBase}w342/poster.jpg');
+      expect(c.imageFallbackUrl, '${tmdbImageRefPrefix}w342/poster.jpg');
     });
 
     testWidgets('Prefer TMDB posters puts TMDB first', (tester) async {
       final c = await card(tester, prefer: true);
-      expect(c.imageUrl, '${tmdbImageBase}w342/poster.jpg');
+      expect(c.imageUrl, '${tmdbImageRefPrefix}w342/poster.jpg');
       expect(c.imageFallbackUrl, 'http://192.0.2.1/poster.jpg');
+    });
+  });
+
+  group('image caches', () {
+    // A provider poster hosted on TMDB's image server.
+    const providerOnTmdb = '${tmdbImageBase}w600/provider.jpg';
+    final fromTmdb = tmdbImageRef('/tmdb.jpg', TmdbImageSize.w342);
+
+    Future<({FakePosterLoader posters, FakeImageCache tmdb})> load(
+      WidgetTester tester, {
+      required bool enabled,
+    }) async {
+      await tester.pumpWidget(
+        testApp(
+          overrides: const [],
+          settings: FakeSettingsStorage(AppSettings(tmdbEnabled: enabled)),
+          child: Scaffold(
+            body: Column(
+              children: [
+                for (final url in [providerOnTmdb, fromTmdb])
+                  SizedBox(width: 100, height: 150, child: Poster(url: url)),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(Scaffold)),
+      );
+      return (
+        posters: container.read(posterLoaderProvider) as FakePosterLoader,
+        tmdb: container.read(tmdbImageLoaderProvider) as FakeImageCache,
+      );
+    }
+
+    testWidgets('provider images use the poster cache, whatever the host', (
+      tester,
+    ) async {
+      final caches = await load(tester, enabled: true);
+      expect(caches.posters.requests, [providerOnTmdb]);
+      expect(caches.tmdb.requests, ['${tmdbImageBase}w342/tmdb.jpg']);
+    });
+
+    testWidgets('nothing is loaded from TMDB while it is off', (tester) async {
+      final caches = await load(tester, enabled: false);
+      expect(caches.posters.requests, [providerOnTmdb]);
+      expect(caches.tmdb.requests, isEmpty);
     });
   });
 

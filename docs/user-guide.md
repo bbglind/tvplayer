@@ -1073,7 +1073,9 @@ the app works exactly as without them.
   exist; the provider's otherwise."
 - **"Image cache"**: "TMDB images: 312 MB of 1 GB", the most kept on disk
   (250 MB, 500 MB, **1 GB** default, 2 GB, 4 GB; the oldest go first).
-  **"Clear"** empties it.
+  **"Clear"** empties it. Only images from TMDB count here; the provider's
+  posters have their own cache, even when the provider hosts them on TMDB.
+  While TMDB is off nothing is loaded from TMDB.
 - **"Removed matches: 3"** (only when there are any): titles you removed
   the TMDB match from. **"Allow matching again"** lets them use TMDB info
   again.
