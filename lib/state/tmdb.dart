@@ -418,27 +418,38 @@ final tmdbLinkProvider = FutureProvider.autoDispose.family<TmdbLink?, TmdbItem>(
     final tags = ref.watch(providerTagsProvider);
     final backend = ref.watch(tmdbBackendProvider).value;
     if (backend == null || !state.loaded) return null;
-    if (TmdbKey.fromProvider(item.kind, item.tmdbId) case final key?) {
-      return state.removed.contains(key) ? null : TmdbLink(key);
-    }
-    final search = TitleSearch.of(item.kind, item.name, tags, year: item.year);
-    if (search == null) return null;
-    switch (state.matches[(item.kind, search.key)]) {
-      case TitleMatch(outcome: MatchOutcome.removed):
-        return null;
-      case TitleMatch(outcome: MatchOutcome.matched, :final tmdbId?):
-        return TmdbLink(TmdbKey(item.kind, tmdbId), titleKey: search.key);
-      case _:
-    }
-    try {
-      final key = await backend.resolve(search);
-      return key == null ? null : TmdbLink(key, titleKey: search.key);
-    } catch (e) {
-      debugPrint('TMDB search: ${e.runtimeType}');
-      return null;
-    }
+    return findTmdbLink(item, state: state, tags: tags, backend: backend);
   },
 );
+
+/// How [item] is linked to TMDB with the stored outcomes [state] (see
+/// [tmdbLinkProvider]); searched for at once when needed.
+Future<TmdbLink?> findTmdbLink(
+  TmdbItem item, {
+  required TmdbMatchState state,
+  required ProviderTags tags,
+  required TmdbBackend backend,
+}) async {
+  if (TmdbKey.fromProvider(item.kind, item.tmdbId) case final key?) {
+    return state.removed.contains(key) ? null : TmdbLink(key);
+  }
+  final search = TitleSearch.of(item.kind, item.name, tags, year: item.year);
+  if (search == null) return null;
+  switch (state.matches[(item.kind, search.key)]) {
+    case TitleMatch(outcome: MatchOutcome.removed):
+      return null;
+    case TitleMatch(outcome: MatchOutcome.matched, :final tmdbId?):
+      return TmdbLink(TmdbKey(item.kind, tmdbId), titleKey: search.key);
+    case _:
+  }
+  try {
+    final key = await backend.resolve(search);
+    return key == null ? null : TmdbLink(key, titleKey: search.key);
+  } catch (e) {
+    debugPrint('TMDB search: ${e.runtimeType}');
+    return null;
+  }
+}
 
 /// TMDB title [key], fetched at once when it isn't stored yet.
 final tmdbTitleProvider = FutureProvider.autoDispose

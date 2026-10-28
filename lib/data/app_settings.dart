@@ -40,8 +40,8 @@ final class AppSettings {
     this.tmdbPreferPosters = false,
     this.tmdbPaused = false,
     this.tmdbImageCacheMb = defaultTmdbImageCacheMb,
-    this.skipDbEnabled = false,
-    this.introDbEnabled = false,
+    this.skipDbEnabled = true,
+    this.introDbEnabled = true,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -176,7 +176,10 @@ final class AppSettings {
   static const defaultTmdbImageCacheMb = 1000;
   static const tmdbImageCacheChoices = [250, 500, 1000, 2000, 4000];
 
-  /// Whether SkipDB and TheIntroDB are used (group 10.2; not shown yet).
+  /// Whether intro, recap and credits times come from SkipDB and
+  /// TheIntroDB (Settings › Services). Saved as `skipDb` / `introDb`: the
+  /// earlier `skipDbEnabled` / `introDbEnabled` were saved as false before
+  /// the switches existed, so they are ignored.
   final bool skipDbEnabled;
   final bool introDbEnabled;
 
@@ -293,8 +296,8 @@ final class AppSettings {
     'tmdbPreferPosters': tmdbPreferPosters,
     'tmdbPaused': tmdbPaused,
     'tmdbImageCacheMb': tmdbImageCacheMb,
-    'skipDbEnabled': skipDbEnabled,
-    'introDbEnabled': introDbEnabled,
+    'skipDb': skipDbEnabled,
+    'introDb': introDbEnabled,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -381,8 +384,8 @@ final class AppSettings {
         tmdbImageCacheChoices,
         defaultTmdbImageCacheMb,
       ),
-      skipDbEnabled: json['skipDbEnabled'] == true,
-      introDbEnabled: json['introDbEnabled'] == true,
+      skipDbEnabled: json['skipDb'] != false,
+      introDbEnabled: json['introDb'] != false,
     );
   }
 

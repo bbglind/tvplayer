@@ -12,6 +12,7 @@ import '../data/videos_directory.dart';
 import '../format.dart';
 import 'notice_level.dart';
 import 'providers.dart';
+import 'skip.dart';
 
 /// How many provider streams may be open at once. The provider of this
 /// app's user allows one; to follow the account instead, return
@@ -462,6 +463,8 @@ class DownloadsController extends Notifier<DownloadsState> {
       addedAt: _now,
     );
     _add(item);
+    // So the download has SkipDB's times offline too.
+    unawaited(ref.read(skipLookupProvider).storeSkipDb(series, episode));
     return item;
   }
 

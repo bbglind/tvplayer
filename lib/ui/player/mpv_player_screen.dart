@@ -21,6 +21,7 @@ import '../../state/downloads_controller.dart';
 import '../../state/player_stream.dart';
 import '../../state/providers.dart';
 import '../../state/recording_controller.dart';
+import '../../state/skip.dart';
 import '../../state/variants.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
@@ -36,6 +37,7 @@ import 'player_controls.dart';
 import 'player_hint.dart';
 import 'player_shortcuts.dart';
 import 'recording_indicator.dart';
+import 'skip_button.dart';
 import 'track_panel.dart';
 import 'zap_panel.dart';
 
@@ -153,6 +155,14 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   /// The countdown was cancelled; it comes back after seeking out of it.
   bool _nextCancelled = false;
+
+  /// Intro, recap and credits times of the episode (sanitized for its
+  /// length), asked for once its length is known; the skip button they
+  /// show.
+  SkipSegments _skipTimes = SkipSegments.none;
+  SkipTracker _skipTracker = SkipTracker();
+  bool _skipAsked = false;
+  SkipPrompt? _skipPrompt;
 
   /// Last known position and duration, kept when mpv stops reporting them.
   Duration? _position;
@@ -277,6 +287,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _trackPosition(state);
     _pickTracks(state);
     _rememberVolume(state);
+    _updateSkip(state);
     _updateCountdown(state);
     _checkEndOfArchive(state);
     if (state.status == ExternalPlayerStatus.exited ||
@@ -361,13 +372,71 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _settings.remember((s) => s.copyWith(playerVolume: volume.round()));
   }
 
+  /// Asks for the episode's skip times once its length is known (and
+  /// then for the next episode's), and shows the skip button they give.
+  void _updateSkip(ExternalPlaybackState state) {
+    final request = _request;
+    if (request is! EpisodePlayback) return;
+    final duration = state.duration;
+    if (!_skipAsked && duration != null && duration > Duration.zero) {
+      _skipAsked = true;
+      unawaited(_lookUpSkips(request, duration));
+    }
+    final position = state.position;
+    if (position == null || state.endedAtEof) return;
+    final prompt = _skipTracker.update(position);
+    if (prompt != _skipPrompt) setState(() => _skipPrompt = prompt);
+  }
+
+  Future<void> _lookUpSkips(EpisodePlayback request, Duration duration) async {
+    final lookup = ref.read(skipLookupProvider);
+    final times = await lookup.lookup(
+      request.info.series,
+      request.episode,
+      duration: duration,
+      downloaded: request.localFile != null,
+    );
+    if (!mounted || !identical(_request, request)) return;
+    final clean = times.sanitized(duration);
+    _skipTracker.setSegments(clean);
+    setState(() => _skipTimes = clean);
+    // Ready when the next one starts.
+    if (_nextEpisode case final next?) {
+      final downloads = ref.read(downloadsProvider.notifier);
+      unawaited(
+        lookup.lookup(
+          request.info.series,
+          next,
+          duration: next.duration,
+          downloaded: downloads.localFile(episodeKey(next.id)) != null,
+        ),
+      );
+    }
+  }
+
+  /// Jumps to the end of the intro or recap the skip button shows.
+  void _skipPart() {
+    final prompt = _skipPrompt;
+    if (prompt == null) return;
+    unawaited(_player.seek(prompt.target));
+    setState(() => _skipPrompt = null);
+  }
+
   /// Shows, counts down or hides the next-episode card, and starts the
-  /// next episode at 0.
+  /// next episode at 0: when the credits start (with their times), else
+  /// the set time before the end.
   void _updateCountdown(ExternalPlaybackState state) {
     final lead = _appSettings.playNextSeconds;
     final position = state.position;
+    final credits = _skipTimes.credits;
     final countdown = lead == null || position == null || _nextEpisode == null
         ? null
+        : credits != null
+        ? creditsCountdown(
+            position: position,
+            duration: state.duration,
+            creditsStart: credits.start,
+          )
         : playNextCountdown(
             position: position,
             duration: state.duration,
@@ -530,6 +599,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       _ended = false;
       _countdown = null;
       _nextCancelled = false;
+      _skipTimes = SkipSegments.none;
+      _skipTracker = SkipTracker();
+      _skipAsked = false;
+      _skipPrompt = null;
       _position = null;
       _duration = null;
       _pickedFor = null;
@@ -1071,6 +1144,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ? () => _setPanel(_Panel.zap)
           : null,
       onNextEpisode: _nextEpisode != null ? _playNext : null,
+      onSkip: _skipPrompt != null && playing ? _skipPart : null,
       onGoLive: (replay || _pausedAt != null) && _showVideo ? _goLive : null,
       // Checked when pressed: whether it can record changes with the
       // player's state, which doesn't rebuild this.
@@ -1203,11 +1277,14 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     final panel = _buildPanel(state);
     final card = _buildNextCard();
     final controls = _controls.visible;
+    // Right after a part starts its skip button shows on its own; later
+    // only in the bar.
+    final skip = !controls && (_skipPrompt?.prominent ?? false);
     final right = panel == null ? 0.0 : _panelWidth;
     return Stack(
       children: [
         Positioned.fill(child: video),
-        if (controls || card != null)
+        if (controls || card != null || skip)
           Positioned(
             left: 0,
             right: right,
@@ -1219,6 +1296,11 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (skip)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildSkipButton()!,
+                    ),
                   if (card != null)
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -1352,6 +1434,16 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       ref.watch(providerTagsProvider),
     ),
     _ => next.title,
+  };
+
+  /// "Skip intro" / "Skip recap" while the part plays.
+  Widget? _buildSkipButton() => switch (_skipPrompt) {
+    final p? => SkipButton(
+      type: p.type,
+      prominent: p.prominent,
+      onPressed: _skipPart,
+    ),
+    null => null,
   };
 
   Widget? _buildNextCard() {
@@ -1535,6 +1627,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                       )
                     : _buildLivePaused(),
               ),
+              if (_buildSkipButton() case final skip?) ...[
+                const SizedBox(width: 8),
+                skip,
+              ],
               if (replay || _pausedAt != null) ...[
                 const SizedBox(width: 8),
                 PlayerTooltip(

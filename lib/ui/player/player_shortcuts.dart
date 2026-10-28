@@ -41,6 +41,7 @@ bool _focusInPanel() {
 /// - m: mute on/off
 /// - c: the channel list (live TV)
 /// - n: the next episode
+/// - i: skip the intro or recap (while its button shows)
 /// - l: go live (a replay, or live TV behind live)
 /// - r: record live TV, or stop recording
 ///
@@ -61,6 +62,7 @@ class PlayerShortcuts extends StatelessWidget {
     this.onToggleMute,
     this.onZap,
     this.onNextEpisode,
+    this.onSkip,
     this.onGoLive,
     this.onRecord,
     this.onActivity,
@@ -87,6 +89,7 @@ class PlayerShortcuts extends StatelessWidget {
   final VoidCallback? onToggleMute;
   final VoidCallback? onZap;
   final VoidCallback? onNextEpisode;
+  final VoidCallback? onSkip;
   final VoidCallback? onGoLive;
   final VoidCallback? onRecord;
   final VoidCallback? onActivity;
@@ -118,6 +121,7 @@ class PlayerShortcuts extends StatelessWidget {
       LogicalKeyboardKey.keyM when !repeat => onToggleMute,
       LogicalKeyboardKey.keyC when !repeat => onZap,
       LogicalKeyboardKey.keyN when !repeat => onNextEpisode,
+      LogicalKeyboardKey.keyI when !repeat => onSkip,
       LogicalKeyboardKey.keyL when !repeat => onGoLive,
       LogicalKeyboardKey.keyR when !repeat => onRecord,
       _ => null,

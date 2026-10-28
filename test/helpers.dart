@@ -19,6 +19,7 @@ import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/downloads_controller.dart';
 import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/state/skip.dart';
 import 'package:tvplayer/state/tmdb.dart';
 import 'package:tvplayer/ui/player/player_hint.dart';
 import 'package:tvplayer/ui/shell/snack_bar_dismisser.dart';
@@ -590,6 +591,33 @@ class FakeTransfers {
   }
 }
 
+/// SkipDB and TheIntroDB without the network: the times in [skipDb] and
+/// [introDb] by `season:episode`; every query is kept. SkipDB's answers
+/// go to [store] (in memory).
+class FakeSkip {
+  final skipDb = <String, SkipSegments>{};
+  final introDb = <String, SkipSegments>{};
+  final skipDbQueries = <SkipQuery>[];
+  final introDbQueries = <SkipQuery>[];
+  final store = SkipStore.inMemory();
+
+  late final SkipApi skipDbApi = _FakeSkipApi(skipDb, skipDbQueries);
+  late final SkipApi introDbApi = _FakeSkipApi(introDb, introDbQueries);
+}
+
+class _FakeSkipApi implements SkipApi {
+  _FakeSkipApi(this._times, this._queries);
+
+  final Map<String, SkipSegments> _times;
+  final List<SkipQuery> _queries;
+
+  @override
+  Future<SkipSegments> lookup(SkipQuery query) async {
+    _queries.add(query);
+    return _times['${query.season}:${query.episode}'] ?? SkipSegments.none;
+  }
+}
+
 /// Wraps [child] in a ProviderScope (no automatic retries) and MaterialApp
 /// with the app's [InputModeScope].
 ///
@@ -617,7 +645,9 @@ Widget testApp({
   DateTime? now,
   Duration searchDebounce = Duration.zero,
   ServiceCredentials? serviceCredentials,
+  FakeSkip? skip,
 }) {
+  final skips = skip ?? FakeSkip();
   final downloadsStore = downloads ?? MemoryDownloadsStore();
   final watchStore = watch ?? MemoryWatchStore();
   final favouritesStore = favourites ?? MemoryFavouritesStore();
@@ -649,6 +679,9 @@ Widget testApp({
         serviceCredentials ?? MemoryServiceCredentials(),
       ),
       tmdbImageLoaderProvider.overrideWithValue(FakeImageCache()),
+      skipDbApiProvider.overrideWithValue(skips.skipDbApi),
+      introDbApiProvider.overrideWithValue(skips.introDbApi),
+      skipStoreProvider.overrideWith((ref) => skips.store),
       // Background isolates don't finish inside fake-async widget tests.
       backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),
       searchDebounceProvider.overrideWithValue(searchDebounce),

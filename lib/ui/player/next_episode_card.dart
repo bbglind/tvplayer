@@ -8,7 +8,8 @@ import 'player_hint.dart';
 import 'player_shortcuts.dart';
 
 /// "Next episode in N s" with the next episode's code and title, and
-/// "Play now" / "Cancel". Shown next to or below the video, never on it.
+/// "Play now" / "Cancel". Shown next to or below the video, never on it;
+/// in the [touch] player (Android) over it, with tooltips without keys.
 class NextEpisodeCard extends StatelessWidget {
   const NextEpisodeCard({
     super.key,
@@ -18,6 +19,7 @@ class NextEpisodeCard extends StatelessWidget {
     required this.onPlayNow,
     required this.onCancel,
     this.playNowFocus,
+    this.touch = false,
   });
 
   final Episode next;
@@ -28,6 +30,11 @@ class NextEpisodeCard extends StatelessWidget {
   final VoidCallback onPlayNow;
   final VoidCallback onCancel;
   final FocusNode? playNowFocus;
+  final bool touch;
+
+  Widget _tooltip(String message, String key, Widget child) => touch
+      ? Tooltip(message: message, child: child)
+      : PlayerTooltip(message: '$message ($key)', side: true, child: child);
 
   static const width = 360.0;
 
@@ -63,10 +70,10 @@ class NextEpisodeCard extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  PlayerTooltip(
-                    message: 'Play the next episode now (n)',
-                    side: true,
-                    child: FilledButton.icon(
+                  _tooltip(
+                    'Play the next episode now',
+                    'n',
+                    FilledButton.icon(
                       key: const Key('player.playNow'),
                       focusNode: playNowFocus,
                       onPressed: onPlayNow,
@@ -74,10 +81,10 @@ class NextEpisodeCard extends StatelessWidget {
                       label: const Text('Play now'),
                     ),
                   ),
-                  PlayerTooltip(
-                    message: 'Cancel and play to the end (Esc)',
-                    side: true,
-                    child: OutlinedButton(
+                  _tooltip(
+                    'Cancel and play to the end',
+                    'Esc',
+                    OutlinedButton(
                       key: const Key('player.cancelNext'),
                       onPressed: onCancel,
                       child: const Text('Cancel'),

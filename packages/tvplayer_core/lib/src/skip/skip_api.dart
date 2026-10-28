@@ -197,3 +197,11 @@ abstract base class SkipHttpClient implements SkipApi {
 Duration? msOf(Object? value) => value is num && value.isFinite
     ? Duration(milliseconds: value.round())
     : null;
+
+final _imdbId = RegExp(r'^tt\d{5,}$');
+
+/// [value] when it is an IMDb title id (`tt` and digits), else null.
+String? imdbIdOrNull(String? value) {
+  final id = value?.trim();
+  return id != null && _imdbId.hasMatch(id) ? id : null;
+}

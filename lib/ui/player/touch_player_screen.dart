@@ -15,14 +15,18 @@ import '../../state/archive_listings.dart';
 import '../../state/downloads_controller.dart';
 import '../../state/player_stream.dart';
 import '../../state/providers.dart';
+import '../../state/skip.dart';
+import '../../state/variants.dart';
 import '../../state/watch_controller.dart';
 import '../epg/now_next.dart';
 import '../live/replay_mark.dart';
 import '../theme/app_colors.dart';
 import '../vod/provider_title.dart';
+import 'next_episode_card.dart';
 import 'open_channel.dart';
 import 'player_controls.dart';
 import 'player_debug.dart';
+import 'skip_button.dart';
 import 'track_panel.dart';
 
 /// Plays a live channel, replay, movie, episode or recording on a phone
@@ -96,6 +100,20 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
   /// handled.
   int _load = 0;
   int? _endHandled;
+
+  /// Seconds until the next episode starts, while its card shows.
+  int? _countdown;
+
+  /// The countdown was cancelled; it comes back after seeking out of it.
+  bool _nextCancelled = false;
+
+  /// Intro, recap and credits times of the episode (sanitized for its
+  /// length), asked for once its length is known; the skip button they
+  /// show.
+  SkipSegments _skipTimes = SkipSegments.none;
+  SkipTracker _skipTracker = SkipTracker();
+  bool _skipAsked = false;
+  SkipPrompt? _skipPrompt;
 
   /// When the current media was loaded; a replay that ends right after
   /// loading has nothing more to give.
@@ -173,6 +191,8 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
     if (!mounted) return;
     _trackPosition();
     _pickTracks();
+    _updateSkip();
+    _updateCountdown();
     _checkEnd();
     setState(() {});
   }
@@ -270,8 +290,140 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
     }
   }
 
-  /// At the end: a replay loads on or goes live; anything else leaves the
-  /// player, its position saved.
+  Episode? get _nextEpisode => switch (_request) {
+    EpisodePlayback(:final info, :final episode) => episodeAfter(info, episode),
+    _ => null,
+  };
+
+  /// Asks for the episode's skip times once its length is known (and then
+  /// for the next episode's), and follows the skip button they give.
+  void _updateSkip() {
+    final request = _request;
+    if (request is! EpisodePlayback || !_player.loaded) return;
+    final duration = _player.duration;
+    if (!_skipAsked && duration != null && duration > Duration.zero) {
+      _skipAsked = true;
+      unawaited(_lookUpSkips(request, duration));
+    }
+    final position = _player.position;
+    // Not the 0 before the start position is reached.
+    if (_player.completed ||
+        (position == Duration.zero &&
+            (request.start ?? Duration.zero) > Duration.zero)) {
+      return;
+    }
+    _skipPrompt = _skipTracker.update(position);
+  }
+
+  Future<void> _lookUpSkips(EpisodePlayback request, Duration duration) async {
+    final lookup = ref.read(skipLookupProvider);
+    final times = await lookup.lookup(
+      request.info.series,
+      request.episode,
+      duration: duration,
+      downloaded: request.localFile != null,
+    );
+    if (!mounted || !identical(_request, request)) return;
+    final clean = times.sanitized(duration);
+    _skipTracker.setSegments(clean);
+    setState(() => _skipTimes = clean);
+    // Ready when the next one starts.
+    if (_nextEpisode case final next?) {
+      final downloads = ref.read(downloadsProvider.notifier);
+      unawaited(
+        lookup.lookup(
+          request.info.series,
+          next,
+          duration: next.duration,
+          downloaded: downloads.localFile(episodeKey(next.id)) != null,
+        ),
+      );
+    }
+  }
+
+  /// Jumps to the end of the intro or recap the skip button shows.
+  void _skipPart() {
+    final prompt = _skipPrompt;
+    if (prompt == null) return;
+    unawaited(_player.seek(prompt.target));
+    setState(() => _skipPrompt = null);
+  }
+
+  /// "Play next episode": seconds before the end, null when off.
+  int? get _playNextSeconds =>
+      (ref.read(appSettingsProvider).value ?? const AppSettings())
+          .playNextSeconds;
+
+  /// Shows, counts down or hides the next-episode card, and starts the
+  /// next episode at 0: when the credits start (with their times), else
+  /// the set time before the end.
+  void _updateCountdown() {
+    final lead = _playNextSeconds;
+    final duration = _player.loaded ? _player.duration : null;
+    final credits = _skipTimes.credits;
+    final countdown = lead == null || _nextEpisode == null || duration == null
+        ? null
+        : credits != null
+        ? creditsCountdown(
+            position: _player.position,
+            duration: duration,
+            creditsStart: credits.start,
+          )
+        : playNextCountdown(
+            position: _player.position,
+            duration: duration,
+            leadSeconds: lead,
+          );
+    // Seeking back out of the countdown brings it back after a cancel.
+    if (countdown == null) _nextCancelled = false;
+    final shown = _nextCancelled ? null : countdown;
+    if (shown == _countdown) return;
+    final appeared = _countdown == null;
+    _countdown = shown;
+    if (shown == 0) {
+      _schedulePlayNext();
+    } else if (appeared && shown != null) {
+      _controls.activity();
+    }
+  }
+
+  /// Plays the next episode after this frame's work, once per load: the
+  /// countdown's end and the episode's end can both ask for it.
+  void _schedulePlayNext() {
+    final load = _load;
+    scheduleMicrotask(() {
+      if (load == _load) _playNext();
+    });
+  }
+
+  void _cancelNext() => setState(() {
+    _nextCancelled = true;
+    _countdown = null;
+  });
+
+  /// Plays the next episode here, marking this one watched.
+  void _playNext() {
+    if (!mounted) return;
+    final next = _nextEpisode;
+    if (next == null) return;
+    final info = (_request as EpisodePlayback).info;
+    if ((_request.watchKey, _duration ?? _position) case (
+      final key?,
+      final end?,
+    )) {
+      _watch?.recordProgress(key, position: end, duration: end, info: info);
+    }
+    final view = ref.read(episodeViewProvider(info.series.seriesId));
+    final start = resumePosition(view.progress(next));
+    _switchTo(
+      withDownload(ref, EpisodePlayback(info, next, start: start)),
+      save: false,
+    );
+  }
+
+  /// At the end: a replay loads on or goes live; an episode goes on to the
+  /// next one (unless "Play next episode" is off or it was cancelled);
+  /// anything else leaves the player, its position saved.
   void _checkEnd() {
     if (!_player.completed || !_player.loaded || _endHandled == _load) return;
     _endHandled = _load;
@@ -292,6 +444,13 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
             _replayFrom(position);
         }
       });
+      return;
+    }
+    if (_nextEpisode != null &&
+        _playNextSeconds != null &&
+        !_nextCancelled &&
+        (ModalRoute.of(context)?.isCurrent ?? false)) {
+      _schedulePlayNext();
       return;
     }
     _saveProgress();
@@ -321,15 +480,21 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
 
   /// Plays [request] in this screen. [reuse]: the same channel, live or
   /// from its archive, where a chosen track stays.
-  void _switchTo(PlaybackRequest request, {bool reuse = false}) {
+  void _switchTo(
+    PlaybackRequest request, {
+    bool reuse = false,
+    bool save = true,
+  }) {
     final url = playbackUrl(ref, request);
     if (url == null) return;
     if (ref.read(playerStreamProvider).request(request) ==
         StreamNeed.pauseDownload) {
-      unawaited(_askPauseDownload(() => _switchTo(request, reuse: reuse)));
+      unawaited(
+        _askPauseDownload(() => _switchTo(request, reuse: reuse, save: save)),
+      );
       return;
     }
-    _saveProgress();
+    if (save) _saveProgress();
     _needListing(request);
     setState(() {
       _request = request;
@@ -340,6 +505,12 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
       _position = null;
       _duration = null;
       _pickedFor = null;
+      _countdown = null;
+      _nextCancelled = false;
+      _skipTimes = SkipSegments.none;
+      _skipTracker = SkipTracker();
+      _skipAsked = false;
+      _skipPrompt = null;
       _clearPause();
       if (!reuse) _manualTracks = false;
     });
@@ -677,10 +848,62 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
                   child: _buildControls(context, loading: loading),
                 ),
               ),
+              ?_buildCorner(),
               if (_player.error case final error?) _buildError(error),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// Bottom right over the video, above the seek bar: the skip button
+  /// (right after its part starts on its own, later with the controls)
+  /// and the next-episode card.
+  Widget? _buildCorner() {
+    final prompt = _skipPrompt;
+    final skip = prompt != null && (prompt.prominent || _controls.visible);
+    final seconds = _countdown;
+    final next = _nextEpisode;
+    final card = seconds != null && next != null;
+    if (!skip && !card) return null;
+    final request = _request as EpisodePlayback;
+    return Positioned(
+      right: 0,
+      bottom: 0,
+      child: SafeArea(
+        top: false,
+        left: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (skip)
+                SkipButton(
+                  type: prompt.type,
+                  prominent: prompt.prominent,
+                  onPressed: _skipPart,
+                  touch: true,
+                ),
+              if (skip && card) const SizedBox(height: 12),
+              if (card)
+                NextEpisodeCard(
+                  next: next,
+                  title: episodeDisplayTitle(
+                    request.info.series,
+                    next,
+                    ref.watch(providerTagsProvider),
+                  ),
+                  seconds: seconds,
+                  onPlayNow: _playNext,
+                  onCancel: _cancelNext,
+                  touch: true,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

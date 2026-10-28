@@ -6,6 +6,7 @@ import '../../data/app_settings.dart';
 import '../../data/provider_storage.dart';
 import '../../format.dart';
 import '../../state/providers.dart';
+import '../../state/skip.dart';
 import '../../state/tmdb.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -14,10 +15,9 @@ import 'settings_section.dart';
 import '../shell/app_messages.dart';
 
 /// Settings › Services: TMDB (on/off, the key, Test connection, the
-/// background fetch, posters, the image cache and removed matches).
-///
-/// SkipDB and TheIntroDB (group 10.2) have their settings and key storage
-/// already, but no rows until they do something.
+/// background fetch, posters, the image cache and removed matches), then
+/// SkipDB and TheIntroDB (on/off, Test connection; TheIntroDB's optional
+/// key).
 class ServicesSection extends ConsumerStatefulWidget {
   const ServicesSection({super.key});
 
@@ -50,7 +50,17 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
   Future<void> _enterKey() async {
     final saved = await showDialog<bool>(
       context: context,
-      builder: (context) => const _KeyDialog(),
+      builder: (context) => _KeyDialog(
+        title: 'TMDB key',
+        help:
+            'Paste your API Read Access Token or API Key from '
+            'themoviedb.org › Settings › API.',
+        hint: 'API Read Access Token or API Key',
+        fieldKey: const Key('settings.tmdbKey.field'),
+        saveKey: const Key('settings.tmdbKey.save'),
+        save: (ref, text) =>
+            ref.read(tmdbCredentialProvider.notifier).save(text),
+      ),
     );
     if (saved == true && mounted) setState(() => _testResult = null);
   }
@@ -184,6 +194,7 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
               child: const Text('Allow matching again'),
             ),
           ),
+        const _SkipServices(),
       ],
     );
   }
@@ -280,9 +291,26 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
   }
 }
 
-/// Asks for the TMDB key and saves it; pops true when saved.
+/// Asks for a service key and saves it with [save]; pops true when saved.
 class _KeyDialog extends ConsumerStatefulWidget {
-  const _KeyDialog();
+  const _KeyDialog({
+    required this.title,
+    required this.help,
+    required this.hint,
+    required this.fieldKey,
+    required this.saveKey,
+    required this.save,
+  });
+
+  final String title;
+  final String help;
+  final String hint;
+  final Key fieldKey;
+  final Key saveKey;
+
+  /// Throws [FormatException] (shown under the field) or
+  /// ProviderStorageException.
+  final Future<void> Function(WidgetRef ref, String text) save;
 
   @override
   ConsumerState<_KeyDialog> createState() => _KeyDialogState();
@@ -305,7 +333,7 @@ class _KeyDialogState extends ConsumerState<_KeyDialog> {
       _error = null;
     });
     try {
-      await ref.read(tmdbCredentialProvider.notifier).save(_controller.text);
+      await widget.save(ref, _controller.text);
       if (mounted) Navigator.of(context).pop(true);
     } on FormatException catch (e) {
       setState(() => _error = e.message);
@@ -319,27 +347,24 @@ class _KeyDialogState extends ConsumerState<_KeyDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('TMDB key'),
+      title: Text(widget.title),
       content: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: isCompact(context) ? 320 : 480),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Paste your API Read Access Token or API Key from '
-              'themoviedb.org › Settings › API.',
-            ),
+            Text(widget.help),
             const SizedBox(height: 16),
             TextField(
-              key: const Key('settings.tmdbKey.field'),
+              key: widget.fieldKey,
               controller: _controller,
               autofocus: true,
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
               decoration: InputDecoration(
-                hintText: 'API Read Access Token or API Key',
+                hintText: widget.hint,
                 errorText: _error,
                 errorMaxLines: 4,
               ),
@@ -354,9 +379,207 @@ class _KeyDialogState extends ConsumerState<_KeyDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          key: const Key('settings.tmdbKey.save'),
+          key: widget.saveKey,
           onPressed: _saving ? null : _submit,
           child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+/// SkipDB and TheIntroDB: on/off and Test connection each, and
+/// TheIntroDB's optional key.
+class _SkipServices extends ConsumerStatefulWidget {
+  const _SkipServices();
+
+  @override
+  ConsumerState<_SkipServices> createState() => _SkipServicesState();
+}
+
+class _SkipServicesState extends ConsumerState<_SkipServices> {
+  /// The result of the last "Test connection" per service, while shown.
+  final _results = <SkipService, String>{};
+  final _testing = <SkipService>{};
+
+  static String _name(SkipService service) => switch (service) {
+    SkipService.skipDb => 'SkipDB',
+    SkipService.introDb => 'TheIntroDB',
+  };
+
+  Future<void> _save(AppSettings Function(AppSettings) apply) async {
+    try {
+      await ref.read(appSettingsProvider.notifier).change(apply);
+    } catch (e) {
+      if (mounted) {
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          'Could not save settings (${e.runtimeType})',
+          level: NoticeLevel.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _test(SkipService service) async {
+    setState(() {
+      _testing.add(service);
+      _results.remove(service);
+    });
+    final key = service == SkipService.introDb
+        ? ref.read(introDbKeyProvider).value
+        : null;
+    final failure = await ref.read(skipConnectionTesterProvider)(
+      service,
+      key: key,
+    );
+    if (!mounted) return;
+    setState(() {
+      _testing.remove(service);
+      _results[service] = describeSkipTest(_name(service), failure);
+    });
+  }
+
+  Future<void> _enterKey() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => _KeyDialog(
+        title: 'TheIntroDB key',
+        help:
+            'Optional. Paste the API key from your own account on '
+            'theintrodb.org; it raises the daily limit of lookups.',
+        hint: 'API key',
+        fieldKey: const Key('settings.introDbKey.field'),
+        saveKey: const Key('settings.introDbKey.save'),
+        save: (ref, text) => ref.read(introDbKeyProvider.notifier).save(text),
+      ),
+    );
+    if (saved == true && mounted) {
+      setState(() => _results.remove(SkipService.introDb));
+    }
+  }
+
+  Future<void> _removeKey() async {
+    try {
+      await ref.read(introDbKeyProvider.notifier).remove();
+      if (mounted) setState(() => _results.remove(SkipService.introDb));
+    } on ProviderStorageException catch (e) {
+      if (mounted) {
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          e.message,
+          level: NoticeLevel.error,
+        );
+      }
+    }
+  }
+
+  Widget _serviceTile(
+    SkipService service, {
+    required String description,
+    required bool on,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final id = service.name;
+    final result = _results[service];
+    final testing = _testing.contains(service);
+    return ListTile(
+      key: Key('settings.$id'),
+      leading: const Icon(Icons.fast_forward_outlined),
+      title: Text(_name(service)),
+      // The test button below the text, so the title keeps its room on a
+      // phone.
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(description),
+          if (result != null)
+            Text(
+              result,
+              key: Key('settings.${id}Test.result'),
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            key: Key('settings.${id}Test'),
+            onPressed: on && !testing ? () => _test(service) : null,
+            child: Text(testing ? 'Testing…' : 'Test connection'),
+          ),
+        ],
+      ),
+      trailing: Switch(
+        key: Key('settings.$id.switch'),
+        value: on,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings =
+        ref.watch(appSettingsProvider).value ?? const AppSettings();
+    final key = ref.watch(introDbKeyProvider);
+    final android = ref.watch(isAndroidProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _serviceTile(
+          SkipService.skipDb,
+          description:
+              'Skip intro and Skip recap buttons, and credits times that '
+              'bring the next episode sooner, from skipdb.tv.',
+          on: settings.skipDbEnabled,
+          onChanged: (v) => _save((s) => s.copyWith(skipDbEnabled: v)),
+        ),
+        _serviceTile(
+          SkipService.introDb,
+          description:
+              "The same from theintrodb.org, for what SkipDB doesn't "
+              'have. Kept only while the app runs.',
+          on: settings.introDbEnabled,
+          onChanged: (v) => _save((s) => s.copyWith(introDbEnabled: v)),
+        ),
+        ListTile(
+          key: const Key('settings.introDbKey'),
+          leading: const Icon(Icons.key_outlined),
+          title: const Text('TheIntroDB key (optional)'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(switch (key) {
+                AsyncError(:final error) => switch (error) {
+                  ProviderStorageException(:final message) => message,
+                  _ => 'Could not read the key (${error.runtimeType})',
+                },
+                AsyncData(value: _?) =>
+                  android
+                      ? 'Saved, encrypted on this device.'
+                      : 'Saved in the system keyring.',
+                AsyncData() =>
+                  'Not set. A key of your own raises the daily limit.',
+                _ => 'Reading…',
+              }, key: const Key('settings.introDbKey.state')),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (key.value != null)
+                    TextButton(
+                      key: const Key('settings.introDbKey.remove'),
+                      onPressed: _removeKey,
+                      child: const Text('Remove key'),
+                    ),
+                  OutlinedButton(
+                    key: const Key('settings.introDbKey.enter'),
+                    onPressed: _enterKey,
+                    child: const Text('Enter key…'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ],
     );

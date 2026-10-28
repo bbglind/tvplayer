@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/app_settings.dart';
 import '../data/archive_epg_repository.dart';
@@ -56,6 +57,19 @@ final searchDebounceProvider = Provider<Duration>(
 /// Keystore and the downloads folder can't be chosen or opened yet.
 /// Overridden in tests.
 final isAndroidProvider = Provider<bool>((ref) => Platform.isAndroid);
+
+/// Opens a web address in the browser; false when it couldn't.
+/// Overridden in tests.
+final linkOpenerProvider = Provider<Future<bool> Function(Uri)>(
+  (ref) => (uri) async {
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Open link: ${e.runtimeType}');
+      return false;
+    }
+  },
+);
 
 /// Shared HTTP client. Overridden with a mock in tests.
 final httpClientProvider = Provider<http.Client>((ref) {
