@@ -63,6 +63,7 @@ export 'src/xtream/xtream_client.dart';
 export 'src/tmdb/details_view.dart';
 export 'src/tmdb/rate_limiter.dart';
 export 'src/tmdb/title_match.dart';
+export 'src/tmdb/tmdb_links.dart';
 export 'src/tmdb/tmdb_client.dart';
 export 'src/tmdb/tmdb_credential.dart';
 export 'src/tmdb/tmdb_images.dart';

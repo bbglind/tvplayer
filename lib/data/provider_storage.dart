@@ -128,29 +128,41 @@ class SecureProviderStorage implements ProviderStorage {
   @override
   Future<void> delete() => _guard(() => _storage.delete(key: _key));
 
-  Future<T> _guard<T>(Future<T> Function() op) async {
-    try {
-      return await op().timeout(_timeout);
-    } on TimeoutException {
-      throw ProviderStorageException(
-        android
-            ? 'The secure storage of this device did not respond. Retry.'
-            : 'The system keyring did not respond. If an unlock prompt is '
-                  'open, unlock it and retry.',
-      );
-    } catch (e) {
-      // Errors come from libsecret/D-Bus or the Android Keystore and never
-      // contain the stored value.
-      throw ProviderStorageException(
-        android
-            ? 'Could not access the secure storage of this device. Retry. '
-                  '($e)'
-            : 'Could not access the system keyring. tvplayer stores provider '
-                  'credentials in a Secret Service keyring (e.g. GNOME Keyring '
-                  'or KWallet); make sure one is installed, running and '
-                  'unlocked, then retry. ($e)',
-      );
-    }
+  Future<T> _guard<T>(Future<T> Function() op) =>
+      guardKeyring(op, android: android, subject: 'provider credentials');
+}
+
+/// Runs a keystore operation [op] with a timeout, turning its errors into
+/// a [ProviderStorageException] that says what to do. [subject] is what
+/// is stored, e.g. `provider credentials`. Messages never contain the
+/// stored value.
+Future<T> guardKeyring<T>(
+  Future<T> Function() op, {
+  required bool android,
+  required String subject,
+  Duration timeout = const Duration(seconds: 60),
+}) async {
+  try {
+    return await op().timeout(timeout);
+  } on TimeoutException {
+    throw ProviderStorageException(
+      android
+          ? 'The secure storage of this device did not respond. Retry.'
+          : 'The system keyring did not respond. If an unlock prompt is '
+                'open, unlock it and retry.',
+    );
+  } catch (e) {
+    // Errors come from libsecret/D-Bus or the Android Keystore and never
+    // contain the stored value.
+    throw ProviderStorageException(
+      android
+          ? 'Could not access the secure storage of this device. Retry. '
+                '($e)'
+          : 'Could not access the system keyring. tvplayer stores $subject '
+                'in a Secret Service keyring (e.g. GNOME Keyring or KWallet); '
+                'make sure one is installed, running and unlocked, then '
+                'retry. ($e)',
+    );
   }
 }
 

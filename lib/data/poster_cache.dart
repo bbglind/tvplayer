@@ -67,10 +67,22 @@ class PosterCache implements PosterLoader {
   Directory? _dir;
 
   /// Total size of the cached files, once known.
-  @visibleForTesting
   Future<int> get totalBytes async {
     await _ensureIndex();
     return _total;
+  }
+
+  /// Deletes every cached file.
+  Future<void> clear() async {
+    await _ensureIndex();
+    for (final name in _index!.keys.toList()) {
+      try {
+        await File('${_dir!.path}/$name').delete();
+      } on FileSystemException {
+        // Already gone.
+      }
+      _forget(name);
+    }
   }
 
   @override

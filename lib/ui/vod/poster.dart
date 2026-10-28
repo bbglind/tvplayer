@@ -9,6 +9,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../data/poster_cache.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../favourites/favourite_menu.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -55,10 +56,13 @@ class PosterImage extends ImageProvider<PosterImage> {
 
 /// A poster, cover, still or logo from [url], decoded at [decodeWidth]
 /// pixels wide to save memory; [placeholder] while loading or on errors.
+/// When [url] fails, [fallbackUrl] is tried. TMDB images come from their
+/// own cache.
 class Poster extends ConsumerWidget {
   const Poster({
     super.key,
     required this.url,
+    this.fallbackUrl,
     this.decodeWidth = 300,
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
@@ -67,6 +71,7 @@ class Poster extends ConsumerWidget {
   });
 
   final String? url;
+  final String? fallbackUrl;
   final int decodeWidth;
   final BoxFit fit;
 
@@ -84,12 +89,23 @@ class Poster extends ConsumerWidget {
       color: background,
       child: Center(child: Icon(placeholder, color: AppColors.textMuted)),
     );
-    if (url == null || url.isEmpty) return fallback;
+    final second = fallbackUrl;
+    final Widget onError = second == null || second.isEmpty || second == url
+        ? fallback
+        : Poster(
+            url: second,
+            decodeWidth: decodeWidth,
+            fit: fit,
+            alignment: alignment,
+            placeholder: placeholder,
+            background: background,
+          );
+    if (url == null || url.isEmpty) return onError;
+    final loader = url.startsWith(tmdbImageBase)
+        ? ref.watch(tmdbImageLoaderProvider)
+        : ref.watch(posterLoaderProvider);
     return Image(
-      image: ResizeImage(
-        PosterImage(url, ref.watch(posterLoaderProvider)),
-        width: decodeWidth,
-      ),
+      image: ResizeImage(PosterImage(url, loader), width: decodeWidth),
       fit: fit,
       alignment: alignment,
       gaplessPlayback: true,
@@ -97,7 +113,7 @@ class Poster extends ConsumerWidget {
           frame == null && !sync ? fallback : child,
       // Also keeps load failures out of the log, which could otherwise
       // show provider details.
-      errorBuilder: (_, _, _) => fallback,
+      errorBuilder: (_, _, _) => onError,
     );
   }
 }
@@ -190,6 +206,7 @@ class PosterCard extends StatefulWidget {
     required this.title,
     required this.imageUrl,
     required this.onTap,
+    this.imageFallbackUrl,
     this.subtitle,
     this.subtitleIcon,
     this.subtitleIconTooltip,
@@ -211,6 +228,9 @@ class PosterCard extends StatefulWidget {
   final IconData? subtitleIcon;
   final String? subtitleIconTooltip;
   final String? imageUrl;
+
+  /// Tried when [imageUrl] fails, e.g. the other poster of a TMDB title.
+  final String? imageFallbackUrl;
   final VoidCallback onTap;
   final bool watched;
 
@@ -297,6 +317,7 @@ class _PosterCardState extends State<PosterCard> {
                     children: [
                       Poster(
                         url: widget.imageUrl,
+                        fallbackUrl: widget.imageFallbackUrl,
                         placeholder: widget.placeholder,
                         alignment: widget.imageAlignment,
                         decodeWidth: widget.decodeWidth,

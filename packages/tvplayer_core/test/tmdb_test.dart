@@ -440,4 +440,59 @@ void main() {
       expect(asked.queryParameters['first_air_date_year'], '2015');
     });
   });
+
+  group('TmdbWork and TmdbLinks', () {
+    final movies = tmdbMovieItems([
+      Movie(streamId: 1, name: 'Old', tmdbId: '10', added: DateTime.utc(2020)),
+      Movie(streamId: 2, name: 'New', tmdbId: '20', added: DateTime.utc(2025)),
+      Movie(
+        streamId: 3,
+        name: 'New 4K',
+        tmdbId: '20',
+        added: DateTime.utc(2024),
+      ),
+      const Movie(streamId: 4, name: 'Unknown (2019)', tmdbId: '0'),
+      const Movie(streamId: 5, name: 'Unknown (2019)'),
+    ]);
+    final series = tmdbSeriesItems([
+      const Series(seriesId: 7, name: 'Show', tmdbId: '70'),
+    ]);
+
+    test('wants each id once, newest first, and searches the rest', () {
+      final work = TmdbWork.of(
+        movies: movies,
+        series: series,
+        tags: ProviderTags.empty,
+      );
+      expect(work.wanted.map((k) => '$k'), ['movie/20', 'movie/10', 'tv/70']);
+      expect(work.searches.single.title, 'Unknown');
+      expect(work.searches.single.year, 2019);
+    });
+
+    test('link items by id or title match, minus removed ones', () {
+      final key = titleKey('Unknown', 2019)!;
+      final links = TmdbLinks.build(
+        movies: movies,
+        series: series,
+        tags: ProviderTags.empty,
+        matches: {
+          (TmdbKind.movie, key): TitleMatch(MatchOutcome.matched, _at, 99),
+        },
+        removed: {const TmdbKey(TmdbKind.movie, 10)},
+      );
+      expect(links.movie(2)!.key, const TmdbKey(TmdbKind.movie, 20));
+      expect(links.movie(2)!.byTitle, isFalse);
+      expect(links.movie(1), isNull, reason: 'removed link');
+      expect(links.movie(5)!.titleKey, key);
+      expect(
+        links.itemsOf(const TmdbKey(TmdbKind.movie, 20)),
+        unorderedEquals([2, 3]),
+      );
+      expect(
+        links.itemsOf(const TmdbKey(TmdbKind.movie, 99)),
+        unorderedEquals([4, 5]),
+      );
+      expect(links.series(7)!.key, const TmdbKey(TmdbKind.tv, 70));
+    });
+  });
 }

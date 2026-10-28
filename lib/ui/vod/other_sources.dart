@@ -177,12 +177,17 @@ const sourcePosterWidth = 180.0;
 /// sources sharing a label show the provider's date.
 class OtherSourcesSection extends StatelessWidget {
   const OtherSourcesSection({
-    super.key,
+    super.key = const Key('details.sources'),
     required this.children,
     this.inset = 0,
+    this.title = 'Other sources',
   });
 
   final List<Widget> children;
+
+  /// The heading; the same row also shows Recommendations and a person's
+  /// titles.
+  final String title;
 
   /// Distance of the heading from the page edges.
   final double inset;
@@ -191,15 +196,11 @@ class OtherSourcesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     if (children.isEmpty) return const SizedBox.shrink();
     return Column(
-      key: const Key('details.sources'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: EdgeInsets.symmetric(horizontal: inset),
-          child: Text(
-            'Other sources',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
         ),
         const SizedBox(height: 16),
         Padding(

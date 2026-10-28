@@ -36,6 +36,12 @@ final class AppSettings {
     this.startMarginMinutes = defaultStartMarginMinutes,
     this.maxRecordingHours = defaultMaxRecordingHours,
     this.minFreeGb = defaultMinFreeGb,
+    this.tmdbEnabled = false,
+    this.tmdbPreferPosters = false,
+    this.tmdbPaused = false,
+    this.tmdbImageCacheMb = defaultTmdbImageCacheMb,
+    this.skipDbEnabled = false,
+    this.introDbEnabled = false,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -153,6 +159,27 @@ final class AppSettings {
   static const defaultMinFreeGb = 5;
   static const minFreeChoices = [1, 2, 5, 10, 20, 50];
 
+  /// Whether TMDB fills in details (with the key in the keyring).
+  final bool tmdbEnabled;
+
+  /// Whether TMDB posters are shown wherever TMDB has one, rather than
+  /// only where the provider has none.
+  final bool tmdbPreferPosters;
+
+  /// Whether the user paused the background fetch of TMDB info.
+  final bool tmdbPaused;
+
+  /// Size limit of the TMDB image cache in MB (one of
+  /// [tmdbImageCacheChoices]).
+  final int tmdbImageCacheMb;
+
+  static const defaultTmdbImageCacheMb = 1000;
+  static const tmdbImageCacheChoices = [250, 500, 1000, 2000, 4000];
+
+  /// Whether SkipDB and TheIntroDB are used (group 10.2; not shown yet).
+  final bool skipDbEnabled;
+  final bool introDbEnabled;
+
   Duration get endMargin => Duration(minutes: endMarginMinutes);
   Duration get startMargin => Duration(minutes: startMarginMinutes);
   Duration get maxRecordingLength => Duration(hours: maxRecordingHours);
@@ -190,6 +217,12 @@ final class AppSettings {
     int? startMarginMinutes,
     int? maxRecordingHours,
     int? minFreeGb,
+    bool? tmdbEnabled,
+    bool? tmdbPreferPosters,
+    bool? tmdbPaused,
+    int? tmdbImageCacheMb,
+    bool? skipDbEnabled,
+    bool? introDbEnabled,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -221,6 +254,12 @@ final class AppSettings {
     startMarginMinutes: startMarginMinutes ?? this.startMarginMinutes,
     maxRecordingHours: maxRecordingHours ?? this.maxRecordingHours,
     minFreeGb: minFreeGb ?? this.minFreeGb,
+    tmdbEnabled: tmdbEnabled ?? this.tmdbEnabled,
+    tmdbPreferPosters: tmdbPreferPosters ?? this.tmdbPreferPosters,
+    tmdbPaused: tmdbPaused ?? this.tmdbPaused,
+    tmdbImageCacheMb: tmdbImageCacheMb ?? this.tmdbImageCacheMb,
+    skipDbEnabled: skipDbEnabled ?? this.skipDbEnabled,
+    introDbEnabled: introDbEnabled ?? this.introDbEnabled,
   );
 
   Map<String, Object?> toJson() => {
@@ -250,6 +289,12 @@ final class AppSettings {
     'startMarginMinutes': startMarginMinutes,
     'maxRecordingHours': maxRecordingHours,
     'minFreeGb': minFreeGb,
+    'tmdbEnabled': tmdbEnabled,
+    'tmdbPreferPosters': tmdbPreferPosters,
+    'tmdbPaused': tmdbPaused,
+    'tmdbImageCacheMb': tmdbImageCacheMb,
+    'skipDbEnabled': skipDbEnabled,
+    'introDbEnabled': introDbEnabled,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -328,6 +373,16 @@ final class AppSettings {
         defaultMaxRecordingHours,
       ),
       minFreeGb: _choice(json['minFreeGb'], minFreeChoices, defaultMinFreeGb),
+      tmdbEnabled: json['tmdbEnabled'] == true,
+      tmdbPreferPosters: json['tmdbPreferPosters'] == true,
+      tmdbPaused: json['tmdbPaused'] == true,
+      tmdbImageCacheMb: _choice(
+        json['tmdbImageCacheMb'],
+        tmdbImageCacheChoices,
+        defaultTmdbImageCacheMb,
+      ),
+      skipDbEnabled: json['skipDbEnabled'] == true,
+      introDbEnabled: json['introDbEnabled'] == true,
     );
   }
 

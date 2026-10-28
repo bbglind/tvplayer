@@ -8,6 +8,7 @@ import '../../format.dart';
 import '../../state/downloads_controller.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../../state/variants.dart';
 import '../home/continue_actions.dart';
 import 'poster.dart';
@@ -46,7 +47,8 @@ Widget seriesPoster(
       subtitle: subtitle ?? series.year?.toString(),
       subtitleIcon: lastPlayed ? Icons.history : null,
       subtitleIconTooltip: lastPlayed ? 'Last played' : null,
-      imageUrl: series.coverUrl,
+      imageUrl: seriesPosterUrls(ref, series).primary,
+      imageFallbackUrl: seriesPosterUrls(ref, series).fallback,
       placeholder: Icons.tv,
       watched: progress?.finished ?? false,
       // Some of its episodes are downloaded.
@@ -131,7 +133,8 @@ class SeriesScreen extends ConsumerWidget {
       title: series.name,
       favourite: seriesItemRef(series),
       subtitle: [?code, ?title].join(' · '),
-      imageUrl: series.coverUrl,
+      imageUrl: seriesPosterUrls(ref, series).primary,
+      imageFallbackUrl: seriesPosterUrls(ref, series).fallback,
       placeholder: Icons.tv,
       progress: isInProgress(episode) ? episode!.fraction : null,
       actions: [removeFromContinueAction(context, ref, series: series)],

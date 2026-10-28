@@ -11,6 +11,7 @@ import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/downloads_controller.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../../state/variants.dart';
 import '../downloads/download_actions.dart';
 import '../downloads/download_button.dart';
@@ -20,13 +21,16 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
 import '../theme/compact.dart';
-import 'details_picture.dart';
+import 'details_backdrop.dart';
+import 'details_menu.dart';
 import 'other_sources.dart';
 import 'poster.dart';
 import 'provider_title.dart';
+import 'tmdb_sections.dart';
 
-/// One series: details, a tab per season (specials last) with watched
-/// progress, and the season's episodes.
+/// One series: details (from the provider, gaps filled from TMDB), a tab
+/// per season (specials last) with watched progress, the season's
+/// episodes, then Cast, Recommendations and Other sources.
 class SeriesDetailsScreen extends ConsumerStatefulWidget {
   const SeriesDetailsScreen({super.key, required this.series});
 
@@ -111,7 +115,11 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      // A backdrop reaches the top edge, behind the back arrow.
+      extendBodyBehindAppBar: true,
+      appBar: detailsAppBar(
+        actions: [DetailsMenu(item: seriesTmdbItem(widget.series))],
+      ),
       body: FutureBuilder(
         future: _info,
         builder: (context, snapshot) {
@@ -160,10 +168,37 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
         ? const <Episode>[]
         : info.episodesForSeason(season);
     final downloads = ref.watch(downloadsProvider);
+    final series = widget.series;
+    final tmdb = ref.watch(tmdbItemTitleProvider(seriesTmdbItem(series))).value;
+    final shown = DetailsView.combine(
+      provider: meta ?? _listMetadata(series),
+      listPoster: series.coverUrl,
+      listBackdrops: series.backdropUrls,
+      listYear: series.year,
+      listRating: series.rating,
+      tmdb: tmdb,
+      preferTmdbPosters: ref.watch(tmdbPreferPostersProvider),
+      compact: isCompact(context),
+    );
+    // TMDB's episodes of the season shown: descriptions and stills where
+    // the provider has none.
+    final tmdbSeason = tmdb == null || season == null
+        ? null
+        : ref
+              .watch(
+                tmdbSeasonProvider((
+                  tvId: tmdb.key.id,
+                  number: season,
+                  ongoing: tmdb.ongoing,
+                )),
+              )
+              .value;
     return CustomScrollView(
       key: const Key('series.scroll'),
       slivers: [
-        SliverToBoxAdapter(child: _buildHeader(context, info, meta, watch)),
+        SliverToBoxAdapter(
+          child: _buildHeader(context, info, meta, shown, watch),
+        ),
         SliverToBoxAdapter(child: _buildSeasonBar(context, info, tabs, watch)),
         if (tabs.isEmpty)
           const SliverToBoxAdapter(
@@ -185,8 +220,11 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
                 ref.watch(providerTagsProvider),
                 title: meta?.episode(e)?.title,
               ),
-              meta: meta?.episode(e),
-              fallbackImage: meta?.posterUrl ?? widget.series.coverUrl,
+              meta: withTmdbEpisode(
+                meta?.episode(e),
+                tmdbSeason?.episode(e.episodeNumber),
+              ),
+              fallbackImage: shown.posterUrls.primary,
               progress: view.progress(e),
               download: downloads.forWatchKey(episodeKey(e.id)),
               onPlay: () => _play(info, e),
@@ -195,9 +233,19 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
           },
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 36)),
+        if (shown.people.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 36),
+              child: CastRow(people: shown.people),
+            ),
+          ),
+        SliverToBoxAdapter(
+          child: RecommendationsRow(keys: shown.recommendations),
+        ),
         SliverToBoxAdapter(
           child: OtherSourcesSection(
-            inset: 40,
+            inset: pageSide(context),
             children: seriesPosters(
               context,
               ref,
@@ -210,25 +258,40 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     );
   }
 
+  /// The list entry's details, while the provider's details are missing.
+  static MediaMetadata _listMetadata(Series s) => MediaMetadata(
+    plot: s.plot,
+    genre: s.genre,
+    cast: s.cast,
+    director: s.director,
+    rating: s.rating,
+    year: s.year,
+    posterUrl: s.coverUrl,
+    backdropUrls: s.backdropUrls,
+  );
+
   Widget _buildHeader(
     BuildContext context,
     SeriesInfo info,
     MediaMetadata? meta,
+    DetailsView shown,
     WatchData watch,
   ) {
     final theme = Theme.of(context);
     final series = widget.series;
-    final rating = meta?.rating ?? series.rating;
+    final rating = shown.rating;
+    final seasons = seasonTabs(info).where((t) => t.number != 0).length;
     final tags = ref.watch(providerTagsProvider);
     final display = tags.display(series.name);
     final sources = seriesSources(ref, series);
     final view = _view;
     final facts = [
-      if ((meta?.year ?? series.year) case final year?) '$year',
+      if (shown.year case final year?) '$year',
       ?display.country,
       ?sources.labels.dateOf(series.seriesId),
-      ?(meta?.genre ?? series.genre),
+      if (seasons > 0) seasons == 1 ? '1 season' : '$seasons seasons',
       if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
+      ?shown.genre,
     ];
     final next = upNext(info, watch, group: view) ?? _firstEpisode(info);
     final nextProgress = next == null ? null : view.progress(next);
@@ -240,17 +303,15 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       null => null,
     };
     final lastPlayed = sources.lastPlayed == series.seriesId;
-    final poster = SizedBox(
-      width: 180,
-      child: AspectRatio(
-        aspectRatio: 2 / 3,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: Poster(
-            url: meta?.posterUrl ?? series.coverUrl,
-            decodeWidth: 360,
-            placeholder: Icons.tv,
-          ),
+    final poster = AspectRatio(
+      aspectRatio: 2 / 3,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Poster(
+          url: shown.posterUrls.primary,
+          fallbackUrl: shown.posterUrls.fallback,
+          decodeWidth: 360,
+          placeholder: Icons.tv,
         ),
       ),
     );
@@ -302,7 +363,7 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
           ],
         ),
         const SizedBox(height: 20),
-        if ((meta?.plot ?? series.plot) case final plot?)
+        if (shown.plot case final plot?)
           Text(
             plot,
             maxLines: 6,
@@ -311,7 +372,8 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
               color: AppColors.textSecondary,
             ),
           ),
-        if ((meta?.cast ?? series.cast) case final cast?) ...[
+        // The Cast row shows TMDB's cast with photos instead.
+        if (shown.cast case final cast? when shown.people.isEmpty) ...[
           const SizedBox(height: 8),
           Text(
             'Cast: $cast',
@@ -322,29 +384,11 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
         ],
       ],
     );
-    return Padding(
-      padding: pagePadding(context).copyWith(bottom: 24),
-      // Phone layout: the picture on top, the details below it.
-      child: isCompact(context)
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DetailsPicture(
-                  backdropUrl: meta?.backdropUrls.firstOrNull,
-                  poster: poster,
-                ),
-                const SizedBox(height: 16),
-                details,
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                poster,
-                const SizedBox(width: 32),
-                Expanded(child: details),
-              ],
-            ),
+    return DetailsHeader(
+      backdropUrl: shown.backdropUrl,
+      poster: poster,
+      details: details,
+      posterWidth: 180,
     );
   }
 

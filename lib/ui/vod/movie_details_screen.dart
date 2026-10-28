@@ -7,6 +7,7 @@ import '../../format.dart';
 import '../../player/playback_request.dart';
 import '../../state/downloads_controller.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../../state/variants.dart';
 import '../downloads/download_actions.dart';
 import '../downloads/download_button.dart';
@@ -15,13 +16,16 @@ import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
-import 'details_picture.dart';
+import 'details_backdrop.dart';
+import 'details_menu.dart';
 import 'other_sources.dart';
 import 'poster.dart';
 import 'provider_title.dart';
+import 'tmdb_sections.dart';
 
-/// One movie: poster, facts, plot and cast from the metadata source, and
-/// Play/Resume.
+/// One movie: backdrop, poster, facts and plot from the provider with gaps
+/// filled from TMDB, Play/Resume, then Cast, Recommendations and Other
+/// sources.
 class MovieDetailsScreen extends ConsumerStatefulWidget {
   const MovieDetailsScreen({super.key, required this.movie});
 
@@ -44,7 +48,11 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      // A backdrop reaches the top edge, behind the back arrow.
+      extendBodyBehindAppBar: true,
+      appBar: detailsAppBar(
+        actions: [DetailsMenu(item: movieTmdbItem(widget.movie))],
+      ),
       body: FutureBuilder(
         future: _details,
         builder: (context, snapshot) => _buildBody(
@@ -73,25 +81,36 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
     final from = group == null || group.from == movie.streamId
         ? null
         : sources.labels.describe(group.from);
-    final rating = meta?.rating ?? movie.rating;
+    final tmdb = ref.watch(tmdbItemTitleProvider(movieTmdbItem(movie))).value;
+    final view = DetailsView.combine(
+      provider: meta,
+      listPoster: movie.posterUrl,
+      listYear: movie.year,
+      listRating: movie.rating,
+      tmdb: tmdb,
+      preferTmdbPosters: ref.watch(tmdbPreferPostersProvider),
+      compact: isCompact(context),
+    );
+    final rating = view.rating;
     final tags = ref.watch(providerTagsProvider);
     final display = tags.display(movie.name);
     final facts = [
-      if ((meta?.year ?? movie.year) case final year?) '$year',
+      if (view.year case final year?) '$year',
       ?display.country,
       ?sources.labels.dateOf(movie.streamId),
-      ?meta?.genre,
+      ?view.genre,
       if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
-      if (meta?.duration case final d?) formatRuntime(d),
+      if (view.runtime case final d?) formatRuntime(d),
     ];
     return SingleChildScrollView(
-      padding: pagePadding(context),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildMain(
             context,
             meta,
+            view,
             loading: loading,
             error: error,
             progress: progress,
@@ -103,8 +122,17 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
             tags: tags,
             lastPlayed: sources.lastPlayed == movie.streamId,
           ),
-          const SizedBox(height: 36),
-          OtherSourcesSection(children: moviePosters(context, sources)),
+          if (view.people.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            CastRow(people: view.people),
+            const SizedBox(height: 36),
+          ] else
+            const SizedBox(height: 36),
+          RecommendationsRow(keys: view.recommendations),
+          OtherSourcesSection(
+            inset: pageSide(context),
+            children: moviePosters(context, sources),
+          ),
         ],
       ),
     );
@@ -112,7 +140,8 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
 
   Widget _buildMain(
     BuildContext context,
-    MediaMetadata? meta, {
+    MediaMetadata? meta,
+    DetailsView view, {
     required bool loading,
     required Object? error,
     required WatchProgress? progress,
@@ -126,33 +155,27 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
   }) {
     final theme = Theme.of(context);
     final movie = widget.movie;
-    final poster = SizedBox(
-      width: 260,
-      child: Column(
-        children: [
-          AspectRatio(
-            aspectRatio: 2 / 3,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Poster(
-                    url: meta?.posterUrl ?? movie.posterUrl,
-                    decodeWidth: 520,
-                  ),
-                  if (isInProgress(progress) && progress!.fraction != null)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: WatchProgressBar(progress.fraction!),
-                    ),
-                ],
-              ),
+    final poster = AspectRatio(
+      aspectRatio: 2 / 3,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Poster(
+              url: view.posterUrls.primary,
+              fallbackUrl: view.posterUrls.fallback,
+              decodeWidth: 520,
             ),
-          ),
-        ],
+            if (isInProgress(progress) && progress!.fraction != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: WatchProgressBar(progress.fraction!),
+              ),
+          ],
+        ),
       ),
     );
     final details = Column(
@@ -256,7 +279,7 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
             'Details unavailable: ${describeProviderError(error)}',
             style: TextStyle(color: theme.colorScheme.error),
           ),
-        if (meta?.plot case final plot?) ...[
+        if (view.plot case final plot?) ...[
           Text(
             plot,
             style: theme.textTheme.bodyLarge?.copyWith(
@@ -265,8 +288,10 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
           ),
           const SizedBox(height: 16),
         ],
-        if (meta?.cast case final cast?) _Fact('Cast', cast),
-        if (meta?.director case final director?) _Fact('Director', director),
+        // The Cast row shows TMDB's cast with photos instead.
+        if (view.cast case final cast? when view.people.isEmpty)
+          _Fact('Cast', cast),
+        if (view.director case final director?) _Fact('Director', director),
         if (error != null)
           TextButton.icon(
             onPressed: () => setState(() => _details = _load()),
@@ -275,28 +300,11 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
           ),
       ],
     );
-    if (isCompact(context)) {
-      // Phone layout: the picture on top, the details below it.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DetailsPicture(
-            backdropUrl: meta?.backdropUrls.firstOrNull,
-            poster: poster,
-            progress: isInProgress(progress) ? progress!.fraction : null,
-          ),
-          const SizedBox(height: 16),
-          details,
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        poster,
-        const SizedBox(width: 32),
-        Expanded(child: details),
-      ],
+    return DetailsHeader(
+      backdropUrl: view.backdropUrl,
+      poster: poster,
+      details: details,
+      progress: isInProgress(progress) ? progress!.fraction : null,
     );
   }
 }

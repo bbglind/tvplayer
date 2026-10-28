@@ -6,6 +6,7 @@ import '../../format.dart';
 import '../../state/downloads_controller.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../../state/variants.dart';
 import '../home/continue_actions.dart';
 import 'movie_details_screen.dart';
@@ -38,7 +39,8 @@ Widget moviePoster(
       subtitle: subtitle ?? movie.year?.toString(),
       subtitleIcon: lastPlayed ? Icons.history : null,
       subtitleIconTooltip: lastPlayed ? 'Last played' : null,
-      imageUrl: movie.posterUrl,
+      imageUrl: moviePosterUrls(ref, movie).primary,
+      imageFallbackUrl: moviePosterUrls(ref, movie).fallback,
       watched: progress?.watched ?? false,
       downloaded: ref.watch(
         downloadsProvider.select(
@@ -90,7 +92,8 @@ class MoviesScreen extends ConsumerWidget {
                   title: movie.name,
                   favourite: movieItemRef(movie),
                   subtitle: 'Resume at ${formatDuration(progress.position)}',
-                  imageUrl: movie.posterUrl,
+                  imageUrl: moviePosterUrls(ref, movie).primary,
+                  imageFallbackUrl: moviePosterUrls(ref, movie).fallback,
                   progress: progress.fraction,
                   actions: [
                     removeFromContinueAction(context, ref, movie: movie),

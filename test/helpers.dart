@@ -14,10 +14,12 @@ import 'package:tvplayer/data/epg_repository.dart';
 import 'package:tvplayer/data/free_space.dart';
 import 'package:tvplayer/data/poster_cache.dart';
 import 'package:tvplayer/data/provider_storage.dart';
+import 'package:tvplayer/data/service_credentials.dart';
 import 'package:tvplayer/data/vod_repository.dart';
 import 'package:tvplayer/state/downloads_controller.dart';
 import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/state/tmdb.dart';
 import 'package:tvplayer/ui/player/player_hint.dart';
 import 'package:tvplayer/ui/shell/snack_bar_dismisser.dart';
 import 'package:tvplayer/ui/theme/app_theme.dart';
@@ -335,6 +337,44 @@ class FakePosterLoader implements PosterLoader {
   }
 }
 
+/// [ServiceCredentials] in memory.
+class MemoryServiceCredentials implements ServiceCredentials {
+  MemoryServiceCredentials([Map<MetadataService, String>? values])
+    : values = values ?? {};
+
+  final Map<MetadataService, String> values;
+
+  @override
+  Future<String?> read(MetadataService service) async => values[service];
+
+  @override
+  Future<void> write(MetadataService service, String value) async =>
+      values[service] = value;
+
+  @override
+  Future<void> delete(MetadataService service) async => values.remove(service);
+}
+
+/// TMDB image cache without files or downloads.
+class FakeImageCache extends PosterCache {
+  FakeImageCache() : super(client: http.Client());
+
+  final requests = <String>[];
+  int cleared = 0;
+
+  @override
+  Future<Uint8List> load(String url) async {
+    requests.add(url);
+    throw const PosterException('No images in tests');
+  }
+
+  @override
+  Future<int> get totalBytes async => 0;
+
+  @override
+  Future<void> clear() async => cleared++;
+}
+
 /// [VodSource] serving fixed catalogues and series info.
 class FakeVodSource implements VodSource {
   FakeVodSource({
@@ -555,7 +595,8 @@ class FakeTransfers {
 ///
 /// The provider storage (empty unless [providerStorage] is given),
 /// settings, the guide, past programme and catalogue caches, the watch history, favourites,
-/// posters and the device time zone (`Europe/Stockholm`) are always faked;
+/// posters, service keys (none unless [serviceCredentials] is given) and
+/// the device time zone (`Europe/Stockholm`) are always faked;
 /// pass [settings], [epg], [vod], [watch], [favourites] or [playlistStatus]
 /// to inspect them. [now] fixes the
 /// clock. Searches report at once unless [searchDebounce] is given.
@@ -575,6 +616,7 @@ Widget testApp({
   FakeTransfers? transfers,
   DateTime? now,
   Duration searchDebounce = Duration.zero,
+  ServiceCredentials? serviceCredentials,
 }) {
   final downloadsStore = downloads ?? MemoryDownloadsStore();
   final watchStore = watch ?? MemoryWatchStore();
@@ -603,6 +645,10 @@ Widget testApp({
       ),
       defaultDownloadFolderProvider.overrideWithValue(testDownloadFolder),
       posterLoaderProvider.overrideWithValue(FakePosterLoader()),
+      serviceCredentialsProvider.overrideWithValue(
+        serviceCredentials ?? MemoryServiceCredentials(),
+      ),
+      tmdbImageLoaderProvider.overrideWithValue(FakeImageCache()),
       // Background isolates don't finish inside fake-async widget tests.
       backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),
       searchDebounceProvider.overrideWithValue(searchDebounce),

@@ -8,6 +8,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
 import '../../state/home.dart';
+import '../../state/tmdb.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
@@ -148,7 +149,32 @@ class _FeaturedBannerState extends ConsumerState<FeaturedBanner> {
     final index = _index.clamp(0, _count - 1);
     final pick = widget.picks[index];
     final details = ref.watch(featuredDetailsProvider(pick)).value;
-    final view = _FeaturedView.of(pick, details);
+    final view = _FeaturedView.of(
+      pick,
+      details,
+      tmdbBackdrop: switch (pick) {
+        MoviePick(:final movie) => movieBackdropUrl(ref, movie, large: true),
+        SeriesPick(:final series) => seriesBackdropUrl(
+          ref,
+          series,
+          large: true,
+        ),
+      },
+      posters: switch (pick) {
+        MoviePick(:final movie) => moviePosterUrls(
+          ref,
+          movie,
+          providerPoster: details?.posterUrl,
+          size: TmdbImageSize.w500,
+        ),
+        SeriesPick(:final series) => seriesPosterUrls(
+          ref,
+          series,
+          providerPoster: details?.posterUrl,
+          size: TmdbImageSize.w500,
+        ),
+      },
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final height = FeaturedBanner.height(context, constraints.maxWidth);
@@ -271,7 +297,14 @@ final class _FeaturedView {
     required this.placeholder,
   });
 
-  factory _FeaturedView.of(VodPick pick, MediaMetadata? details) {
+  /// [tmdbBackdrop] comes before the provider's backdrop; the poster is
+  /// the first of [posters] (see [moviePosterUrls]).
+  factory _FeaturedView.of(
+    VodPick pick,
+    MediaMetadata? details, {
+    String? tmdbBackdrop,
+    List<String> posters = const [],
+  }) {
     String? rating(double? r) =>
         r != null && r > 0 ? '★ ${r.toStringAsFixed(1)}' : null;
     switch (pick) {
@@ -287,9 +320,10 @@ final class _FeaturedView {
           ],
           plot: details?.plot ?? movie.plot,
           backdrop:
+              tmdbBackdrop ??
               details?.backdropUrls.firstOrNull ??
               movie.backdropUrls.firstOrNull,
-          poster: details?.posterUrl ?? movie.posterUrl,
+          poster: posters.firstOrNull,
           placeholder: Icons.movie_outlined,
         );
       case SeriesPick(:final series):
@@ -309,9 +343,10 @@ final class _FeaturedView {
           ],
           plot: details?.plot ?? series.plot,
           backdrop:
+              tmdbBackdrop ??
               details?.backdropUrls.firstOrNull ??
               series.backdropUrls.firstOrNull,
-          poster: details?.posterUrl ?? series.coverUrl,
+          poster: posters.firstOrNull,
           placeholder: Icons.tv,
         );
     }

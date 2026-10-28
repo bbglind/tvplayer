@@ -8,6 +8,7 @@ import '../../format.dart';
 import '../../state/home.dart';
 import '../../state/navigation.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../epg/now_next.dart';
 import '../favourites/category_icons.dart';
 import '../favourites/favourite_menu.dart';
@@ -255,8 +256,12 @@ Widget continueCard(BuildContext context, WidgetRef ref, ContinueItem item) {
         key: ValueKey('home.continue.movie.${movie.streamId}'),
         title: movie.name,
         subtitle: left,
-        imageUrl: movie.backdropUrls.firstOrNull ?? movie.posterUrl,
-        imageAlignment: movie.backdropUrls.isEmpty
+        imageUrl:
+            movieBackdropUrl(ref, movie) ?? moviePosterUrls(ref, movie).primary,
+        imageFallbackUrl: movieBackdropUrl(ref, movie) == null
+            ? moviePosterUrls(ref, movie).fallback
+            : moviePosterUrls(ref, movie).primary,
+        imageAlignment: movieBackdropUrl(ref, movie) == null
             ? Alignment.topCenter
             : Alignment.center,
         decodeWidth: 600,
@@ -293,8 +298,13 @@ Widget continueCard(BuildContext context, WidgetRef ref, ContinueItem item) {
         key: ValueKey('home.continue.series.${series.seriesId}'),
         title: series.name,
         subtitle: parts.join(' · '),
-        imageUrl: series.backdropUrls.firstOrNull ?? series.coverUrl,
-        imageAlignment: series.backdropUrls.isEmpty
+        imageUrl:
+            seriesBackdropUrl(ref, series) ??
+            seriesPosterUrls(ref, series).primary,
+        imageFallbackUrl: seriesBackdropUrl(ref, series) == null
+            ? seriesPosterUrls(ref, series).fallback
+            : seriesPosterUrls(ref, series).primary,
+        imageAlignment: seriesBackdropUrl(ref, series) == null
             ? Alignment.topCenter
             : Alignment.center,
         decodeWidth: 600,

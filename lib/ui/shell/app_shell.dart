@@ -6,6 +6,7 @@ import '../../state/downloads_controller.dart';
 import '../../state/navigation.dart';
 import '../../state/playlist_refresh.dart';
 import '../../state/providers.dart';
+import '../../state/tmdb.dart';
 import '../downloads/downloads_screen.dart';
 import '../epg/guide_screen.dart';
 import '../home/home_screen.dart';
@@ -120,6 +121,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     ref.listen(autoRefreshFailureProvider, (_, failure) {
       if (failure != null) _showRefreshFailure(failure);
     });
+    // Keeps the TMDB background fetch running while the app is open.
+    ref.listen(tmdbSyncProvider, (_, _) {});
     // Keeps the downloads queue running while the app is open.
     ref.listen(downloadsProvider, (_, _) {});
     ref.listen(downloadNoticeProvider, (_, notice) {
