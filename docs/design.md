@@ -297,6 +297,7 @@ clean and simple over every desktop feature.
   available while recording"), Record on live TV (see Recording), the
   seek bar with position and end time (on live TV nothing, or "Paused · Behind live
   0:45" while paused; in a replay clock times, see Replay player), the
+  skip button while an intro or recap plays (see Skip button), the
   "LIVE" button in a replay or while live TV is paused,
   mute button + volume slider (0–100 %, about 120 wide), the Channels and
   favourite pills (live TV), the Subtitles pill, fullscreen, stop, and the
@@ -314,7 +315,8 @@ clean and simple over every desktop feature.
   always kept, so the video never changes size. Windowed, the tooltips of
   the side panels and the next-episode card stay inside the panel column;
   in fullscreen they use the hint line too, which mpv shows with the bar
-  and which hides with it. In the touch player (Android) there is no hint
+  and which hides with it (the prominent skip button, shown without the
+  bar, has no hint until the bar shows). In the touch player (Android) there is no hint
   line: controls use ordinary tooltips, shown on long-press, without key
   names ("Pause live TV", "Seek (or double-tap left or right: 10 s)").
 - **Player layout**: windowed, the video keeps its area; the controls bar
@@ -387,7 +389,10 @@ clean and simple over every desktop feature.
   safe area (camera cutout). Side panels (Subtitles and audio, Debug
   info) slide in from the right edge, 360 wide (at most 70 % of the
   screen), `surface`, over a `scrim` 40 % barrier that closes them on a
-  tap; Back closes them too.
+  tap; Back closes them too. Episodes: the skip button and the
+  next-episode card at the bottom right over the video, above the seek
+  bar; at the end of an episode the next one plays in the player (unless
+  cancelled, Play next Off or the last one: then it closes).
 - **Player errors** (standing rule): never mpv's own text in the UI. A
   known message gets plain words ("The provider refused the stream (HTTP
   403).", "Couldn't connect to the stream.", "This video or audio format
@@ -419,7 +424,26 @@ clean and simple over every desktop feature.
 - **Next episode card**: `surface` panel 360 wide, "Next episode in N s"
   (card title), the episode code and title (`textSecondary`), primary
   button "Play now" (focused) and secondary "Cancel" (also Esc). Windowed it
-  sits beside the video, in fullscreen at the bottom right over it.
+  sits beside the video, in fullscreen at the bottom right over it; in the
+  touch player at the bottom right over the video, above the seek bar,
+  with ordinary tooltips. It comes "Play next episode" seconds before the
+  end, or, when the episode's credits times are known, at the start of the
+  credits with a 10 s countdown (playback time: pausing holds it). Play
+  next Off: no card and no auto-start.
+- **Skip button** (episodes with intro or recap times): "Skip intro" /
+  "Skip recap" with the `fast_forward` icon; it jumps to the end of the
+  part. It shows from the part's start to 1 s before its end. When
+  playback reaches the start (or starts there) it is the filled primary
+  button for 10 s of playback ("prominent"), once per part; after that,
+  or after resuming or seeking into the middle, it is outlined and only
+  shows with the controls. Windowed it sits in the controls bar after the
+  seek bar (the bar is always shown there; the video never resizes for
+  it). In fullscreen the prominent button is drawn by mpv at the bottom
+  right of the bottom overlay while the controls are hidden, later it is
+  in the bar. Touch player: at the bottom right over the video, above
+  the seek bar, prominent on its own, then only with the controls. Hint
+  "Skip intro (i)" (touch: "Skip intro" on long-press). Never skips by
+  itself.
 - **Favourite star**: filled accent star when the item is in at least one of
   my categories; otherwise an outline star that shows only on hover or
   focus. At the right end of channel rows; at the top left of posters, on a
@@ -508,12 +532,25 @@ clean and simple over every desktop feature.
   now" / "Continue fetching TMDB info"), "Prefer TMDB posters" switch
   (disabled while TMDB is off), "Image cache" ("TMDB images: 312 MB of
   1 GB", a dropdown of sizes and "Clear"), and "Removed matches: N" with
-  "Allow matching again" when there are any. SkipDB and TheIntroDB get
-  rows here when they work (group 10.2).
+  "Allow matching again" when there are any. Then "SkipDB" and
+  "TheIntroDB" (`fast_forward_outlined`, both default on): the name, a
+  line on what it gives, the result of the last test, an outlined "Test
+  connection" below the text (disabled while off) and the switch as
+  trailing; then "TheIntroDB key (optional)" ("Not set. A key of your own
+  raises the daily limit." / "Saved in the system keyring.", "Remove key"
+  and "Enter key…" below the text, so phone rows keep their width). Keys
+  in the system keyring like TMDB's; SkipDB needs none for reading. A
+  service that is off gets no requests (not even a test).
 - **Settings › About** (last): the app's name (`titleLarge`) and a short
   line, then "Data sources" with the TMDB logo 14 high (smaller than the
   app's name, as TMDB asks) and "This product uses the TMDB API but is not
-  endorsed or certified by TMDB." (`textSecondary`).
+  endorsed or certified by TMDB." (`textSecondary`); then "Intro, recap and
+  credits times come from SkipDB and TheIntroDB, made by their
+  communities." and "SkipDB data © SkipDB contributors, available under the
+  Open Database License (ODbL) 1.0." (`textSecondary`), and text-button
+  links (`open_in_new` 16, the address as tooltip) "SkipDB", "ODbL 1.0" and
+  "TheIntroDB" that open the browser (an error message with the address
+  if it can't).
 - **Settings › Playlist** (right after Provider): a row per part
   (Channels, Movies, Series, TV guide) with when it was last updated, in
   local time ("Updated Today 12:40 · 4,512 channels", "Yesterday 21:05",
@@ -598,6 +635,9 @@ English for now.
 | My order | The sort of Movies/Series in my categories that keeps my order (default there) |
 | Channels | The player's zap panel of my Live TV categories |
 | Play next episode | The setting and countdown that start the next episode |
+| Skip intro / Skip recap | The player button that jumps to the end of an episode's intro or recap |
+| Credits | The end credits of an episode; their start brings the next-episode card |
+| SkipDB / TheIntroDB | The community databases of intro, recap and credits times (Settings › Services) |
 | Playlist | The provider's channels, movies, series and TV guide, as downloaded |
 | Refresh all | Downloads every part of the playlist again, one after another |
 | Automatic refresh | The setting: Off, On app start, Every 6 hours, Daily (default) |

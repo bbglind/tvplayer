@@ -294,8 +294,8 @@ class SettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.skip_next_outlined),
               title: const Text('Play next episode'),
               subtitle: const Text(
-                'Counts down this long before the end of an episode, then '
-                'plays the next one.',
+                'Counts down this long before the end of an episode (or '
+                '10 s from its credits, when known), then plays the next one.',
               ),
               trailing: DropdownButton<int>(
                 key: const Key('settings.playNext'),

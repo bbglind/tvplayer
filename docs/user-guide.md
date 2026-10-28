@@ -624,6 +624,8 @@ From left to right (only the parts that apply are shown):
 - **Seek bar** with the position and the end time (movies, episodes,
   replays). Double-click the end time (or focus it and press Enter) to
   switch between the length and the time left ("-12:34").
+- **"Skip intro"** / **"Skip recap"** while an episode's intro or recap
+  plays (see [Skip intro and recap](#skip-intro-and-recap)).
 - **"LIVE"** in a replay or while live TV is paused: back to live.
 - **Mute** and a **volume** slider (0–100 %). The volume is remembered.
 - **"Channels"** and the **favourite star** (live TV).
@@ -651,7 +653,9 @@ playback and returns to where you started.
 **f**, double click or the fullscreen button. The video fills the screen;
 the controls bar, panels and the next-episode card appear over it when you
 move the mouse or press a key, and hide again after 3 seconds (with the
-mouse pointer). They stay while a panel is open, a control has keyboard
+mouse pointer). When an intro or recap starts, "Skip intro" / "Skip
+recap" shows at the bottom right for about 10 seconds even while the
+controls are hidden; after that it is in the controls bar. They stay while a panel is open, a control has keyboard
 focus or you drag a slider. **Esc** (or f, or a double click) leaves
 fullscreen.
 
@@ -674,6 +678,26 @@ When playback starts, tracks are picked from your preferred languages in
 by hand while watching a series, that choice is remembered for the rest of
 the series.
 
+### Skip intro and recap
+
+For episodes, the player looks up when the intro, the recap ("Previously
+on …") and the credits are, from the community databases SkipDB and
+TheIntroDB (see [Settings › Services](#services)). Many episodes have no
+times yet; then nothing changes.
+
+- When an intro or recap starts, **"Skip intro"** or **"Skip recap"**
+  appears (gold, "Skip intro (i)" in the hint line) for about 10 seconds.
+  After that it stays, plainer, in the controls bar until the part ends,
+  and shows whenever the controls do.
+- **"Skip intro"**, **"Skip recap"** or **i** jumps to the end of the
+  part. Skipping is always your choice; nothing is skipped on its own.
+- Resuming or seeking into the middle of an intro shows the button only
+  with the controls.
+- Times that look wrong are ignored: parts shorter than 5 seconds, intros
+  longer than 3 minutes, recaps longer than 8 minutes, and credits that
+  would start in the first half of the episode.
+- Movies, live TV and replays have no skip buttons.
+
 ### Next episode
 
 When an episode is close to its end (30 seconds by default, see
@@ -682,6 +706,12 @@ with the episode's code and name, **"Play now"** and **"Cancel"** (also
 Esc). Cancel plays this episode to the end, which then shows "Episode
 finished" with "Play next episode". After a season's last episode it moves
 on to the next season; after the very last episode there is no card.
+
+When the episode's **credits** times are known (see
+[Skip intro and recap](#skip-intro-and-recap)), the card comes when the
+credits start instead and counts down 10 seconds: "Next episode in 10 s".
+Pausing pauses the countdown. With "Play next episode" **Off** there is
+no card and nothing starts on its own, credits or not.
 
 **n** or the "Next episode" button skips ahead at any time.
 
@@ -808,10 +838,25 @@ languages, and a choice made in a series is remembered, as on the desktop.
 
 Movies and episodes start where you left off and save their position as
 they play, so Continue watching follows what you watched on the phone. At
-the end of a movie or episode the player closes.
+the end of a movie the player closes.
 
-Not on Android yet: the Channels panel, the next-episode card, recording,
-the volume slider and mute, and playback statistics.
+Episodes work as on the desktop (see
+[Skip intro and recap](#skip-intro-and-recap) and
+[Next episode](#next-episode)), with the buttons at the bottom right over
+the video:
+
+- **"Skip intro"** / **"Skip recap"** shows for about 10 seconds when the
+  part starts, then only together with the controls (tap the video).
+  Tap it to skip; long-press it to see what it does.
+- The **next-episode card** ("Next episode in 12 s", **"Play now"**,
+  **"Cancel"**) counts down before the end, or from the start of the
+  credits when they are known, and then plays the next episode in the
+  player. The end of an episode also goes on to the next one. With
+  **"Cancel"**, "Play next episode" Off or after the last episode, the
+  player closes at the end.
+
+Not on Android yet: the Channels panel, recording, the volume slider and
+mute, and playback statistics.
 
 ---
 
@@ -892,6 +937,10 @@ ask first ("Remove “X”? The file (2.1 GB) is deleted.").
 - **Downloaded** movies and episodes play from the file: no provider, no
   network, no question. They share their position and watched marks with
   the streamed version, so you can start online and finish offline.
+- Downloaded episodes use the **SkipDB** times saved on the device (when
+  SkipDB is on, they are saved as you add the download, and whenever the
+  episode plays online). Nothing is looked up while a download plays, and
+  TheIntroDB's times are never saved, so they aren't there offline.
 - Recordings and archive programmes keep no position and don't appear in
   Continue watching.
 
@@ -1024,6 +1073,9 @@ messages, such as those offering "Undo", have no mark.
 
 - **"Play next episode"**: how long before the end of an episode the
   countdown starts: Off, 15, 20, **30** (default), 45, 60, 90 or 120 s.
+  When the episode's credits times are known, the countdown starts with
+  the credits instead and lasts 10 s (see [Next episode](#next-episode)).
+  Off: nothing starts on its own.
 - **"Show playback statistics"** (default off): dropped-frame counters
   below the video.
 - **"Player debug info"** (default off): mpv property overlay, hardware
@@ -1064,8 +1116,9 @@ as "My categories: 2 · 5 hidden".
 
 ### Services
 
-Online services that add information the provider lacks. Without a key
-the app works exactly as without them.
+Online services that add information the provider lacks. TMDB needs a
+key of your own; SkipDB and TheIntroDB work without one. Switched off, a
+service gets no requests at all and the app works as without it.
 
 - **"TMDB"** (default off): "Fill in missing details, background images,
   cast and recommendations from The Movie Database."
@@ -1103,11 +1156,55 @@ isn't fetched again (titles TMDB didn't know, and titles without a match,
 are tried again after 30 days; a title you open is refreshed when its
 info is older than 30 days).
 
+Intro, recap and credits times (see
+[Skip intro and recap](#skip-intro-and-recap)):
+
+- **"SkipDB"** (default on): "Skip intro and Skip recap buttons, and
+  credits times that bring the next episode sooner, from skipdb.tv." Asked
+  first. Its answers are kept on the device (30 days; "no times" 3 days).
+- **"TheIntroDB"** (default on): "The same from theintrodb.org, for what
+  SkipDB doesn't have. Kept only while the app runs." Asked only for the
+  parts SkipDB has no times for. Its answers stay in memory until the app
+  closes and are never saved, as its terms ask.
+- Each has **"Test connection"** (only while it is on): "Connected to
+  SkipDB.", "Couldn't reach SkipDB. Check your internet connection.",
+  "SkipDB is busy or the daily limit is reached. Try again later." or
+  "SkipDB couldn't answer. Try again later." (the same for TheIntroDB).
+  It asks for one public example episode.
+- **"TheIntroDB key (optional)"**: "Not set. A key of your own raises the
+  daily limit.", or "Saved in the system keyring." ("Saved, encrypted on
+  this device." on Android). **"Enter key…"** asks for it ("Optional.
+  Paste the API key from your own account on theintrodb.org; it raises the
+  daily limit of lookups."); **"Remove key"** deletes it. Without a key
+  TheIntroDB allows a few thousand lookups a day from your connection,
+  far more than watching needs. With a key, "Test connection" can also
+  answer "TheIntroDB didn't accept this key. Check that you copied all of
+  it.".
+
+**What is sent.** When an episode starts playing (and for the episode
+after it, so it is ready), the app asks the services that are on:
+
+- **SkipDB**: the series' **IMDb id**, the **season and episode number**
+  and the episode's **length** (so SkipDB can fit its times to your copy).
+  Also when you add an episode to Downloads.
+- **TheIntroDB**: the series' **TMDB id** (or its IMDb id when there is no
+  TMDB id), the **season and episode number**, the episode's **length**,
+  and your key if you saved one.
+- Like any website, both see your device's **IP address**. Nothing else
+  is sent: not your provider, its addresses or your login, not the
+  episode's title, not what else you watch.
+
+To send nothing, switch **"SkipDB"** and **"TheIntroDB"** off here.
+
 ### About
 
 The app's name, and the data sources it credits: the TMDB logo with
 "This product uses the TMDB API but is not endorsed or certified by
-TMDB."
+TMDB.", then "Intro, recap and credits times come from SkipDB and
+TheIntroDB, made by their communities." and "SkipDB data © SkipDB
+contributors, available under the Open Database License (ODbL) 1.0.",
+with links **"SkipDB"**, **"ODbL 1.0"** and **"TheIntroDB"** that open
+in the browser.
 
 ---
 
@@ -1135,6 +1232,7 @@ gold ring.
 | Player | m | Mute on/off |
 | Player | c | Channels panel (live TV) |
 | Player | n | Next episode |
+| Player | i | Skip intro / Skip recap (while the button shows) |
 | Player | l | Go live (in a replay or while live TV is paused) |
 | Player | r | Record / stop recording (live TV) |
 | Player | Enter (on the end time) | Switch between length and time left |
@@ -1190,6 +1288,15 @@ just choose "Pause download" and it resumes when you stop.
 - **Replay** and **pause live TV** depend on the provider keeping an archive
   for that channel (the replay mark). How far back depends on the provider.
 - The UI is in **English** only.
+- **Skip times** come from community databases (SkipDB, TheIntroDB) and
+  exist for only part of the episodes, mostly of popular series; some
+  times may be off. Episodes without times play as before.
+- **SkipDB needs the series' IMDb id**, which the app gets from TMDB (or
+  from the provider, when it sends one). With TMDB off, or for a series
+  TMDB has no match or IMDb id for, SkipDB isn't asked; TheIntroDB is
+  still asked when there is a TMDB id. Without either id there are no
+  skip times for that series. This happens silently: no message, nothing
+  else changes.
 
 ### Android test builds
 
