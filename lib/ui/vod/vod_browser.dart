@@ -18,6 +18,7 @@ import '../theme/widgets.dart';
 import 'poster.dart';
 import 'provider_title.dart';
 import 'vod_filters.dart';
+import '../shell/app_messages.dart';
 
 /// The page title and search field on top; categories on the left; sort
 /// and filters, a "Continue watching" row and a lazily built poster grid
@@ -637,12 +638,9 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
         imageUrl: null,
         placeholder: Icons.block,
         favourite: m.item,
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'The provider no longer lists “${plainTitle(ref, m.name)}”.',
-            ),
-          ),
+        onTap: () => showAppMessage(
+          ScaffoldMessenger.of(context),
+          'The provider no longer lists “${plainTitle(ref, m.name)}”.',
         ),
       );
 

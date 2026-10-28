@@ -9,6 +9,7 @@ import '../data/app_settings.dart';
 import '../format.dart';
 import '../player/mpv/external_mpv_player.dart';
 import 'downloads_controller.dart';
+import 'notice_level.dart';
 import 'providers.dart';
 
 /// A recording in progress.
@@ -230,6 +231,7 @@ class RecordingController extends Notifier<ActiveRecording?> {
               .show(
                 'Recording stopped: less than $minFree free on the disk. '
                 'What was recorded is kept.',
+                level: NoticeLevel.error,
               );
           return;
         case SpaceStatus.low:

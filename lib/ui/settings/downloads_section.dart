@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
 import 'settings_section.dart';
+import '../shell/app_messages.dart';
 
 /// Asks for a folder, starting in [initial]; null when cancelled.
 /// Overridden in tests.
@@ -34,8 +35,10 @@ class DownloadsSection extends ConsumerWidget {
       await ref.read(appSettingsProvider.notifier).set(settings);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save settings (${e.runtimeType})')),
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          'Could not save settings (${e.runtimeType})',
+          level: NoticeLevel.error,
         );
       }
     }

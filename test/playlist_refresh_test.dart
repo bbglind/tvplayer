@@ -15,6 +15,7 @@ import 'package:tvplayer/ui/home/home_screen.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/settings/playlist_section.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
+import 'package:tvplayer/ui/shell/app_messages.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -760,7 +761,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(bar, findsOneWidget);
       expect(find.text('Channels updated'), findsOneWidget);
-      expect(tester.widget<SnackBar>(bar).duration, AppShell.noticeDuration);
+      expect(tester.widget<SnackBar>(bar).duration, messageDuration);
+      expect(find.byKey(const Key('message.icon.success')), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 5));
       expect(bar, findsOneWidget);
@@ -880,6 +882,7 @@ void main() {
       final snackBar = tester.widget<SnackBar>(bar);
       expect(snackBar.persist, isFalse);
       expect(snackBar.duration, const Duration(seconds: 6));
+      expect(find.byKey(const Key('message.icon.error')), findsOneWidget);
       expect(find.byType(AlertDialog), findsNothing);
 
       await tester.pump(const Duration(seconds: 5));
@@ -894,7 +897,7 @@ void main() {
     ) async {
       await pump(tester);
       expect(bar, findsOneWidget);
-      await tester.pump(AppShell.noticeDuration);
+      await tester.pump(messageDuration);
       await tester.pumpAndSettle();
       expect(bar, findsNothing);
 

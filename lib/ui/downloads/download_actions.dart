@@ -10,9 +10,7 @@ import '../../state/downloads_controller.dart';
 import '../../state/navigation.dart';
 import '../../state/providers.dart';
 import '../player/open_channel.dart';
-
-/// How long "Show" of a new download stays offered.
-const downloadNoticeDuration = Duration(seconds: 6);
+import '../shell/app_messages.dart';
 
 /// "Added “X” to Downloads" (with [episodes]: "Added 3 episodes of “X”
 /// …") and "Show", which opens the Downloads page. Like every snack bar
@@ -25,29 +23,24 @@ void showAddedToDownloads(
   int? episodes,
 }) {
   final navigator = Navigator.of(context);
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        key: const Key('downloads.added'),
-        duration: downloadNoticeDuration,
-        // With an action a snack bar stays until dismissed by default.
-        persist: false,
-        content: Text(switch (episodes) {
-          null => 'Added “$name” to Downloads',
-          final n =>
-            'Added ${formatCountOf(n, 'episode', 'episodes')} of “$name” '
-                'to Downloads',
-        }),
-        action: SnackBarAction(
-          label: 'Show',
-          onPressed: () {
-            navigator.popUntil((route) => route.isFirst);
-            ref.read(appSectionProvider.notifier).select(AppSection.downloads);
-          },
-        ),
-      ),
-    );
+  showAppMessage(
+    ScaffoldMessenger.of(context),
+    switch (episodes) {
+      null => 'Added “$name” to Downloads',
+      final n =>
+        'Added ${formatCountOf(n, 'episode', 'episodes')} of “$name” '
+            'to Downloads',
+    },
+    key: const Key('downloads.added'),
+    level: NoticeLevel.success,
+    action: SnackBarAction(
+      label: 'Show',
+      onPressed: () {
+        navigator.popUntil((route) => route.isFirst);
+        ref.read(appSectionProvider.notifier).select(AppSection.downloads);
+      },
+    ),
+  );
 }
 
 /// Asks before deleting [item]'s file (or partial file); true to delete.

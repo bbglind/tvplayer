@@ -27,8 +27,8 @@ and one gold accent used for focus, selection, progress and the main action.
 | accent         | `#D4AE6A` | Focus ring, active marker, primary button, progress fill, selected chip, favourite star |
 | accentHover    | `#DEBE84` | Hover / pressed state of accent elements and links |
 | onAccent       | `#262423` | Text/icons on accent (and on live/success badges) |
-| live           | `#D8735F` | LIVE badge, recording indicator |
-| success        | `#9DB48A` | Downloaded, recorded, OK |
+| live           | `#D8735F` | LIVE badge, recording indicator, error and warning messages |
+| success        | `#9DB48A` | Downloaded, recorded, OK, success messages |
 
 Accent is the only bright colour. Do not use it for large areas apart from
 the primary button and selected chip.
@@ -149,6 +149,24 @@ clean and simple over every desktop feature.
   while a filter is active.
 - **Scrollbar**: thin pill, `accent` thumb (`accentHover` while hovered or
   dragged); where a track is shown it is `surface`, with no border.
+- **Messages (snack bars)**: floating, `card` bg, radius 10, text
+  `textPrimary` (never coloured), action (e.g. "Undo", "Details", "Show")
+  in `accent`. Each has a type, shown by a 4 px pill bar at the start and
+  a 20 px icon in the type's colour (icon shape differs, so colour is never
+  the only cue):
+
+  | Type    | Colour    | Icon                  | Use |
+  |---------|-----------|-----------------------|-----|
+  | error   | `live`    | error (circle with !) | Something failed: "Couldn't refresh …", "Could not save settings", "Downloads paused: …" |
+  | warning | `live`    | warning triangle      | Something is about to go wrong: "The disk is almost full …" |
+  | success | `success` | check circle          | It worked: "Channels updated", "Added “X” to Downloads" |
+  | info    | —         | —                     | Plain facts and Undo offers: "Removed “X” from Continue watching" |
+
+  Never `accent` for a type: gold stays for focus, selection, progress and
+  the main action. Every message stays 6 s (also with an action), one at a
+  time (a new one replaces it) and closes when another page opens; refresh
+  confirmations aren't shown over the player. Code shows them only through
+  `showAppMessage` (lib/ui/shell/app_messages.dart).
 - **Search field**: pill, `surface` bg, height 44, search icon in
   `textMuted`, placeholder in `textMuted`.
 - **Channel row**: `card` bg, radius 12, padding ~10/14: channel number

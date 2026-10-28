@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
 import 'settings_section.dart';
+import '../shell/app_messages.dart';
 
 /// Settings › Services: TMDB (on/off, the key, Test connection, the
 /// background fetch, posters, the image cache and removed matches).
@@ -37,8 +38,10 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
       await ref.read(appSettingsProvider.notifier).change(apply);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save settings (${e.runtimeType})')),
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          'Could not save settings (${e.runtimeType})',
+          level: NoticeLevel.error,
         );
       }
     }
@@ -58,8 +61,11 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
       if (mounted) setState(() => _testResult = null);
     } on ProviderStorageException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          e.message,
+          level: NoticeLevel.error,
+        );
       }
     }
   }

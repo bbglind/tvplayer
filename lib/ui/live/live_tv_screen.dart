@@ -23,6 +23,7 @@ import '../theme/compact.dart';
 import '../theme/widgets.dart';
 import 'replay_mark.dart';
 import 'separator_header.dart';
+import '../shell/app_messages.dart';
 
 /// The page title and channel search on top; categories on the left and
 /// the channel list on the right. The search covers all channels (except
@@ -592,10 +593,9 @@ class _MissingChannelRow extends StatelessWidget {
             padding: ChannelRow._padding.copyWith(
               right: ChannelRow._padding.right + ChannelRow._starSpace,
             ),
-            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('The provider no longer lists this channel.'),
-              ),
+            onTap: () => showAppMessage(
+              ScaffoldMessenger.of(context),
+              'The provider no longer lists this channel.',
             ),
             child: _ChannelContent(
               number: null,

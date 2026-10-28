@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
 import 'settings_section.dart';
+import '../shell/app_messages.dart';
 
 /// The name of [part] in Settings: "Channels", "TV guide".
 String playlistPartLabel(PlaylistPart part) => switch (part) {
@@ -80,8 +81,10 @@ class PlaylistSection extends ConsumerWidget {
       await ref.read(playlistStatusProvider.notifier).setAutoRefresh(mode);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save settings (${e.runtimeType})')),
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          'Could not save settings (${e.runtimeType})',
+          level: NoticeLevel.error,
         );
       }
     }

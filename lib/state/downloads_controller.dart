@@ -10,6 +10,7 @@ import '../data/app_settings.dart';
 import '../data/free_space.dart';
 import '../data/videos_directory.dart';
 import '../format.dart';
+import 'notice_level.dart';
 import 'providers.dart';
 
 /// How many provider streams may be open at once. The provider of this
@@ -164,10 +165,11 @@ final class DownloadsState {
 /// snack bar.
 @immutable
 final class DownloadNotice {
-  const DownloadNotice(this.serial, this.text);
+  const DownloadNotice(this.serial, this.text, this.level);
 
   final int serial;
   final String text;
+  final NoticeLevel level;
 }
 
 /// The latest [DownloadNotice]; null before the first.
@@ -180,7 +182,8 @@ class DownloadNotices extends Notifier<DownloadNotice?> {
   @override
   DownloadNotice? build() => null;
 
-  void show(String text) => state = DownloadNotice(++_serial, text);
+  void show(String text, {required NoticeLevel level}) =>
+      state = DownloadNotice(++_serial, text, level);
 }
 
 /// The downloads of the active provider.
@@ -277,6 +280,7 @@ class DownloadsController extends Notifier<DownloadsState> {
             .show(
               "Couldn't resume “${downloadName(item)}”: "
               'the server started it again from the beginning.',
+              level: NoticeLevel.warning,
             );
       }
     }
@@ -344,6 +348,7 @@ class DownloadsController extends Notifier<DownloadsState> {
         .read(downloadNoticeProvider.notifier)
         .show(
           'The disk is almost full: downloads pause at $_minFreeText free.',
+          level: NoticeLevel.warning,
         );
   }
 
@@ -367,6 +372,7 @@ class DownloadsController extends Notifier<DownloadsState> {
             .show(
               'Downloads paused: less than $_minFreeText free on the disk. '
               'What was saved is kept.',
+              level: NoticeLevel.error,
             );
       case SpaceStatus.low:
         _warnLow(running);

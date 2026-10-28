@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/player/playback_request.dart';
 import 'package:tvplayer/state/downloads_controller.dart';
+import 'package:tvplayer/state/notice_level.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/downloads/downloads_screen.dart';
 import 'package:tvplayer/ui/epg/programme_panel.dart';
@@ -312,6 +313,10 @@ void main() {
         container(tester).read(downloadNoticeProvider)?.text,
         'The disk is almost full: downloads pause at 5 GB free.',
       );
+      expect(
+        container(tester).read(downloadNoticeProvider)?.level,
+        NoticeLevel.warning,
+      );
       expect(transfers.runs.single.control.stopped, isFalse);
 
       freeSpace.bytes = 4 * bytesPerGb;
@@ -325,6 +330,10 @@ void main() {
       expect(
         container(tester).read(downloadNoticeProvider)?.text,
         startsWith('Downloads paused: less than 5 GB free'),
+      );
+      expect(
+        container(tester).read(downloadNoticeProvider)?.level,
+        NoticeLevel.error,
       );
     });
   });

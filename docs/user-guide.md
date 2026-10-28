@@ -993,6 +993,11 @@ you had is kept. The message closes after 6 seconds or when you open
 another page, and a new one replaces it. Automatic refreshes stay silent
 unless they fail.
 
+All messages at the bottom look alike: a red mark with a round "!" means
+something went wrong, a red mark with a triangle is a warning (such as a
+nearly full disk), and a green mark with a check means it worked. Plain
+messages, such as those offering "Undo", have no mark.
+
 ### TV guide
 
 - **"Time zone"**: which time zone guide times are shown in, with its

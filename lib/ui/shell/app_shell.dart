@@ -18,6 +18,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
 import '../theme/widgets.dart';
+import 'app_messages.dart';
 import '../vod/movies_screen.dart';
 import 'more_screen.dart';
 import '../vod/series_screen.dart';
@@ -32,9 +33,6 @@ class AppShell extends ConsumerStatefulWidget {
 
   /// Below this window width the sidebar shows icons only.
   static const compactWidth = 900.0;
-
-  /// How long a notice such as a failed automatic refresh stays.
-  static const noticeDuration = Duration(seconds: 6);
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
@@ -84,27 +82,18 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   /// The quiet notice of a failed automatic refresh. It closes by itself
   /// and when another page opens, like every snack bar with an action.
-  void _showRefreshFailure(AutoRefreshFailure failure) =>
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            key: const Key('playlist.autoFailed'),
-            duration: AppShell.noticeDuration,
-            // With an action a snack bar stays until dismissed by default.
-            persist: false,
-            content: Text(
-              "Couldn't refresh ${playlistPartsPhrase(failure.parts)}. "
-              'The previous data is kept.',
-            ),
-            action: SnackBarAction(
-              label: 'Details',
-              onPressed: () => ref
-                  .read(appSectionProvider.notifier)
-                  .select(AppSection.settings),
-            ),
-          ),
-        );
+  void _showRefreshFailure(AutoRefreshFailure failure) => showAppMessage(
+    ScaffoldMessenger.of(context),
+    "Couldn't refresh ${playlistPartsPhrase(failure.parts)}. "
+    'The previous data is kept.',
+    key: const Key('playlist.autoFailed'),
+    level: NoticeLevel.error,
+    action: SnackBarAction(
+      label: 'Details',
+      onPressed: () =>
+          ref.read(appSectionProvider.notifier).select(AppSection.settings),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -124,15 +113,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     // Every refresh by hand confirms how it went; none over the player.
     ref.listen(manualRefreshNoticeProvider, (_, notice) {
       if (notice == null || ref.read(playbackActiveProvider)) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            key: const Key('playlist.manualDone'),
-            duration: AppShell.noticeDuration,
-            content: Text(manualRefreshText(notice)),
-          ),
-        );
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        manualRefreshText(notice),
+        key: const Key('playlist.manualDone'),
+        level: notice.failed.isEmpty ? NoticeLevel.success : NoticeLevel.error,
+      );
     });
     // Keeps the TMDB background fetch running while the app is open.
     ref.listen(tmdbSyncProvider, (_, _) {});
@@ -140,15 +126,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     ref.listen(downloadsProvider, (_, _) {});
     ref.listen(downloadNoticeProvider, (_, notice) {
       if (notice != null) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              key: const Key('downloads.notice'),
-              duration: AppShell.noticeDuration,
-              content: Text(notice.text),
-            ),
-          );
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          notice.text,
+          key: const Key('downloads.notice'),
+          level: notice.level,
+        );
       }
     });
     if (isCompact(context)) return _buildPhone(section);

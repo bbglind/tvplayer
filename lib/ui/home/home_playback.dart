@@ -8,6 +8,7 @@ import '../../state/providers.dart';
 import '../../state/variants.dart';
 import '../player/open_channel.dart';
 import '../vod/provider_title.dart';
+import '../shell/app_messages.dart';
 
 /// Plays [movie], from where it was left off if it was started.
 void playMovie(BuildContext context, WidgetRef ref, Movie movie) {
@@ -37,12 +38,10 @@ Future<void> playSeries(
     info = await source.seriesInfo(series.seriesId);
   } catch (e) {
     onLoading?.call(false);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          'Could not load the episodes: ${describeProviderError(e)}',
-        ),
-      ),
+    showAppMessage(
+      messenger,
+      'Could not load the episodes: ${describeProviderError(e)}',
+      level: NoticeLevel.error,
     );
     return;
   }
@@ -55,10 +54,9 @@ Future<void> playSeries(
       info.episodes.where((e) => e.season != 0).firstOrNull ??
       info.episodes.firstOrNull;
   if (episode == null) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('“${plainTitle(ref, series.name)}” has no episodes.'),
-      ),
+    showAppMessage(
+      messenger,
+      '“${plainTitle(ref, series.name)}” has no episodes.',
     );
     return;
   }

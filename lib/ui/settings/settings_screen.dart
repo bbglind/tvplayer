@@ -18,6 +18,7 @@ import 'playlist_section.dart';
 import 'services_section.dart';
 import 'settings_section.dart';
 import 'time_zone_picker.dart';
+import '../shell/app_messages.dart';
 
 /// Provider management, the playlist, online services (TMDB), TV guide
 /// settings, player options, downloads and About.
@@ -51,8 +52,11 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(savedProviderProvider.notifier).remove();
     } on ProviderStorageException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          e.message,
+          level: NoticeLevel.error,
+        );
       }
     }
   }
@@ -66,8 +70,10 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(appSettingsProvider.notifier).set(settings);
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save settings (${e.runtimeType})')),
+        showAppMessage(
+          ScaffoldMessenger.of(context),
+          'Could not save settings (${e.runtimeType})',
+          level: NoticeLevel.error,
         );
       }
     }

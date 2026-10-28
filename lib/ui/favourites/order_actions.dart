@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/providers.dart';
-
-/// How long the "Undo" of "Reset to provider order" stays offered.
-const orderUndoDuration = Duration(seconds: 6);
+import '../shell/app_messages.dart';
 
 /// "Move up", "Move down", "Move to top".
 String moveStepLabel(MoveStep step) => switch (step) {
@@ -30,21 +28,15 @@ void resetCategoryOrderWithUndo(
   final messenger = ScaffoldMessenger.of(context);
   final notifier = ref.read(favouritesProvider.notifier);
   final previous = notifier.resetOrder(kind);
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        key: const Key('categories.orderReset'),
-        duration: orderUndoDuration,
-        // With an action a snack bar stays until dismissed by default.
-        persist: false,
-        content: const Text('Categories are back in the provider’s order'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () => notifier.restoreOrder(kind, previous),
-        ),
-      ),
-    );
+  showAppMessage(
+    messenger,
+    'Categories are back in the provider’s order',
+    key: const Key('categories.orderReset'),
+    action: SnackBarAction(
+      label: 'Undo',
+      onPressed: () => notifier.restoreOrder(kind, previous),
+    ),
+  );
 }
 
 /// "Reset to provider order" for the provider categories of [kind];
