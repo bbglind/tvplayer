@@ -506,8 +506,10 @@ when you mark it.
 
 ### Movie details
 
-Backdrop, title, meta line (year, rating, length, genre), plot, director
-and cast, then:
+A large background image at the top that fades into the page (with TMDB
+on, TMDB's image first, else the provider's; without any image the page
+looks as before, with the poster beside the details). Then the poster,
+title, meta line (year, rating, length, genre), plot and director, and:
 
 - **"Play"**, or **"Resume from 12:34"** plus **"Play from start"** if you
   started it.
@@ -517,9 +519,17 @@ and cast, then:
   and opens the Downloads page when clicked.
 - The star to add it to my categories.
 
+Below the details: **"Cast"**, **"Recommendations"** and **"Other
+sources"** (see [TMDB on detail pages](#tmdb-on-detail-pages)).
+
+On a phone the background image goes across the whole width at the top,
+behind the back arrow.
+
 ### Series details
 
-The series info, a season selector and the episodes. Each episode row shows
+The same background image and details as a movie, with the number of
+seasons in the meta line ("2019 · 3 seasons · ★ 8.1 · Drama"); then a
+season selector and the episodes. Each episode row shows
 "N. <episode name>" (or "N. Episode N"), a thumbnail with progress, a ✓
 when watched, and a download icon or mark when it is downloading or
 downloaded.
@@ -532,6 +542,43 @@ downloaded.
 - **"Season options"**: "Mark season as watched", "Mark season as
   unwatched", and **"Download season"** (all episodes of the season not in
   Downloads yet).
+
+Below the episodes: "Cast", "Recommendations" and "Other sources".
+
+### TMDB on detail pages
+
+With TMDB turned on (Settings › Services, your own key), detail pages get
+what the provider lacks. TMDB never replaces what the provider sends,
+except images:
+
+- **Fill-ins**: a missing description, year, genres, rating or length
+  comes from TMDB, and so do missing episode descriptions and episode
+  pictures (loaded when you open the series, per season).
+- **Background image**: TMDB's first (one without text when there is one),
+  the provider's when TMDB has none. The Featured banner on Home and the
+  wide cards in Continue watching use it too.
+- **Posters** follow "Prefer TMDB posters" (Settings › Services): off, the
+  provider's poster with TMDB's only where it has none or it fails to
+  load; on, TMDB's poster wherever it has one.
+- **"Cast"**: round photos with the actor's and the character's name.
+  Click or tap an actor ("Open <name>") for their page: photo, name and
+  biography ("More" / "Less"), then **"Movies"** and **"Series"** with
+  only the titles of your playlist they acted in (not from hidden
+  categories), which open and play as anywhere else. Without any: "None of
+  <name>'s movies or series are in your playlist."
+- **"Recommendations"**: TMDB's recommendations that are in your
+  playlist, not from hidden categories. Left out when there are none.
+- **⋮ "More options" › "Wrong TMDB match? Remove it"**: when the TMDB info
+  belongs to another title. After "Remove" the page shows the provider's
+  details only and the title is never matched again, also not its other
+  sources. Settings › Services › "Allow matching again" undoes it.
+
+Most titles come with a TMDB id from the provider. Titles without one are
+searched on TMDB by their name (without the provider label) and year; a
+title is only matched when exactly one result has the same name and
+(nearly) the same year.
+
+TMDB info is in English.
 
 ### Other sources
 
@@ -996,6 +1043,51 @@ as "My categories: 2 · 5 hidden".
 
 - **"Show hidden categories in global search"** (default off): also find
   channels, movies and series in hidden categories on the Search page.
+
+### Services
+
+Online services that add information the provider lacks. Without a key
+the app works exactly as without them.
+
+- **"TMDB"** (default off): "Fill in missing details, background images,
+  cast and recommendations from The Movie Database."
+- **"TMDB key"**: "Not set", or "Saved in the system keyring." ("Saved,
+  encrypted on this device." on Android). **"Enter key…"** asks for the key
+  ("Paste your API Read Access Token or API Key from themoviedb.org ›
+  Settings › API."); either kind works. **"Test connection"** answers
+  "Connected to TMDB.", "TMDB didn't accept this key. Check that you copied
+  all of it.", "Couldn't reach TMDB. Check your internet connection." or
+  "TMDB is busy. Try again in a minute.". **"Remove key"** deletes it.
+- **"TMDB info: 12,400 of 31,500 titles"** (TMDB on, key saved): the
+  one-time fetch of TMDB info for every title of your playlist, in the
+  background, about 10 titles a second (an hour or so for a large
+  playlist). Under it: "Fetching in the background.", "Paused while
+  playing." (it waits while anything plays), "Paused.", "Waiting for the
+  network.", "Up to date." or "Stopped: TMDB didn't accept the key.".
+  **"Pause"** / **"Resume"** stops and continues it; this is kept when you
+  restart the app. After a restart it continues where it stopped, and
+  after a playlist refresh only new titles are fetched. A title you open
+  is fetched at once, also while paused. Only text is fetched here;
+  images are downloaded when they are shown.
+- **"Prefer TMDB posters"** (default off): "Use TMDB posters where they
+  exist; the provider's otherwise."
+- **"Image cache"**: "TMDB images: 312 MB of 1 GB", the most kept on disk
+  (250 MB, 500 MB, **1 GB** default, 2 GB, 4 GB; the oldest go first).
+  **"Clear"** empties it.
+- **"Removed matches: 3"** (only when there are any): titles you removed
+  the TMDB match from. **"Allow matching again"** lets them use TMDB info
+  again.
+
+TMDB info is kept on the device, also when you change provider, and
+isn't fetched again (titles TMDB didn't know, and titles without a match,
+are tried again after 30 days; a title you open is refreshed when its
+info is older than 30 days).
+
+### About
+
+The app's name, and the data sources it credits: the TMDB logo with
+"This product uses the TMDB API but is not endorsed or certified by
+TMDB."
 
 ---
 

@@ -59,8 +59,9 @@ weights 400, 500, 600, 700.
 - Gap between sections: ~36–40. Gap inside a section (title → content): 16.
 - Minimum touch/click target: 44 px high (buttons 44–48, nav items 44,
   chips 40).
-- No shadows, no gradients except the dark bottom fade on hero/backdrop
-  images.
+- No shadows, no gradients except the fades on hero/backdrop images (the
+  dark bottom fade, and on detail pages the fades into `background`, see
+  Detail backdrop).
 
 ## Layout
 
@@ -109,9 +110,12 @@ clean and simple over every desktop feature.
 - **Posters**: 2–3 columns (about 130 wide each), 2:3 posters; each cell
   is as tall as the poster plus two title lines and the subtitle at the
   current text scale, so labels are never cut.
-- **Details** (movie, series): stacked: the backdrop across the width
-  (16:9, radius 12, bottom fade) or, without one, the poster centred (at
-  most 180 wide); then title, meta line, buttons (wrapping), plot.
+- **Details** (movie, series): stacked: the backdrop edge to edge (16:9,
+  no radius, no side padding) under the transparent app bar, fading into
+  `background` at the bottom, with the watched progress along its bottom
+  edge; or, without one, the poster centred (at most 180 wide); then
+  title, meta line, buttons (wrapping), plot, Cast, Recommendations and
+  Other sources.
 - **Featured banner**: 16 padding, title 26/700, as tall as its content
   or ¾ of its width; without a backdrop the poster fills it with the fade.
 - **TV guide**: channel column 84 wide (scaled with the text): number
@@ -175,6 +179,46 @@ clean and simple over every desktop feature.
   sources sharing a label show the provider's date ("Added 24 Apr 2026",
   series "Updated …"), also in the details' meta line. Left out when there
   are none.
+- **Detail backdrop** (movie and series details, desktop): the backdrop
+  (TMDB's first, else the provider's) lies behind the top of the page,
+  across its width, 16:9 but at most 60 % of the window height, aligned to
+  the top, under a transparent app bar (it takes `background` once the
+  page scrolls under it). Three fades, all from tokens: `scrim` at 55 % →
+  0 over the top 25 % (keeps ← and ⋮ readable), `background` at 85 % → 0
+  from the left over 55 % of the width (behind the text), and
+  `background` 0 → 100 % over the bottom 45 %, so the image melts into
+  the page. The poster (260 movies, 180 series) and the details start at
+  40 % of the image height. Without a backdrop the page is as before
+  (poster beside the details, no fades).
+- **Cast row** ("Cast", movie and series details, after the details or
+  the episodes, before Recommendations): heading `titleLarge`, then a
+  sideways row of 104-wide members: a round photo 88 across (TMDB `w185`,
+  placeholder `card` with a person icon), the actor's name (`titleSmall`,
+  one line, centred) and the character (`bodySmall`, `textMuted`, one
+  line). The row's height follows the text scale. Each member has the
+  tooltip "Open <name>" and opens the person page. Left out without cast.
+- **Recommendations** (after Cast): the Other sources row with the
+  heading "Recommendations": TMDB's recommendations that are in the
+  catalogue (by TMDB id), one poster per title and variant group, none
+  from hidden categories, movies and series mixed in TMDB's order. Left
+  out when empty.
+- **Person page**: back arrow; a round photo (160 desktop, 120 phone, TMDB
+  `w342`) beside the name (`headlineMedium`) and biography (`bodyLarge`,
+  `textSecondary`, 4 lines, then a "More"/"Less" text button); on a phone
+  photo, name and biography are centred above each other. Below: rows
+  "Movies" and "Series" (the Other sources row) with the catalogue titles
+  the person acted in, newest first. Without any: "None of <name>'s movies
+  or series are in your playlist." (`bodyLarge`, `textSecondary`).
+  Loading shows a linear progress bar under the name; a failure says
+  "Couldn't load this person's details." with "Retry".
+- **Details menu** (⋮ "More options" in the details app bar, only when the
+  title is linked to TMDB): "Wrong TMDB match? Remove it", confirmed in a
+  dialog ("Remove the TMDB match?", Cancel / Remove).
+- **TMDB images**: sizes by use, never originals: posters `w342` in
+  lists and rows, `w500` on detail pages and Featured; backdrops `w1280`
+  (desktop, Featured) and `w780` (phone, 16:9 cards); cast `w185`;
+  episode stills `w300`; person photo `w342`. Their own disk cache, apart
+  from the provider's posters.
 - **Replay mark**: on channels whose provider keeps an archive (Xtream
   `tv_archive`), a history icon (outline, 16, `textSecondary`) right after
   the name in Live TV, search, the guide's channel column, the Channels
@@ -435,6 +479,21 @@ clean and simple over every desktop feature.
   margin (None, 5–60 min, default 15), Start margin (replay) (None, 1, 2,
   5, 10 min, default 2), Maximum recording length (1–12 h, default 4),
   Minimum free disk space (1–50 GB, default 5).
+- **Settings › Services** (after Search, before About): "TMDB" switch,
+  "TMDB key" ("Not set" / "Saved in the system keyring.", the result of
+  the last test below it; text buttons "Remove key", outlined "Test
+  connection" and "Enter key…", which opens a dialog with an obscured
+  field), "TMDB info: 12,400 of 31,500 titles" with the state under it and
+  an outlined "Pause"/"Resume" (tooltips "Stop fetching TMDB info for
+  now" / "Continue fetching TMDB info"), "Prefer TMDB posters" switch
+  (disabled while TMDB is off), "Image cache" ("TMDB images: 312 MB of
+  1 GB", a dropdown of sizes and "Clear"), and "Removed matches: N" with
+  "Allow matching again" when there are any. SkipDB and TheIntroDB get
+  rows here when they work (group 10.2).
+- **Settings › About** (last): the app's name (`titleLarge`) and a short
+  line, then "Data sources" with the TMDB logo 14 high (smaller than the
+  app's name, as TMDB asks) and "This product uses the TMDB API but is not
+  endorsed or certified by TMDB." (`textSecondary`).
 - **Settings › Playlist** (right after Provider): a row per part
   (Channels, Movies, Series, TV guide) with when it was last updated, in
   local time ("Updated Today 12:40 · 4,512 channels", "Yesterday 21:05",
@@ -496,6 +555,10 @@ English for now.
 | Remove from Continue watching | Takes a started item out of Continue watching |
 | Hidden | Hidden provider categories |
 | Featured | The banner at the top of Home |
+| Cast | TMDB's actors of a movie or series, with photos |
+| Recommendations | TMDB's recommendations that are in the playlist |
+| TMDB info | What TMDB adds to the provider's details (Settings › Services) |
+| Services | Settings for online services such as TMDB |
 | Recently viewed channels | The last live channels played (up to 20) |
 | Recently added series / movies | Newest series (by last update) / movies (by date added) |
 | Edit home | The mode that moves and hides Home rows |
