@@ -24,3 +24,27 @@ int? playNextCountdown({
   if (left <= Duration.zero) return 0;
   return (left.inMilliseconds / Duration.millisecondsPerSecond).ceil();
 }
+
+/// How long the next-episode card counts down once the credits start.
+const creditsCountdownSeconds = 10;
+
+/// Whole seconds until the next episode starts when an episode of
+/// [duration] played to [position] has credits from [creditsStart]: the
+/// card shows from there and counts down [creditsCountdownSeconds] of
+/// playback (never past the end). Null before the credits (or while the
+/// length is unknown); pausing pauses it.
+int? creditsCountdown({
+  required Duration position,
+  required Duration? duration,
+  required Duration creditsStart,
+}) {
+  if (duration == null || position < creditsStart) return null;
+  final untilNext =
+      creditsStart +
+      const Duration(seconds: creditsCountdownSeconds) -
+      position;
+  final untilEnd = duration - position;
+  final left = untilNext < untilEnd ? untilNext : untilEnd;
+  if (left <= Duration.zero) return 0;
+  return (left.inMilliseconds / Duration.millisecondsPerSecond).ceil();
+}

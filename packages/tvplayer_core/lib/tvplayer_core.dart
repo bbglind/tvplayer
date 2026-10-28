@@ -3,8 +3,9 @@
 /// series catalogues, metadata sources, audio/subtitle track selection and
 /// watch history, replay (catch-up), favourites and hidden categories,
 /// playlist refresh scheduling, title parsing, search, sorting and filters,
-/// the provider stream guard, the downloads queue, and TMDB metadata (client,
-/// rate limiting, a SQLite store and the background fetch).
+/// the provider stream guard, the downloads queue, TMDB metadata (client,
+/// rate limiting, a SQLite store and the background fetch) and skip times
+/// (SkipDB and TheIntroDB clients, the SkipDB store, the skip button).
 /// Pure Dart, no Flutter dependency.
 library;
 
@@ -41,6 +42,12 @@ export 'src/models/series.dart';
 export 'src/playlist/missing_items.dart';
 export 'src/playlist/playlist_status.dart';
 export 'src/playlist/refresh_schedule.dart';
+export 'src/skip/introdb_client.dart';
+export 'src/skip/skip_api.dart';
+export 'src/skip/skip_prompt.dart';
+export 'src/skip/skip_segments.dart';
+export 'src/skip/skip_store.dart';
+export 'src/skip/skipdb_client.dart';
 export 'src/streams/stream_guard.dart';
 export 'src/text/provider_titles.dart';
 export 'src/text/search_text.dart';
