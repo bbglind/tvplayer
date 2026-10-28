@@ -1,0 +1,7 @@
+{
+  "season_number": 1,
+  "episodes": [
+    {"episode_number": 1, "season_number": 1, "name": "Pilot", "overview": "First episode overview.", "still_path": "/s1e1.jpg", "air_date": "2015-09-01", "runtime": 50},
+    {"episode_number": 2, "season_number": 1, "name": "Second", "overview": "", "still_path": null}
+  ]
+}

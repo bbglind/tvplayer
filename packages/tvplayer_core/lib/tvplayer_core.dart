@@ -3,7 +3,8 @@
 /// series catalogues, metadata sources, audio/subtitle track selection and
 /// watch history, replay (catch-up), favourites and hidden categories,
 /// playlist refresh scheduling, title parsing, search, sorting and filters,
-/// the provider stream guard and the downloads queue.
+/// the provider stream guard, the downloads queue, and TMDB metadata (client,
+/// rate limiting, a SQLite store and the background fetch).
 /// Pure Dart, no Flutter dependency.
 library;
 
@@ -59,3 +60,13 @@ export 'src/watch/play_next.dart';
 export 'src/watch/watch_logic.dart';
 export 'src/xmltv/xmltv_parser.dart' show XmltvChannel, XmltvParser;
 export 'src/xtream/xtream_client.dart';
+export 'src/tmdb/details_view.dart';
+export 'src/tmdb/rate_limiter.dart';
+export 'src/tmdb/title_match.dart';
+export 'src/tmdb/tmdb_client.dart';
+export 'src/tmdb/tmdb_credential.dart';
+export 'src/tmdb/tmdb_images.dart';
+export 'src/tmdb/tmdb_models.dart';
+export 'src/tmdb/tmdb_store.dart';
+export 'src/tmdb/tmdb_sync.dart';
+export 'src/tmdb/tmdb_worker.dart';

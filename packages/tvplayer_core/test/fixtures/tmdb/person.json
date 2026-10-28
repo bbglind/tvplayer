@@ -1,0 +1,14 @@
+{
+  "id": 501,
+  "name": "Actor One",
+  "biography": "A placeholder biography.",
+  "profile_path": "/p1.jpg",
+  "combined_credits": {
+    "cast": [
+      {"id": 1001, "media_type": "movie", "character": "Hero", "release_date": "2019-04-12"},
+      {"id": 2001, "media_type": "tv", "character": "Guest", "first_air_date": "2015-09-01"},
+      {"id": 2001, "media_type": "tv", "character": "Guest again"},
+      {"id": 9, "media_type": "person"}
+    ]
+  }
+}

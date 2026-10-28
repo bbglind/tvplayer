@@ -1,0 +1,7 @@
+{
+  "results": [
+    {"id": 1001, "title": "Example Movie", "original_title": "Exemple de film", "release_date": "2019-04-12"},
+    {"id": 1004, "title": "Example Movie 2", "release_date": "2021-01-01"},
+    {"id": 1005, "title": "Example Movie", "release_date": "1980-06-01"}
+  ]
+}

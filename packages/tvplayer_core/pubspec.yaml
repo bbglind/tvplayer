@@ -9,6 +9,7 @@ environment:
 dependencies:
   crypto: ^3.0.7
   http: ^1.6.0
+  sqlite3: ^3.8.0
   timezone: ^0.11.2
   xml: ^7.0.1
 

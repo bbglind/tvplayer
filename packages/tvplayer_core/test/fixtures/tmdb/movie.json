@@ -1,0 +1,36 @@
+{
+  "id": 1001,
+  "title": "Example Movie",
+  "original_title": "Exemple de film",
+  "release_date": "2019-04-12",
+  "overview": "A placeholder overview for tests.",
+  "runtime": 128,
+  "status": "Released",
+  "vote_average": 7.8,
+  "popularity": 42.5,
+  "imdb_id": "tt0000001",
+  "poster_path": "/poster-en.jpg",
+  "backdrop_path": "/backdrop-default.jpg",
+  "genres": [{"id": 18, "name": "Drama"}, {"id": 80, "name": "Crime"}],
+  "credits": {
+    "cast": [
+      {"id": 501, "name": "Actor One", "character": "Hero", "profile_path": "/p1.jpg"},
+      {"id": 502, "name": "Actor Two", "character": "Villain", "profile_path": null},
+      {"name": "No Id"}
+    ]
+  },
+  "recommendations": {
+    "results": [
+      {"id": 1002, "media_type": "movie"},
+      {"id": 2002, "media_type": "tv"},
+      {"id": 1003}
+    ]
+  },
+  "images": {
+    "backdrops": [
+      {"file_path": "/backdrop-en.jpg", "iso_639_1": "en", "vote_average": 9.0},
+      {"file_path": "/backdrop-plain-low.jpg", "iso_639_1": null, "vote_average": 4.0},
+      {"file_path": "/backdrop-plain-high.jpg", "iso_639_1": null, "vote_average": 6.5}
+    ]
+  }
+}
