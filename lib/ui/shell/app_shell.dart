@@ -121,6 +121,19 @@ class _AppShellState extends ConsumerState<AppShell> {
     ref.listen(autoRefreshFailureProvider, (_, failure) {
       if (failure != null) _showRefreshFailure(failure);
     });
+    // Every refresh by hand confirms how it went; none over the player.
+    ref.listen(manualRefreshNoticeProvider, (_, notice) {
+      if (notice == null || ref.read(playbackActiveProvider)) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('playlist.manualDone'),
+            duration: AppShell.noticeDuration,
+            content: Text(manualRefreshText(notice)),
+          ),
+        );
+    });
     // Keeps the TMDB background fetch running while the app is open.
     ref.listen(tmdbSyncProvider, (_, _) {});
     // Keeps the downloads queue running while the app is open.

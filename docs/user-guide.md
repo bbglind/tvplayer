@@ -287,7 +287,9 @@ and a star if it is one of your favourites.
 Click a channel (or select it and press Enter) to watch it.
 
 At the top: the search field ([see Search](#the-search-field-in-live-tv-movies-and-series)),
-and ⟳ "Reload channels", which downloads the channel list again.
+⟳ "Reload channels", which downloads the channel list again ("Channels
+updated" when done), and "Refresh TV guide" when the provider has a guide
+("TV guide updated").
 
 ### Categories
 
@@ -383,7 +385,7 @@ From left to right:
   evening. It is disabled while the guide doesn't reach that far yet ("No
   TV guide for tomorrow evening yet").
 - **"Updated …"**: when the guide was last downloaded, and ⟳ "Refresh TV
-  guide" to download it again.
+  guide" to download it again ("TV guide updated" when done).
 
 Scroll with the mouse wheel / touchpad, or move between programmes with
 the arrow keys. The channel column's edge can be dragged to make it
@@ -468,6 +470,8 @@ The toolbar above the grid:
 - While searching: the "Only in <category>" chip.
 - The number of results, and **"Reset filters"** (clears year and genre)
   while a filter is on.
+- ⟳ **"Reload movies"** / **"Reload series"**: downloads the list again
+  ("Movies updated" / "Series updated" when done).
 
 Chips that filter turn gold while active.
 
@@ -975,10 +979,19 @@ Try again later."). It is tried again like any other failure.
   of your favourites and Continue watching items the provider has dropped;
   the favourites count opens a list of their names.
 - **"Refresh all"**: downloads every part again, one after another
-  ("Refreshing 2 of 4…").
+  ("Refreshing 2 of 4…"), then says "Playlist updated".
 
 The ⟳ buttons on Live TV, TV Guide, Movies and Series refresh just that
 part, the same way.
+
+Every reload you start yourself (these buttons and "Retry" on a list that
+couldn't load) ends with a short message at the bottom: "Channels
+updated", "Movies updated", "Series updated", "TV guide updated" or
+"Playlist updated". If it failed, it says what failed and why, e.g.
+"Couldn't refresh movies. The provider didn't respond in time."; the list
+you had is kept. The message closes after 6 seconds or when you open
+another page, and a new one replaces it. Automatic refreshes stay silent
+unless they fail.
 
 ### TV guide
 

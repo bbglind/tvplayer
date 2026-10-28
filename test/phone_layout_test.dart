@@ -47,8 +47,7 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-Finder _tab(AppSection section) =>
-    find.byKey(Key('phoneNav.${section.name}'));
+Finder _tab(AppSection section) => find.byKey(Key('phoneNav.${section.name}'));
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.tap(finder);

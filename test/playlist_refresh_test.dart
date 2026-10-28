@@ -13,6 +13,7 @@ import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/home/home_screen.dart';
 import 'package:tvplayer/ui/live/live_tv_screen.dart';
+import 'package:tvplayer/ui/settings/playlist_section.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -351,6 +352,15 @@ void main() {
       );
       expect(status.status.part(PlaylistPart.movies).failed, isTrue);
       expect(status.status.part(PlaylistPart.series).failed, isFalse);
+      // Only the failed part is named in the confirmation.
+      final notice = _container(tester).read(manualRefreshNoticeProvider)!;
+      expect(notice.all, PlaylistPart.values);
+      expect(notice.failed, [PlaylistPart.movies]);
+      expect(
+        manualRefreshText(notice),
+        "Couldn't refresh movies. The provider's server had a problem "
+        '(HTTP 502).',
+      );
 
       // Nothing shown or logged names the provider or the account.
       for (final text in [_texts(tester), ...logs]) {
@@ -656,6 +666,163 @@ void main() {
       expect(part.updatedAt, isNull);
       expect(part.failedAt, _now);
       expect(part.error, 'The provider sent an empty list. Try again later.');
+    });
+  });
+
+  group('manual reload confirmation', () {
+    test('texts', () {
+      ManualRefreshNotice notice(
+        List<PlaylistPart> all, [
+        List<PlaylistPart> failed = const [],
+        String? error,
+      ]) => ManualRefreshNotice(
+        serial: 1,
+        all: all,
+        failed: failed,
+        error: error,
+      );
+      expect(
+        manualRefreshText(notice([PlaylistPart.guide])),
+        'TV guide updated',
+      );
+      expect(
+        manualRefreshText(notice([PlaylistPart.channels])),
+        'Channels updated',
+      );
+      expect(
+        manualRefreshText(notice(PlaylistPart.values)),
+        'Playlist updated',
+      );
+      expect(
+        manualRefreshText(
+          notice(PlaylistPart.values, [
+            PlaylistPart.movies,
+            PlaylistPart.guide,
+          ], "The provider didn't respond in time."),
+        ),
+        "Couldn't refresh movies and the TV guide. The provider didn't "
+        'respond in time.',
+      );
+    });
+
+    late FakeVodSource vodSource;
+
+    Future<void> pump(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      vodSource = FakeVodSource(
+        movies: syntheticMovies(count: 3),
+        series: syntheticSeries(count: 3),
+      );
+      final vod = FakeVodRepository()
+        ..movies['test'] = syntheticMovies(count: 3, fetchedAt: _now)
+        ..series['test'] = syntheticSeries(count: 3, fetchedAt: _now);
+      await tester.pumpWidget(
+        testApp(
+          overrides: [
+            liveSourceProvider.overrideWithValue(
+              FakeLiveSource(syntheticCatalog(count: 3), hasGuide: true),
+            ),
+            vodSourceProvider.overrideWithValue(vodSource),
+            providerKeyProvider.overrideWithValue('test'),
+          ],
+          vod: vod,
+          epg: FakeEpgRepository(
+            cached: EpgGuide.empty(fetchedAt: _now),
+            next: EpgGuide.empty(fetchedAt: _now),
+          ),
+          now: _now,
+          child: const AppShell(),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    final bar = find.byKey(const Key('playlist.manualDone'));
+
+    Future<void> open(WidgetTester tester, String section) async {
+      await tester.tap(find.text(section).first);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('automatic refreshes and first downloads stay silent', (
+      tester,
+    ) async {
+      await pump(tester);
+      expect(bar, findsNothing);
+    });
+
+    testWidgets('Reload channels confirms; closes after 6 s', (tester) async {
+      await pump(tester);
+      await open(tester, 'Live TV');
+      await tester.tap(find.byTooltip('Reload channels'));
+      await tester.pumpAndSettle();
+      expect(bar, findsOneWidget);
+      expect(find.text('Channels updated'), findsOneWidget);
+      expect(tester.widget<SnackBar>(bar).duration, AppShell.noticeDuration);
+
+      await tester.pump(const Duration(seconds: 5));
+      expect(bar, findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(bar, findsNothing);
+    });
+
+    testWidgets('one message at a time; closes when another page opens', (
+      tester,
+    ) async {
+      await pump(tester);
+      await open(tester, 'Live TV');
+      await tester.tap(find.byTooltip('Reload channels'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Refresh TV guide'));
+      await tester.pumpAndSettle();
+      expect(bar, findsOneWidget);
+      expect(find.text('Channels updated'), findsNothing);
+      expect(find.text('TV guide updated'), findsOneWidget);
+
+      await open(tester, 'Movies');
+      expect(bar, findsNothing);
+    });
+
+    testWidgets('TV Guide and Movies confirm; a failure says why', (
+      tester,
+    ) async {
+      await pump(tester);
+      await open(tester, 'TV Guide');
+      await tester.tap(find.byTooltip('Refresh TV guide'));
+      await tester.pumpAndSettle();
+      expect(find.text('TV guide updated'), findsOneWidget);
+
+      await open(tester, 'Movies');
+      await tester.tap(find.byKey(const Key('movies.refresh')));
+      await tester.pumpAndSettle();
+      expect(find.text('Movies updated'), findsOneWidget);
+
+      vodSource.failure = const XtreamException(
+        'Unexpected response (get_vod_streams)',
+        statusCode: 502,
+      );
+      await tester.tap(find.byKey(const Key('movies.refresh')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          "Couldn't refresh movies. The provider's server had a problem "
+          '(HTTP 502).',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Refresh all confirms once', (tester) async {
+      await pump(tester);
+      await open(tester, 'Settings');
+      await _openPlaylist(tester);
+      await tester.tap(find.byKey(const Key('settings.refreshAll')));
+      await tester.pumpAndSettle();
+      expect(bar, findsOneWidget);
+      expect(find.text('Playlist updated'), findsOneWidget);
     });
   });
 

@@ -34,6 +34,19 @@ String playlistPartsPhrase(List<PlaylistPart> parts) {
   return '${words.sublist(0, words.length - 1).join(', ')} and ${words.last}';
 }
 
+/// The confirmation of a refresh started by hand: "TV guide updated",
+/// "Playlist updated" (Refresh all), or "Couldn't refresh movies. (why)".
+String manualRefreshText(ManualRefreshNotice notice) {
+  if (notice.failed.isNotEmpty) {
+    final failed = "Couldn't refresh ${playlistPartsPhrase(notice.failed)}.";
+    return notice.error == null ? failed : '$failed ${notice.error}';
+  }
+  final name = notice.all.length == 1
+      ? playlistPartLabel(notice.all.single)
+      : 'Playlist';
+  return '$name updated';
+}
+
 /// Labels of the automatic refresh choices.
 String autoRefreshLabel(AutoRefresh mode) => switch (mode) {
   AutoRefresh.off => 'Off',
@@ -124,9 +137,7 @@ class PlaylistSection extends ConsumerWidget {
                 key: const Key('settings.refreshAll'),
                 onPressed: run.busy || available.isEmpty
                     ? null
-                    : () => unawaited(
-                        ref.read(playlistRefreshProvider.notifier).refreshAll(),
-                      ),
+                    : () => refreshWholePlaylist(ref),
                 icon: const Icon(Icons.refresh),
                 label: Text(
                   run.busy

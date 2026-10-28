@@ -517,6 +517,16 @@ clean and simple over every desktop feature.
   snack bar ("channels, movies and the TV guide"); each part is reported
   at most once while the app is open, whatever failed before it started
   or by hand.
+- **Every manual reload confirms**: each reload the user starts (⟳
+  "Reload channels", "Refresh TV guide", "Reload movies", "Reload series",
+  "Refresh all", and "Retry" on a list that couldn't load) ends with a
+  snack bar: "Channels updated", "Movies updated", "Series updated", "TV
+  guide updated", "Playlist updated" (Refresh all), or on failure
+  "Couldn't refresh <parts>. <describeRefreshError text>" (Refresh all
+  names only the failed parts). No action, 6 s, closes when another page
+  opens, a new one replaces the old one (never stacked), nothing while
+  something plays. New reload actions follow the same rule; automatic
+  refreshes stay silent apart from the failure notice above.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).

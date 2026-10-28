@@ -160,6 +160,62 @@ class AutoRefreshFailureNotifier extends Notifier<AutoRefreshFailure?> {
   void report(AutoRefreshFailure failure) => state = failure;
 }
 
+/// How a refresh started by hand ended, for a short confirmation.
+@immutable
+final class ManualRefreshNotice {
+  const ManualRefreshNotice({
+    required this.serial,
+    required this.all,
+    required this.failed,
+    this.error,
+  });
+
+  final int serial;
+
+  /// The parts refreshed, in [PlaylistPart] order.
+  final List<PlaylistPart> all;
+
+  /// The parts that failed, in [PlaylistPart] order; empty when all worked.
+  final List<PlaylistPart> failed;
+
+  /// Why the first of [failed] failed.
+  final String? error;
+}
+
+/// The latest [ManualRefreshNotice]; null before the first.
+final manualRefreshNoticeProvider =
+    NotifierProvider<ManualRefreshNotices, ManualRefreshNotice?>(
+      ManualRefreshNotices.new,
+    );
+
+class ManualRefreshNotices extends Notifier<ManualRefreshNotice?> {
+  var _serial = 0;
+
+  @override
+  ManualRefreshNotice? build() {
+    ref.watch(providerKeyProvider);
+    return null;
+  }
+
+  /// Reports the [errors] (null when it worked) of the parts refreshed.
+  void report(Map<PlaylistPart, String?> errors) {
+    if (errors.isEmpty) return;
+    final failed = [
+      for (final p in PlaylistPart.values)
+        if (errors[p] != null) p,
+    ];
+    state = ManualRefreshNotice(
+      serial: ++_serial,
+      all: [
+        for (final p in PlaylistPart.values)
+          if (errors.containsKey(p)) p,
+      ],
+      failed: failed,
+      error: failed.isEmpty ? null : errors[failed.first],
+    );
+  }
+}
+
 /// Refreshes the playlist one part at a time, by hand ([refresh],
 /// [refreshAll]) or automatically: when the app starts and every
 /// [checkInterval] while it is open, the parts [dueParts] picks. Automatic
@@ -215,12 +271,32 @@ class PlaylistRefreshController extends Notifier<PlaylistRefreshState> {
     return PlaylistRefreshState.idle;
   }
 
-  /// Refreshes every part the provider has, one after another.
-  Future<void> refreshAll() async {
-    await Future.wait([
+  /// Refreshes every part the provider has, one after another. Returns
+  /// why each failed, or null.
+  Future<Map<PlaylistPart, String?>> refreshAll() async {
+    final parts = [
       for (final p in PlaylistPart.values)
-        if (ref.read(availablePartsProvider).contains(p)) refresh(p),
-    ]);
+        if (ref.read(availablePartsProvider).contains(p)) p,
+    ];
+    final errors = await Future.wait([for (final p in parts) refresh(p)]);
+    return {for (final (i, p) in parts.indexed) p: errors[i]};
+  }
+
+  /// [refresh] for a button: reports how it went to
+  /// [manualRefreshNoticeProvider].
+  Future<void> refreshByHand(PlaylistPart part) async {
+    final error = await refresh(part);
+    if (ref.mounted) {
+      ref.read(manualRefreshNoticeProvider.notifier).report({part: error});
+    }
+  }
+
+  /// [refreshAll] for a button, reporting like [refreshByHand].
+  Future<void> refreshAllByHand() async {
+    final errors = await refreshAll();
+    if (ref.mounted) {
+      ref.read(manualRefreshNoticeProvider.notifier).report(errors);
+    }
   }
 
   /// Refreshes [part] after the parts already waiting; joins a refresh of
@@ -335,9 +411,14 @@ class PlaylistRefreshController extends Notifier<PlaylistRefreshState> {
   }
 }
 
-/// Refreshes [part] through [playlistRefreshProvider], for buttons.
+/// Refreshes [part] through [playlistRefreshProvider], for buttons; says
+/// how it went ([manualRefreshNoticeProvider]).
 void refreshPlaylistPart(WidgetRef ref, PlaylistPart part) =>
-    unawaited(ref.read(playlistRefreshProvider.notifier).refresh(part));
+    unawaited(ref.read(playlistRefreshProvider.notifier).refreshByHand(part));
+
+/// "Refresh all", saying how it went like [refreshPlaylistPart].
+void refreshWholePlaylist(WidgetRef ref) =>
+    unawaited(ref.read(playlistRefreshProvider.notifier).refreshAllByHand());
 
 /// The user's items the loaded catalogues no longer list.
 final missingItemsProvider = Provider<MissingItems>((ref) {
