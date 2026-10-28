@@ -13,8 +13,10 @@ const skipNotFoundTtl = Duration(days: 3);
 /// A stored answer is for this copy when its length is this close.
 const skipDurationTolerance = Duration(seconds: 2);
 
-/// SkipDB's answers per episode (IMDb id, season, episode) in SQLite,
-/// with the length they were asked for.
+/// SkipDB's answers per episode (IMDb id, season, episode) and the
+/// length they were asked for, in SQLite: one copy's answer never
+/// replaces another's (e.g. a prefetch with the provider's length and
+/// playback with mpv's).
 ///
 /// Only SkipDB's data belongs here (ODbL): TheIntroDB's terms allow no
 /// lasting copy, so its answers are never stored.
@@ -23,20 +25,24 @@ class SkipStore {
     _db
       ..execute('PRAGMA journal_mode = WAL')
       ..execute('PRAGMA busy_timeout = 5000');
-    if (_db.userVersion < 1) {
-      _db.execute('''
-        CREATE TABLE IF NOT EXISTS skipdb_segment (
-          imdb_id TEXT NOT NULL,
-          season INTEGER NOT NULL,
-          episode INTEGER NOT NULL,
-          duration_ms INTEGER,
-          found INTEGER NOT NULL,
-          fetched_at INTEGER NOT NULL,
-          segments_json TEXT NOT NULL,
-          PRIMARY KEY (imdb_id, season, episode)
-        ) WITHOUT ROWID;
-      ''');
-      _db.userVersion = 1;
+    if (_db.userVersion < 2) {
+      // Version 1 kept one answer per episode, and "nothing known" for
+      // times only left out for another length: start again.
+      _db
+        ..execute('DROP TABLE IF EXISTS skipdb_segment')
+        ..execute('''
+          CREATE TABLE skipdb_segment (
+            imdb_id TEXT NOT NULL,
+            season INTEGER NOT NULL,
+            episode INTEGER NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            found INTEGER NOT NULL,
+            fetched_at INTEGER NOT NULL,
+            segments_json TEXT NOT NULL,
+            PRIMARY KEY (imdb_id, season, episode, duration_ms)
+          ) WITHOUT ROWID;
+        ''')
+        ..userVersion = 2;
     }
   }
 
@@ -49,10 +55,14 @@ class SkipStore {
 
   void close() => _db.close();
 
-  /// The stored answer for the episode, or null when there is none, it
-  /// is older than its TTL or it was asked for another length than
-  /// [duration]. With [anyAge] (a downloaded episode, played without
-  /// asking SkipDB) the age and the length don't matter.
+  /// Stands for "asked without a length" in `duration_ms`.
+  static const _noLength = -1;
+
+  /// The stored answer for the episode asked for [duration] (within
+  /// [skipDurationTolerance], the closest), or null when there is none or
+  /// it is older than its TTL. With [anyAge] (a downloaded episode, played
+  /// without asking SkipDB) any answer will do: the closest length, else
+  /// the newest.
   SkipSegments? get(
     String imdbId,
     int season,
@@ -61,13 +71,29 @@ class SkipStore {
     required DateTime now,
     bool anyAge = false,
   }) {
+    final wanted = duration?.inMilliseconds ?? _noLength;
     final rows = _db.select(
       'SELECT duration_ms, found, fetched_at, segments_json '
-      'FROM skipdb_segment WHERE imdb_id = ? AND season = ? AND episode = ?',
+      'FROM skipdb_segment WHERE imdb_id = ? AND season = ? AND episode = ? '
+      'ORDER BY found DESC, fetched_at DESC',
       [imdbId, season, episode],
     );
-    if (rows.isEmpty) return null;
-    final row = rows.first;
+    int gap(Row r) => ((readInt(r['duration_ms']) ?? _noLength) - wanted).abs();
+    final candidates = anyAge
+        ? rows.toList()
+        : [
+            for (final r in rows)
+              if (duration == null
+                  ? readInt(r['duration_ms']) == _noLength
+                  : gap(r) <= skipDurationTolerance.inMilliseconds)
+                r,
+          ];
+    if (candidates.isEmpty) return null;
+    // The closest; among equal gaps the first (found, newer: the order).
+    var row = candidates.first;
+    for (final r in candidates.skip(1)) {
+      if (gap(r) < gap(row)) row = r;
+    }
     final found = readInt(row['found']) == 1;
     if (!anyAge) {
       final at = DateTime.fromMillisecondsSinceEpoch(
@@ -75,13 +101,6 @@ class SkipStore {
         isUtc: true,
       );
       if (now.difference(at) > (found ? skipFoundTtl : skipNotFoundTtl)) {
-        return null;
-      }
-      final stored = readInt(row['duration_ms']);
-      if (duration != null &&
-          (stored == null ||
-              (stored - duration.inMilliseconds).abs() >
-                  skipDurationTolerance.inMilliseconds)) {
         return null;
       }
     }
@@ -108,7 +127,7 @@ class SkipStore {
       imdbId,
       season,
       episode,
-      duration?.inMilliseconds,
+      duration?.inMilliseconds ?? _noLength,
       segments.isEmpty ? 0 : 1,
       at.millisecondsSinceEpoch,
       jsonEncode(segments.toJson()),

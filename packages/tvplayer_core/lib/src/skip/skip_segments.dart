@@ -48,15 +48,38 @@ const minSkipLength = Duration(seconds: 5);
 const maxIntroLength = Duration(minutes: 3);
 const maxRecapLength = Duration(minutes: 8);
 
+/// Copies whose lengths differ by at most this much share their times
+/// (SkipDB's own tolerance is about as much).
+const skipFitTolerance = Duration(seconds: 15);
+
+/// A copy shorter than the one the times are for by this ratio of the
+/// lengths plays faster: film (23.976 fps) shown at 25 fps ("PAL
+/// speed-up", 0.959), so all its times come that much earlier.
+const palSpeedUpRatio = (min: 0.95, max: 0.965);
+
 /// The intro, recap and credits times of one episode, as far as known.
 final class SkipSegments {
-  const SkipSegments({this.intro, this.recap, this.credits});
+  const SkipSegments({
+    this.intro,
+    this.recap,
+    this.credits,
+    this.reference,
+    this.incomplete = false,
+  });
 
   static const none = SkipSegments();
 
   final SkipRange? intro;
   final SkipRange? recap;
   final SkipRange? credits;
+
+  /// The length of the copy the source's times were measured on, when
+  /// known and not the one asked for (see [fittedTo]).
+  final Duration? reference;
+
+  /// Times in the answer were left out as unusable, so an empty answer
+  /// doesn't mean "nothing known". Not stored, not compared.
+  final bool incomplete;
 
   SkipRange? operator [](SkipType type) => switch (type) {
     SkipType.intro => intro,
@@ -77,7 +100,44 @@ final class SkipSegments {
     intro: intro ?? other.intro,
     recap: recap ?? other.recap,
     credits: credits ?? other.credits,
+    reference: reference ?? other.reference,
   );
+
+  /// These times, measured on a copy of [from] (default [reference]),
+  /// moved to a copy of [length]. Lengths within [skipFitTolerance]:
+  /// unchanged. A sped-up copy ([palSpeedUpRatio]): every time scaled.
+  /// Otherwise the copies are taken to differ at the end: intro and recap
+  /// stay, the credits keep their distance from the end. The result has
+  /// no [reference].
+  SkipSegments fittedTo(Duration length, {Duration? from}) {
+    final source = from ?? reference;
+    if (source == null ||
+        source <= Duration.zero ||
+        (length - source).abs() <= skipFitTolerance) {
+      return SkipSegments(intro: intro, recap: recap, credits: credits);
+    }
+    final ratio = length.inMicroseconds / source.inMicroseconds;
+    if (ratio >= palSpeedUpRatio.min && ratio <= palSpeedUpRatio.max) {
+      Duration scale(Duration d) => d * ratio;
+      SkipRange? scaled(SkipRange? r) => r == null
+          ? null
+          : SkipRange(scale(r.start), r.end == null ? null : scale(r.end!));
+      return SkipSegments(
+        intro: scaled(intro),
+        recap: scaled(recap),
+        credits: scaled(credits),
+      );
+    }
+    final shift = length - source;
+    final c = credits;
+    return SkipSegments(
+      intro: intro,
+      recap: recap,
+      credits: c == null
+          ? null
+          : SkipRange(c.start + shift, c.end == null ? null : c.end! + shift),
+    );
+  }
 
   /// The times that make sense in an episode of [duration]: ends past the
   /// end are cut there; parts shorter than [minSkipLength], starting after
@@ -112,14 +172,17 @@ final class SkipSegments {
     'intro': ?intro?.toJson(),
     'recap': ?recap?.toJson(),
     'credits': ?credits?.toJson(),
+    'reference': ?reference?.inMilliseconds,
   };
 
   static SkipSegments fromJson(Object? json) {
     final map = readMap(json);
+    final reference = readInt(map?['reference']);
     return SkipSegments(
       intro: SkipRange.fromJson(map?['intro']),
       recap: SkipRange.fromJson(map?['recap']),
       credits: SkipRange.fromJson(map?['credits']),
+      reference: reference == null ? null : Duration(milliseconds: reference),
     );
   }
 
@@ -128,13 +191,14 @@ final class SkipSegments {
       other is SkipSegments &&
       other.intro == intro &&
       other.recap == recap &&
-      other.credits == credits;
+      other.credits == credits &&
+      other.reference == reference;
 
   @override
-  int get hashCode => Object.hash(intro, recap, credits);
+  int get hashCode => Object.hash(intro, recap, credits, reference);
 
   @override
   String toString() =>
       'SkipSegments(intro: $intro, recap: $recap, '
-      'credits: $credits)';
+      'credits: $credits, reference: $reference)';
 }

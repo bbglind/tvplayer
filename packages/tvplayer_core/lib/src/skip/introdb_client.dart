@@ -7,10 +7,6 @@ import '../util/json.dart';
 import 'skip_api.dart';
 import 'skip_segments.dart';
 
-/// Credits of TheIntroDB are left out when its copy of the episode is
-/// longer or shorter than ours by more than this: they'd be off.
-const introDbMaxDurationGap = Duration(seconds: 60);
-
 /// TheIntroDB (theintrodb.org): community intro, recap and credits times
 /// by TMDB id (else IMDb id), season and episode; the episode's length
 /// picks the matching release.
@@ -111,12 +107,14 @@ final class IntroDbClient extends SkipHttpClient {
       }),
       headers: {if (_key case final key?) 'Authorization': 'Bearer $key'},
     );
-    return json == null ? SkipSegments.none : parse(json, query.duration);
+    return json == null ? SkipSegments.none : parse(json);
   }
 
   /// The first usable entry of each type. A null start is the beginning
-  /// (intro, recap); a null end the end of the episode (credits).
-  static SkipSegments parse(Map<String, Object?> json, Duration? duration) {
+  /// (intro, recap); a null end the end of the episode (credits). The
+  /// length of TheIntroDB's copy (`group_duration_ms`), when sent, is the
+  /// [SkipSegments.reference] the times are fitted from.
+  static SkipSegments parse(Map<String, Object?> json) {
     SkipRange? first(String type, {required bool toEnd}) {
       for (final e in readList(json[type])) {
         final entry = readMap(e);
@@ -130,15 +128,11 @@ final class IntroDbClient extends SkipHttpClient {
       return null;
     }
 
-    final group = msOf(json['group_duration_ms']);
-    final creditsFit =
-        group == null ||
-        duration == null ||
-        (group - duration).abs() <= introDbMaxDurationGap;
     return SkipSegments(
       intro: first('intro', toEnd: false),
       recap: first('recap', toEnd: false),
-      credits: creditsFit ? first('credits', toEnd: true) : null,
+      credits: first('credits', toEnd: true),
+      reference: msOf(json['group_duration_ms']),
     );
   }
 }

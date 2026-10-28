@@ -31,20 +31,64 @@ const creditsCountdownSeconds = 10;
 /// Whole seconds until the next episode starts when an episode of
 /// [duration] played to [position] has credits from [creditsStart]: the
 /// card shows from there and counts down [creditsCountdownSeconds] of
-/// playback (never past the end). Null before the credits (or while the
-/// length is unknown); pausing pauses it.
+/// playback from [countFrom] (default [creditsStart]; never past the
+/// end). Null before the credits (or while the length is unknown);
+/// pausing pauses it.
 int? creditsCountdown({
   required Duration position,
   required Duration? duration,
   required Duration creditsStart,
+  Duration? countFrom,
 }) {
   if (duration == null || position < creditsStart) return null;
   final untilNext =
-      creditsStart +
+      (countFrom ?? creditsStart) +
       const Duration(seconds: creditsCountdownSeconds) -
       position;
   final untilEnd = duration - position;
   final left = untilNext < untilEnd ? untilNext : untilEnd;
   if (left <= Duration.zero) return 0;
   return (left.inMilliseconds / Duration.millisecondsPerSecond).ceil();
+}
+
+/// A position step larger than this (or backwards) is a seek.
+const _seekStep = Duration(seconds: 3);
+
+/// Follows the playing position of an episode with credits from
+/// [creditsStart] and says the countdown ([update]): reached by playing,
+/// it counts from the credits start; after a seek into or within the
+/// credits (or starting there, or times arriving there) from where
+/// playback landed, so the card shows its full countdown instead of the
+/// next episode starting at once.
+class CreditsCountdown {
+  CreditsCountdown(this.creditsStart);
+
+  final Duration creditsStart;
+
+  Duration? _last;
+  Duration? _from;
+
+  /// The countdown at [position] of an episode of [duration] (see
+  /// [creditsCountdown]).
+  int? update(Duration position, Duration? duration) {
+    final last = _last;
+    _last = position;
+    if (position < creditsStart) {
+      _from = null;
+    } else {
+      final played =
+          last != null && position >= last && position - last <= _seekStep;
+      if (!played) {
+        _from = position;
+      } else {
+        _from ??= creditsStart;
+      }
+    }
+    return creditsCountdown(
+      position: position,
+      duration: duration,
+      creditsStart: creditsStart,
+      countFrom: _from,
+    );
+  }
 }

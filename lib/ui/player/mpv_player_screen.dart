@@ -157,9 +157,9 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   bool _nextCancelled = false;
 
   /// Intro, recap and credits times of the episode (sanitized for its
-  /// length), asked for once its length is known; the skip button they
-  /// show.
-  SkipSegments _skipTimes = SkipSegments.none;
+  /// length) are asked for once its length is known: the countdown its
+  /// credits start, and the skip button they show.
+  CreditsCountdown? _credits;
   SkipTracker _skipTracker = SkipTracker();
   bool _skipAsked = false;
   SkipPrompt? _skipPrompt;
@@ -399,9 +399,15 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     if (!mounted || !identical(_request, request)) return;
     final clean = times.sanitized(duration);
     _skipTracker.setSegments(clean);
-    setState(() => _skipTimes = clean);
-    // Ready when the next one starts.
-    if (_nextEpisode case final next?) {
+    setState(() {
+      _credits = switch (clean.credits) {
+        final c? => CreditsCountdown(c.start),
+        null => null,
+      };
+    });
+    // Ready when the next one starts; without its length (the provider's)
+    // the answer wouldn't be for that copy.
+    if (_nextEpisode case final next? when next.duration != null) {
       final downloads = ref.read(downloadsProvider.notifier);
       unawaited(
         lookup.lookup(
@@ -428,15 +434,15 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
   void _updateCountdown(ExternalPlaybackState state) {
     final lead = _appSettings.playNextSeconds;
     final position = state.position;
-    final credits = _skipTimes.credits;
+    final credits = _credits;
+    // Followed even while there is no card, to tell playing from seeking.
+    final fromCredits = position == null
+        ? null
+        : credits?.update(position, state.duration);
     final countdown = lead == null || position == null || _nextEpisode == null
         ? null
         : credits != null
-        ? creditsCountdown(
-            position: position,
-            duration: state.duration,
-            creditsStart: credits.start,
-          )
+        ? fromCredits
         : playNextCountdown(
             position: position,
             duration: state.duration,
@@ -599,7 +605,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       _ended = false;
       _countdown = null;
       _nextCancelled = false;
-      _skipTimes = SkipSegments.none;
+      _credits = null;
       _skipTracker = SkipTracker();
       _skipAsked = false;
       _skipPrompt = null;

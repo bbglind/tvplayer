@@ -141,7 +141,9 @@ typedef SkipIds = ({String? imdbId, int? tmdbId});
 
 /// Intro, recap and credits times of an episode: SkipDB first (kept on
 /// disk), then TheIntroDB for the types SkipDB doesn't have (kept in
-/// memory for this session only, as its terms ask).
+/// memory for this session only, as its terms ask). TheIntroDB's times
+/// are moved to this copy's length from the length of its copy, else of
+/// SkipDB's ([SkipSegments.fittedTo]); SkipDB's already are.
 ///
 /// The series is asked for by its IMDb id (SkipDB needs one) and TMDB id,
 /// from its TMDB title when TMDB is on, else from the provider's
@@ -216,7 +218,15 @@ class SkipLookup {
     if (introDbOn &&
         _ref.read(introDbEnabledProvider) &&
         segments.missing.isNotEmpty) {
-      segments = segments.fillFrom(await _fromIntroDb(query));
+      final introDb = await _fromIntroDb(query);
+      segments = segments.fillFrom(
+        duration == null
+            ? introDb
+            : introDb.fittedTo(
+                duration,
+                from: introDb.reference ?? segments.reference,
+              ),
+      );
     }
     return segments;
   }
@@ -259,6 +269,8 @@ class SkipLookup {
     if (stored != null || downloaded) return stored ?? SkipSegments.none;
     try {
       final segments = await _ref.read(skipDbApiProvider).lookup(q);
+      // Times left out as unusable aren't "nothing known": ask again.
+      if (segments.isEmpty && segments.incomplete) return segments;
       store?.put(
         imdb,
         q.season,

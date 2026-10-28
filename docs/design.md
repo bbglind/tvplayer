@@ -428,8 +428,9 @@ clean and simple over every desktop feature.
   touch player at the bottom right over the video, above the seek bar,
   with ordinary tooltips. It comes "Play next episode" seconds before the
   end, or, when the episode's credits times are known, at the start of the
-  credits with a 10 s countdown (playback time: pausing holds it). Play
-  next Off: no card and no auto-start.
+  credits with a 10 s countdown (playback time: pausing holds it; a seek
+  into or within the credits starts it again from there). Play next Off:
+  no card and no auto-start.
 - **Skip button** (episodes with intro or recap times): "Skip intro" /
   "Skip recap" with the `fast_forward` icon; it jumps to the end of the
   part. It shows from the part's start to 1 s before its end. When

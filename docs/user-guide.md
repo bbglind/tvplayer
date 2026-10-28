@@ -693,6 +693,11 @@ times yet; then nothing changes.
   part. Skipping is always your choice; nothing is skipped on its own.
 - Resuming or seeking into the middle of an intro shows the button only
   with the controls.
+- The databases' times were measured on their own copy of the episode.
+  When yours is shorter or longer, the times are moved to it: a copy
+  that runs about 4 % faster (common in Europe, 25 frames per second)
+  has every time moved that much earlier; otherwise the intro and recap
+  stay and the credits keep their distance from the end.
 - Times that look wrong are ignored: parts shorter than 5 seconds, intros
   longer than 3 minutes, recaps longer than 8 minutes, and credits that
   would start in the first half of the episode.
@@ -710,7 +715,9 @@ on to the next season; after the very last episode there is no card.
 When the episode's **credits** times are known (see
 [Skip intro and recap](#skip-intro-and-recap)), the card comes when the
 credits start instead and counts down 10 seconds: "Next episode in 10 s".
-Pausing pauses the countdown. With "Play next episode" **Off** there is
+Pausing pauses the countdown. Seeking into the credits (or further on
+while the card shows) starts the 10 seconds from there, so the next
+episode never starts the moment you land. With "Play next episode" **Off** there is
 no card and nothing starts on its own, credits or not.
 
 **n** or the "Next episode" button skips ahead at any time.
@@ -1290,7 +1297,8 @@ just choose "Pause download" and it resumes when you stop.
 - The UI is in **English** only.
 - **Skip times** come from community databases (SkipDB, TheIntroDB) and
   exist for only part of the episodes, mostly of popular series; some
-  times may be off. Episodes without times play as before.
+  times may be off, more so for a copy whose length differs a lot from
+  the databases'. Episodes without times play as before.
 - **SkipDB needs the series' IMDb id**, which the app gets from TMDB (or
   from the provider, when it sends one). With TMDB off, or for a series
   TMDB has no match or IMDb id for, SkipDB isn't asked; TheIntroDB is

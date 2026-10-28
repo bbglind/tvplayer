@@ -134,6 +134,45 @@ void main() {
       expect(skip.introDbQueries, hasLength(1));
     });
 
+    test("TheIntroDB's credits move to this copy with SkipDB's length "
+        'of the episode', () async {
+      // SkipDB's copy is 60 s longer (2460 s): its times are fitted
+      // already; TheIntroDB's credits keep their distance from the end.
+      skip.skipDb['1:1'] = SkipSegments(intro: _intro, reference: _s(2460));
+      skip.introDb['1:1'] = SkipSegments(credits: SkipRange(_s(2400)));
+      final times = await lookup(container());
+      expect(times.intro, _intro);
+      expect(times.credits, SkipRange(_s(2340)));
+      // TheIntroDB's own length comes first.
+      skip.introDb['1:2'] = SkipSegments(
+        credits: SkipRange(_s(2400)),
+        reference: _s(2430),
+      );
+      skip.skipDb['1:2'] = SkipSegments(reference: _s(2460));
+      expect(
+        (await lookup(container(), episode: _ep(1, 2))).credits,
+        SkipRange(_s(2370)),
+      );
+    });
+
+    test('an answer whose times were all unusable is not kept', () async {
+      skip.skipDb['1:1'] = const SkipSegments(incomplete: true);
+      final c = container();
+      await lookup(c);
+      expect(
+        skip.store.get(
+          'tt0000005',
+          1,
+          1,
+          duration: const Duration(minutes: 40),
+          now: DateTime.now().toUtc(),
+        ),
+        isNull,
+      );
+      await lookup(c);
+      expect(skip.skipDbQueries, hasLength(2));
+    });
+
     test('TheIntroDB is not asked when SkipDB has every type', () async {
       skip.skipDb['1:1'] = SkipSegments(
         intro: _intro,
@@ -524,10 +563,29 @@ void main() {
       expect(find.byKey(const Key('player.nextCard')), findsNothing);
       await playTo(tester, 2300);
       expect(find.text('Next episode in 10 s'), findsOneWidget);
-      await playTo(tester, 2306);
+      for (var t = 2301; t <= 2306; t++) {
+        await playTo(tester, t);
+      }
       expect(find.text('Next episode in 4 s'), findsOneWidget);
-      await playTo(tester, 2310);
+      for (var t = 2307; t <= 2310; t++) {
+        await playTo(tester, t);
+      }
       expect(player.opened.last.title, 'Test Show · S01E02 · Episode 1-2');
+    });
+
+    testWidgets('a seek far into the credits shows the full countdown', (
+      tester,
+    ) async {
+      await open(tester, EpisodePlayback(_info, _ep(1, 1)));
+      await playTo(tester, 30);
+      await tester.pump();
+      await playTo(tester, 2340);
+      expect(find.text('Next episode in 10 s'), findsOneWidget);
+      expect(player.opened, hasLength(1));
+      for (var t = 2341; t <= 2345; t++) {
+        await playTo(tester, t);
+      }
+      expect(find.text('Next episode in 5 s'), findsOneWidget);
     });
 
     testWidgets('without credits times the set time applies; Off starts '
@@ -542,6 +600,28 @@ void main() {
       await playTo(tester, 2390);
       expect(find.byKey(const Key('player.nextCard')), findsNothing);
       expect(player.opened, hasLength(1));
+    });
+
+    testWidgets('the next episode is asked for ahead only with its length', (
+      tester,
+    ) async {
+      final info = SeriesInfo(
+        series: _series,
+        seasons: const [],
+        episodes: [
+          _ep(1, 1),
+          const Episode(
+            id: '102',
+            season: 1,
+            episodeNumber: 2,
+            title: 'Episode 1-2',
+          ),
+        ],
+      );
+      await open(tester, EpisodePlayback(info, _ep(1, 1)));
+      await playTo(tester, 30);
+      await tester.pump();
+      expect(skip.skipDbQueries.map((q) => q.episode), [1]);
     });
 
     testWidgets('movies ask nothing', (tester) async {
@@ -621,7 +701,9 @@ void main() {
       await open(tester, EpisodePlayback(_info, _ep(1, 1)));
       await playTo(tester, 2300);
       expect(find.text('Next episode in 10 s'), findsOneWidget);
-      await playTo(tester, 2310);
+      for (var t = 2301; t <= 2310; t++) {
+        await playTo(tester, t);
+      }
       await tester.pump();
       expect(player.opened, hasLength(2));
       expect(find.byType(TouchPlayerScreen), findsOneWidget);

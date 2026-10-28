@@ -108,9 +108,9 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
   bool _nextCancelled = false;
 
   /// Intro, recap and credits times of the episode (sanitized for its
-  /// length), asked for once its length is known; the skip button they
-  /// show.
-  SkipSegments _skipTimes = SkipSegments.none;
+  /// length) are asked for once its length is known: the countdown its
+  /// credits start, and the skip button they show.
+  CreditsCountdown? _credits;
   SkipTracker _skipTracker = SkipTracker();
   bool _skipAsked = false;
   SkipPrompt? _skipPrompt;
@@ -326,9 +326,15 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
     if (!mounted || !identical(_request, request)) return;
     final clean = times.sanitized(duration);
     _skipTracker.setSegments(clean);
-    setState(() => _skipTimes = clean);
-    // Ready when the next one starts.
-    if (_nextEpisode case final next?) {
+    setState(() {
+      _credits = switch (clean.credits) {
+        final c? => CreditsCountdown(c.start),
+        null => null,
+      };
+    });
+    // Ready when the next one starts; without its length (the provider's)
+    // the answer wouldn't be for that copy.
+    if (_nextEpisode case final next? when next.duration != null) {
       final downloads = ref.read(downloadsProvider.notifier);
       unawaited(
         lookup.lookup(
@@ -360,15 +366,15 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
   void _updateCountdown() {
     final lead = _playNextSeconds;
     final duration = _player.loaded ? _player.duration : null;
-    final credits = _skipTimes.credits;
+    final credits = _credits;
+    // Followed even while there is no card, to tell playing from seeking.
+    final fromCredits = duration == null
+        ? null
+        : credits?.update(_player.position, duration);
     final countdown = lead == null || _nextEpisode == null || duration == null
         ? null
         : credits != null
-        ? creditsCountdown(
-            position: _player.position,
-            duration: duration,
-            creditsStart: credits.start,
-          )
+        ? fromCredits
         : playNextCountdown(
             position: _player.position,
             duration: duration,
@@ -507,7 +513,7 @@ class _TouchPlayerScreenState extends ConsumerState<TouchPlayerScreen> {
       _pickedFor = null;
       _countdown = null;
       _nextCancelled = false;
-      _skipTimes = SkipSegments.none;
+      _credits = null;
       _skipTracker = SkipTracker();
       _skipAsked = false;
       _skipPrompt = null;

@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -60,8 +62,54 @@ void main() {
       final x = SkipSegments(
         intro: SkipRange(s(1), s(61)),
         credits: SkipRange(s(2500)),
+        reference: s(2640),
       );
       expect(SkipSegments.fromJson(jsonDecode(jsonEncode(x.toJson()))), x);
+    });
+
+    group('fittedTo', () {
+      final times = SkipSegments(
+        recap: SkipRange(s(0), s(60)),
+        intro: SkipRange(s(100), s(160)),
+        credits: SkipRange(s(2560), s(2640)),
+        reference: s(2640),
+      );
+
+      test('close lengths: unchanged, without the reference', () {
+        final f = times.fittedTo(s(2652));
+        expect(f.intro, times.intro);
+        expect(f.credits, times.credits);
+        expect(f.reference, isNull);
+        expect(times.fittedTo(s(2000), from: s(2010)).credits, times.credits);
+        expect(
+          SkipSegments(intro: times.intro).fittedTo(s(2000)).intro,
+          times.intro,
+        );
+      });
+
+      test('a sped-up (PAL) copy: every time scaled', () {
+        // 2640 s at 25 fps instead of 23.976: 2532 s.
+        final f = times.fittedTo(s(2532));
+        const r = 2532 / 2640;
+        expect(f.recap, SkipRange(s(0), s(60) * r));
+        expect(f.intro, SkipRange(s(100) * r, s(160) * r));
+        expect(f.credits, SkipRange(s(2560) * r, s(2532)));
+      });
+
+      test('other lengths: credits keep their distance from the end', () {
+        final f = times.fittedTo(s(2580));
+        expect(f.intro, times.intro);
+        expect(f.recap, times.recap);
+        expect(f.credits, SkipRange(s(2500), s(2580)));
+        final longer = times.fittedTo(s(2700));
+        expect(longer.credits, SkipRange(s(2620), s(2700)));
+        expect(
+          SkipSegments(
+            credits: SkipRange(s(2500)),
+          ).fittedTo(s(2400), from: s(2600)).credits,
+          SkipRange(s(2300)),
+        );
+      });
     });
   });
 
@@ -157,6 +205,51 @@ void main() {
     test('never past the end', () {
       expect(at(2695, credits: 2694), 5);
     });
+
+    test('counts from a later point when given', () {
+      expect(
+        creditsCountdown(
+          position: s(2640),
+          duration: s(2700),
+          creditsStart: s(2600),
+          countFrom: s(2636),
+        ),
+        6,
+      );
+    });
+  });
+
+  group('CreditsCountdown', () {
+    test('played into the credits: from their start', () {
+      final c = CreditsCountdown(s(2600));
+      expect(c.update(s(2598), s(2700)), isNull);
+      expect(c.update(s(2599.5), s(2700)), isNull);
+      expect(c.update(s(2600.5), s(2700)), 10);
+      expect(c.update(s(2603), s(2700)), 7);
+      expect(c.update(s(2605), s(2700)), 5);
+      expect(c.update(s(2608), s(2700)), 2);
+      expect(c.update(s(2610), s(2700)), 0);
+    });
+
+    test('a seek into or within the credits: from where it landed', () {
+      final c = CreditsCountdown(s(2600));
+      expect(c.update(s(100), s(2700)), isNull);
+      expect(c.update(s(2640), s(2700)), 10);
+      expect(c.update(s(2642.5), s(2700)), 8);
+      expect(c.update(s(2645), s(2700)), 5);
+      // Further on while counting: a full countdown again.
+      expect(c.update(s(2660), s(2700)), 10);
+      // Back before the credits and played in: from their start.
+      expect(c.update(s(2590), s(2700)), isNull);
+      expect(c.update(s(2599), s(2700)), isNull);
+      expect(c.update(s(2601), s(2700)), 9);
+    });
+
+    test('starting, or times arriving, in the credits: full countdown', () {
+      expect(CreditsCountdown(s(2600)).update(s(2650), s(2700)), 10);
+      expect(CreditsCountdown(s(2600)).update(s(2695), s(2700)), 5);
+      expect(CreditsCountdown(s(2600)).update(s(2650), null), isNull);
+    });
   });
 
   group('SkipDbClient', () {
@@ -205,13 +298,14 @@ void main() {
         'season': '2',
         'episode': '3',
         'duration': '2600.3',
+        'adjust': 'conservative',
       });
       expect(segments.intro, SkipRange(s(61), s(121)));
       expect(segments.recap, isNull);
       expect(segments.credits, SkipRange(s(2500), s(2580)));
     });
 
-    test('leaves out weak and unmatched times', () {
+    test('leaves out weak and unusable times', () {
       final parsed = SkipDbClient.parse({
         'segments': {
           'intro': {'start_ms': 0, 'end_ms': 50000, 'confidence': 0.2},
@@ -223,8 +317,44 @@ void main() {
           },
           'recap': {'start_ms': 0, 'end_ms': 0},
         },
-      });
+      }, s(2600));
       expect(parsed.isEmpty, isTrue);
+      expect(parsed.incomplete, isTrue);
+      final none = SkipDbClient.parse({
+        'segments': {'intro': null, 'outro': null},
+      }, s(2600));
+      expect(none.isEmpty, isTrue);
+      expect(none.incomplete, isFalse);
+    });
+
+    test('times for another length (out-of-range) are fitted', () {
+      Map<String, Object?> seg(int start, int end) => {
+        'start_ms': start,
+        'end_ms': end,
+        'match': 'out-of-range',
+        'confidence': 0.6,
+        'offset_ms': -60000,
+      };
+      final parsed = SkipDbClient.parse({
+        'segments': {
+          'intro': seg(100000, 160000),
+          'outro': seg(2560000, 2640000),
+        },
+      }, s(2580));
+      // Its copy: 2580 + 60 = 2640 s; not sped up, so the credits keep
+      // their distance from the end and the intro stays.
+      expect(parsed.reference, s(2640));
+      expect(parsed.intro, SkipRange(s(100), s(160)));
+      expect(parsed.credits, SkipRange(s(2500), s(2580)));
+      expect(parsed.incomplete, isFalse);
+      // No offset: unusable.
+      final noOffset = SkipDbClient.parse({
+        'segments': {
+          'intro': {...seg(100000, 160000)}..remove('offset_ms'),
+        },
+      }, s(2580));
+      expect(noOffset.intro, isNull);
+      expect(noOffset.incomplete, isTrue);
     });
 
     test('no IMDb id, 404: nothing; never the address in errors', () async {
@@ -359,15 +489,18 @@ void main() {
       expect(asked.headers.containsKey('Authorization'), isFalse);
     });
 
-    test('credits of a much longer or shorter copy are left out', () {
+    test('the length of its copy is the reference', () {
       final json = {
         'group_duration_ms': 2600000,
         'credits': [
           {'start_ms': 2500000},
         ],
       };
-      expect(IntroDbClient.parse(json, s(2660)).credits, isNotNull);
-      expect(IntroDbClient.parse(json, s(2661)).credits, isNull);
+      final parsed = IntroDbClient.parse(json);
+      expect(parsed.credits, SkipRange(s(2500)));
+      expect(parsed.reference, s(2600));
+      expect(parsed.fittedTo(s(2400)).credits, SkipRange(s(2300)));
+      expect(IntroDbClient.parse({}).reference, isNull);
     });
 
     test(
@@ -461,6 +594,50 @@ void main() {
       expect(get(2, days: 4), isNull);
       expect(get(1, days: 400, d: s(10), any: true), times);
       expect(get(3), isNull);
+    });
+
+    test('one answer per length; downloads take the closest', () {
+      final store = SkipStore.inMemory();
+      addTearDown(store.close);
+      final other = SkipSegments(intro: SkipRange(s(20), s(80)));
+      store
+        ..put('tt1', 1, 1, times, duration: s(2600), at: now)
+        ..put('tt1', 1, 1, SkipSegments.none, duration: s(2400), at: now)
+        ..put('tt1', 1, 1, other, at: now);
+      SkipSegments? get(Duration? d, {bool any = false}) =>
+          store.get('tt1', 1, 1, duration: d, now: now, anyAge: any);
+      expect(get(s(2600)), times);
+      expect(get(s(2400)), SkipSegments.none);
+      expect(get(null), other);
+      expect(get(s(2500)), isNull);
+      expect(get(s(2550), any: true), times);
+      expect(get(s(2420), any: true), SkipSegments.none);
+    });
+
+    test('a store of the first version starts again', () {
+      final dir = Directory.systemTemp.createTempSync('skip_store');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/skip.sqlite';
+      final old = sqlite3.open(path)
+        ..execute('''
+          CREATE TABLE skipdb_segment (
+            imdb_id TEXT NOT NULL, season INTEGER NOT NULL,
+            episode INTEGER NOT NULL, duration_ms INTEGER,
+            found INTEGER NOT NULL, fetched_at INTEGER NOT NULL,
+            segments_json TEXT NOT NULL,
+            PRIMARY KEY (imdb_id, season, episode)
+          ) WITHOUT ROWID''')
+        ..execute(
+          "INSERT INTO skipdb_segment VALUES ('tt1', 1, 1, 2600000, 0, "
+          "${now.millisecondsSinceEpoch}, '{}')",
+        )
+        ..userVersion = 1;
+      old.close();
+      final store = SkipStore.open(path);
+      addTearDown(store.close);
+      expect(store.get('tt1', 1, 1, duration: s(2600), now: now), isNull);
+      store.put('tt1', 1, 1, times, duration: s(2600), at: now);
+      expect(store.get('tt1', 1, 1, duration: s(2600), now: now), times);
     });
   });
 }
