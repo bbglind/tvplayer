@@ -18,6 +18,7 @@ WatchProgress updatedProgress(
   int? seriesId,
   int? season,
   int? episode,
+  String? tmdbId,
 }) {
   final total = duration ?? previous?.duration;
   final reached =
@@ -31,6 +32,7 @@ WatchProgress updatedProgress(
     seriesId: seriesId ?? previous?.seriesId,
     season: season ?? previous?.season,
     episode: episode ?? previous?.episode,
+    tmdbId: tmdbId ?? previous?.tmdbId,
     updatedAt: now,
   );
 }
@@ -83,6 +85,7 @@ WatchData markWatched(
       seriesId: t.seriesId ?? data.items[t.key]?.seriesId,
       season: t.season ?? data.items[t.key]?.season,
       episode: t.episode ?? data.items[t.key]?.episode,
+      tmdbId: data.items[t.key]?.tmdbId,
       updatedAt: now,
     ),
 });
@@ -220,6 +223,7 @@ final class EpisodeGroupView {
       seriesId: newest.seriesId,
       season: e.season,
       episode: e.episodeNumber,
+      tmdbId: newest.tmdbId,
       updatedAt: newest.updatedAt,
     );
   }
@@ -417,6 +421,7 @@ List<WatchTarget> groupEpisodeTargets(
       position: p.position,
       duration: p.duration,
       watched: watched,
+      tmdbId: p.tmdbId,
       updatedAt: p.updatedAt,
     ),
     from: newest.from,
@@ -536,6 +541,7 @@ WatchData removeContinueMovie(WatchData data, int streamId, DateTime now) {
     key: WatchProgress(
       position: Duration.zero,
       duration: previous.duration,
+      tmdbId: previous.tmdbId,
       updatedAt: now,
     ),
   });
@@ -554,6 +560,7 @@ WatchData restoreContinueMovie(
     duration: previous.duration,
     watched: previous.watched,
     seriesId: previous.seriesId,
+    tmdbId: previous.tmdbId,
     updatedAt: now,
   ),
 });
@@ -589,6 +596,7 @@ WatchData restoreProgress(
       seriesId: value.seriesId,
       season: value.season,
       episode: value.episode,
+      tmdbId: value.tmdbId,
       updatedAt: now,
     ),
 });

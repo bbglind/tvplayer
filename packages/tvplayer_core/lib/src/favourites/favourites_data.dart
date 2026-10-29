@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import '../models/category.dart';
+import '../sync/sync_record.dart';
 import '../util/json.dart';
 
 /// What a favourite category holds, and which provider list a hidden
@@ -158,6 +159,7 @@ final class FavouriteMembership {
     required this.updatedAt,
     this.order = 0,
     this.deleted = false,
+    this.tmdbId,
   });
 
   final String categoryId;
@@ -179,6 +181,10 @@ final class FavouriteMembership {
   /// Tombstone: removed from the category.
   final bool deleted;
 
+  /// The TMDB id of a movie or series, when known: lets the item be
+  /// matched to another provider's copy of the title.
+  final String? tmdbId;
+
   String get key => membershipKey(categoryId, item);
 
   static String membershipKey(String categoryId, ItemRef item) =>
@@ -191,19 +197,31 @@ final class FavouriteMembership {
     'name': name,
     'added': addedAt.millisecondsSinceEpoch,
     'order': order,
+    'tmdb': ?tmdbId,
   };
+
+  /// This membership with the given fields changed, at [updatedAt].
+  FavouriteMembership copyWith({
+    String? categoryId,
+    DateTime? addedAt,
+    int? order,
+    bool? deleted,
+    required DateTime updatedAt,
+  }) => FavouriteMembership(
+    categoryId: categoryId ?? this.categoryId,
+    item: item,
+    name: name,
+    addedAt: addedAt ?? this.addedAt,
+    updatedAt: updatedAt,
+    order: order ?? this.order,
+    deleted: deleted ?? this.deleted,
+    tmdbId: tmdbId,
+  );
 
   /// This membership at [order], keeping its change time (for filling in
   /// the order of data saved without one).
-  FavouriteMembership _withOrder(int order) => FavouriteMembership(
-    categoryId: categoryId,
-    item: item,
-    name: name,
-    addedAt: addedAt,
-    updatedAt: updatedAt,
-    order: order,
-    deleted: deleted,
-  );
+  FavouriteMembership _withOrder(int order) =>
+      copyWith(order: order, updatedAt: updatedAt);
 
   static FavouriteMembership? fromJson(
     Object? json,
@@ -226,6 +244,7 @@ final class FavouriteMembership {
       updatedAt: updatedAt,
       order: readInt(map['order']) ?? 0,
       deleted: deleted,
+      tmdbId: readString(map['tmdb']),
     );
   }
 
@@ -238,11 +257,20 @@ final class FavouriteMembership {
       other.addedAt == addedAt &&
       other.updatedAt == updatedAt &&
       other.order == order &&
-      other.deleted == deleted;
+      other.deleted == deleted &&
+      other.tmdbId == tmdbId;
 
   @override
-  int get hashCode =>
-      Object.hash(categoryId, item, name, addedAt, updatedAt, order, deleted);
+  int get hashCode => Object.hash(
+    categoryId,
+    item,
+    name,
+    addedAt,
+    updatedAt,
+    order,
+    deleted,
+    tmdbId,
+  );
 }
 
 /// Whether a provider category is hidden. Showing it again keeps the
@@ -558,6 +586,33 @@ final class FavouritesData {
       ),
     );
   }
+
+  /// This data with every record of [other] in place of the one with its
+  /// key, newer or not.
+  FavouritesData overlay(FavouritesData other) => FavouritesData(
+    categories: {...categories, ...other.categories},
+    memberships: {...memberships, ...other.memberships},
+    hidden: {...hidden, ...other.hidden},
+    categoryOrders: {...categoryOrders, ...other.categoryOrders},
+  );
+
+  /// The records of [toJson] by key, for syncing.
+  Map<String, SyncRecord> get syncRecords => {
+    for (final r in [
+      for (final json in toJson()['records'] as List)
+        ?SyncRecord.fromJson(json),
+    ])
+      r.key: r,
+  };
+
+  /// This data with [records] (as from [syncRecords]) in place of the ones
+  /// with their keys. Records it can't read are left out.
+  FavouritesData withSyncRecords(Iterable<SyncRecord> records) => overlay(
+    FavouritesData.fromJson({
+          'records': [for (final r in records) r.toJson()],
+        }) ??
+        FavouritesData.empty,
+  );
 
   /// The records as JSON: `{"version": 1, "records": [{"k", "t", "v",
   /// "d"}]}`, with `t` the change time in milliseconds since the epoch and

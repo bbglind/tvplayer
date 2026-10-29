@@ -5,7 +5,8 @@
 /// playlist refresh scheduling, title parsing, search, sorting and filters,
 /// the provider stream guard, the downloads queue, TMDB metadata (client,
 /// rate limiting, a SQLite store and the background fetch) and skip times
-/// (SkipDB and TheIntroDB clients, the SkipDB store, the skip button).
+/// (SkipDB and TheIntroDB clients, the SkipDB store, the skip button) and
+/// sync (records, clock, engine, the sync server's API and client).
 /// Pure Dart, no Flutter dependency.
 library;
 
@@ -50,6 +51,16 @@ export 'src/skip/skip_segments.dart';
 export 'src/skip/skip_store.dart';
 export 'src/skip/skipdb_client.dart';
 export 'src/streams/stream_guard.dart';
+export 'src/sync/data_spaces.dart';
+export 'src/sync/http_sync_backend.dart';
+export 'src/sync/memory_sync_backend.dart';
+export 'src/sync/sync_account.dart';
+export 'src/sync/sync_backend.dart';
+export 'src/sync/sync_clock.dart';
+export 'src/sync/sync_engine.dart';
+export 'src/sync/sync_protocol.dart';
+export 'src/sync/sync_record.dart';
+export 'src/sync/sync_state.dart';
 export 'src/text/provider_titles.dart';
 export 'src/text/search_text.dart';
 export 'src/text/title_parser.dart';

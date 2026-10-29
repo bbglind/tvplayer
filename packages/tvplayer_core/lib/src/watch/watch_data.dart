@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../sync/sync_record.dart';
 import '../tracks/track_picker.dart';
 import '../util/json.dart';
 
@@ -23,6 +24,7 @@ final class WatchProgress {
     this.seriesId,
     this.season,
     this.episode,
+    this.tmdbId,
   });
 
   /// Where playback stopped.
@@ -47,6 +49,10 @@ final class WatchProgress {
   final int? season;
   final int? episode;
 
+  /// The TMDB id of the movie, or of the episode's series, when known: lets
+  /// the record be matched to another provider's copy of the title.
+  final String? tmdbId;
+
   /// Watched fraction (0–1), when the duration is known.
   double? get fraction {
     final d = duration;
@@ -61,6 +67,7 @@ final class WatchProgress {
     'series': ?seriesId,
     's': ?season,
     'e': ?episode,
+    'tmdb': ?tmdbId,
   };
 
   static WatchProgress fromJson(Object? json, DateTime updatedAt) {
@@ -73,20 +80,33 @@ final class WatchProgress {
       seriesId: readInt(map['series']),
       season: readInt(map['s']),
       episode: readInt(map['e']),
+      tmdbId: readString(map['tmdb']),
       updatedAt: updatedAt,
     );
   }
 
-  /// This progress with [season] and [episode] set, same time.
-  WatchProgress numbered(int season, int episode) => WatchProgress(
-    position: position,
-    duration: duration,
-    watched: watched,
+  /// This progress with the given fields changed.
+  WatchProgress copyWith({
+    Duration? position,
+    Duration? Function()? duration,
+    bool? watched,
+    int? season,
+    int? episode,
+    DateTime? updatedAt,
+  }) => WatchProgress(
+    position: position ?? this.position,
+    duration: duration == null ? this.duration : duration(),
+    watched: watched ?? this.watched,
     seriesId: seriesId,
-    season: season,
-    episode: episode,
-    updatedAt: updatedAt,
+    season: season ?? this.season,
+    episode: episode ?? this.episode,
+    tmdbId: tmdbId,
+    updatedAt: updatedAt ?? this.updatedAt,
   );
+
+  /// This progress with [season] and [episode] set, same time.
+  WatchProgress numbered(int season, int episode) =>
+      copyWith(season: season, episode: episode);
 
   @override
   bool operator ==(Object other) =>
@@ -97,7 +117,8 @@ final class WatchProgress {
       other.updatedAt == updatedAt &&
       other.seriesId == seriesId &&
       other.season == season &&
-      other.episode == episode;
+      other.episode == episode &&
+      other.tmdbId == tmdbId;
 
   @override
   int get hashCode => Object.hash(
@@ -108,6 +129,7 @@ final class WatchProgress {
     seriesId,
     season,
     episode,
+    tmdbId,
   );
 
   @override
@@ -338,6 +360,34 @@ final class WatchData {
       played: newest(played, other.played, (t) => t),
     );
   }
+
+  /// This data with every record of [other] in place of the one with its
+  /// key, newer or not.
+  WatchData overlay(WatchData other) => WatchData(
+    items: {...items, ...other.items},
+    series: {...series, ...other.series},
+    seriesTracks: {...seriesTracks, ...other.seriesTracks},
+    channels: {...channels, ...other.channels},
+    continueRemovals: {...continueRemovals, ...other.continueRemovals},
+    played: {...played, ...other.played},
+  );
+
+  /// The records of [toJson] by key, for syncing.
+  Map<String, SyncRecord> get syncRecords => {
+    for (final r in [
+      for (final json in toJson()['records'] as List)
+        ?SyncRecord.fromJson(json),
+    ])
+      r.key: r,
+  };
+
+  /// This data with [records] (as from [syncRecords]) in place of the ones
+  /// with their keys. Records it can't read are left out.
+  WatchData withSyncRecords(Iterable<SyncRecord> records) => overlay(
+    WatchData.fromJson({
+      'records': [for (final r in records) r.toJson()],
+    }),
+  );
 
   /// The records as JSON: `{"version": 1, "records": [{"k", "t", "v"}]}`,
   /// with `t` the change time in milliseconds since the epoch.

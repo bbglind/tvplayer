@@ -140,22 +140,15 @@ FavouritesData deleteCategory(
     memberships: {
       ...data.memberships,
       for (final m in data.itemsIn(id))
-        m.key: FavouriteMembership(
-          categoryId: id,
-          item: m.item,
-          name: m.name,
-          addedAt: m.addedAt,
-          updatedAt: now,
-          order: m.order,
-          deleted: true,
-        ),
+        m.key: m.copyWith(deleted: true, updatedAt: now),
     },
   );
 }
 
 /// [data] with [item] added to ([member] true) or removed from category
 /// [categoryId]. An added item goes first in the category. [name] is
-/// remembered for when the provider drops the item. Unchanged when the
+/// remembered for when the provider drops the item, and [tmdbId] (when
+/// known) for matching it to another provider's. Unchanged when the
 /// category doesn't exist or holds another kind.
 FavouritesData setMembership(
   FavouritesData data,
@@ -164,6 +157,7 @@ FavouritesData setMembership(
   required String name,
   required bool member,
   required DateTime now,
+  String? tmdbId,
 }) {
   if (data.category(categoryId)?.kind != item.kind) return data;
   final key = FavouriteMembership.membershipKey(categoryId, item);
@@ -175,15 +169,17 @@ FavouritesData setMembership(
   return data.copyWith(
     memberships: {
       ...data.memberships,
-      key: FavouriteMembership(
-        categoryId: categoryId,
-        item: item,
-        name: name,
-        addedAt: member ? now : current!.addedAt,
-        updatedAt: now,
-        order: member ? first - 1 : current!.order,
-        deleted: !member,
-      ),
+      key: member
+          ? FavouriteMembership(
+              categoryId: categoryId,
+              item: item,
+              name: name,
+              addedAt: now,
+              updatedAt: now,
+              order: first - 1,
+              tmdbId: tmdbId ?? current?.tmdbId,
+            )
+          : current!.copyWith(deleted: true, updatedAt: now),
     },
   );
 }
@@ -224,14 +220,7 @@ FavouritesData restoreMemberships(
   final restored = {
     for (final m in previous)
       if (data.category(m.categoryId) != null)
-        m.key: FavouriteMembership(
-          categoryId: m.categoryId,
-          item: m.item,
-          name: m.name,
-          addedAt: m.addedAt,
-          updatedAt: now,
-          order: m.order,
-        ),
+        m.key: m.copyWith(deleted: false, updatedAt: now),
   };
   if (restored.isEmpty) return data;
   return data.copyWith(memberships: {...data.memberships, ...restored});
@@ -278,14 +267,7 @@ FavouritesData moveFavouriteItem(
   final changed = {...data.memberships};
   for (final (i, m) in list.indexed) {
     if (m.order != i) {
-      changed[m.key] = FavouriteMembership(
-        categoryId: m.categoryId,
-        item: m.item,
-        name: m.name,
-        addedAt: m.addedAt,
-        updatedAt: now,
-        order: i,
-      );
+      changed[m.key] = m.copyWith(order: i, updatedAt: now);
     }
   }
   return data.copyWith(memberships: changed);
@@ -367,4 +349,55 @@ FavouritesData restoreCategoryOrder(
   return data.copyWith(
     categoryOrders: {...data.categoryOrders, order.key: order},
   );
+}
+
+/// [data] with each of my categories that isn't in [keep] combined into a
+/// category of [keep] with the same kind and name (ignoring case and
+/// spaces), changed at [now]: its items move to the end of that category
+/// (in their order; ones it already holds are dropped) and it is deleted.
+/// For the first sync, where both devices may have made a "Favourites"
+/// of their own; [keep] are the ids of the categories already synced.
+FavouritesData combineCategoriesByName(
+  FavouritesData data,
+  Set<String> keep, {
+  required DateTime now,
+}) {
+  String nameKey(FavouriteCategory c) =>
+      '${c.kind.name}\n${c.name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase()}';
+  final targets = <String, FavouriteCategory>{};
+  for (final kind in ContentKind.values) {
+    for (final c in data.categoriesOf(kind)) {
+      if (keep.contains(c.id)) targets.putIfAbsent(nameKey(c), () => c);
+    }
+  }
+  var result = data;
+  for (final kind in ContentKind.values) {
+    for (final c in data.categoriesOf(kind)) {
+      final target = targets[nameKey(c)];
+      if (keep.contains(c.id) || target == null) continue;
+      final present = {for (final m in result.itemsIn(target.id)) m.item};
+      final targetItems = result.itemsIn(target.id);
+      var order = targetItems.isEmpty ? 0 : targetItems.last.order + 1;
+      final changed = <String, FavouriteMembership>{};
+      for (final m in result.itemsIn(c.id)) {
+        changed[m.key] = m.copyWith(deleted: true, updatedAt: now);
+        if (!present.add(m.item)) continue;
+        final moved = m.copyWith(
+          categoryId: target.id,
+          order: order++,
+          deleted: false,
+          updatedAt: now,
+        );
+        changed[moved.key] = moved;
+      }
+      result = result.copyWith(
+        categories: {
+          ...result.categories,
+          c.id: c.copyWith(deleted: true, updatedAt: now),
+        },
+        memberships: {...result.memberships, ...changed},
+      );
+    }
+  }
+  return result;
 }
