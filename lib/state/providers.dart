@@ -647,6 +647,26 @@ final guideProvider = NotifierProvider<GuideController, GuideState>(
   GuideController.new,
 );
 
+/// The change times of watch data, favourites and synced settings: the
+/// device clock, corrected to the sync server's and never going back
+/// (see [SyncClock]). Without sync it is just the device clock.
+final syncClockProvider = Provider<SyncClock>((ref) => SyncClock());
+
+/// Whether a player is open; sync waits while it is.
+final playerOpenProvider = NotifierProvider<PlayerOpen, bool>(PlayerOpen.new);
+
+class PlayerOpen extends Notifier<bool> {
+  var _count = 0;
+
+  @override
+  bool build() => false;
+
+  /// A player opened; [leave] when it closes.
+  void enter() => state = ++_count > 0;
+
+  void leave() => state = (_count = (_count - 1).clamp(0, 1 << 20)) > 0;
+}
+
 /// Whether the player shows its debug overlay, hwdec selector and log.
 final playerDebugProvider = NotifierProvider<PlayerDebug, bool>(
   PlayerDebug.new,

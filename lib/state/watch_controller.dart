@@ -8,6 +8,7 @@ import 'package:tvplayer_core/tvplayer_core.dart'
     show forgetChannel, recordChannel, recordPlayed;
 
 import 'providers.dart';
+import 'tmdb.dart';
 import 'variants.dart';
 
 /// Resume positions, watched marks and remembered track choices of the
@@ -15,13 +16,17 @@ import 'variants.dart';
 class WatchController extends Notifier<WatchData> {
   WatchStore? _store;
   Future<void> _saving = Future.value();
+  Future<void> _loaded = Future.value();
 
   @override
   WatchData build() {
     final key = ref.watch(providerKeyProvider);
-    if (key == null) return WatchData.empty;
+    if (key == null) {
+      _loaded = Future.value();
+      return WatchData.empty;
+    }
     final store = _store = ref.watch(watchStoreProvider)(key);
-    unawaited(_load(store));
+    unawaited(_loaded = _load(store));
     return WatchData.empty;
   }
 
@@ -42,6 +47,12 @@ class WatchController extends Notifier<WatchData> {
   @visibleForTesting
   Future<void> get saved => _saving;
 
+  /// Completes when the saved data has been read.
+  Future<void> get loaded => _loaded;
+
+  /// Takes [data] changed by sync, and saves it.
+  void applySynced(WatchData data) => _update(data);
+
   void _update(WatchData data) {
     if (!ref.mounted || identical(data, state)) return;
     state = data;
@@ -56,7 +67,7 @@ class WatchController extends Notifier<WatchData> {
     });
   }
 
-  DateTime get _now => DateTime.now().toUtc();
+  DateTime get _now => ref.read(syncClockProvider).now();
 
   /// The other sources of series [seriesId].
   List<int> _seriesVariants(int seriesId) =>
@@ -85,6 +96,7 @@ class WatchController extends Notifier<WatchData> {
         seriesId: info?.series.seriesId,
         season: episode?.season,
         episode: episode?.episodeNumber,
+        tmdbId: _tmdbId(key, info),
       ),
     });
     if (info != null) {
@@ -95,6 +107,16 @@ class WatchController extends Notifier<WatchData> {
       );
     }
     _update(data);
+  }
+
+  /// The TMDB id of movie [key], or of [info]'s series, when known.
+  String? _tmdbId(String key, SeriesInfo? info) {
+    if (info != null) {
+      return tmdbIdOf(ref, ContentKind.series, info.series.seriesId) ??
+          TmdbKey.fromProvider(TmdbKind.tv, info.series.tmdbId)?.id.toString();
+    }
+    final id = key.startsWith('movie:') ? int.tryParse(key.substring(6)) : null;
+    return id == null ? null : tmdbIdOf(ref, ContentKind.movie, id);
   }
 
   /// Remembers that playback of [key] ([movieKey] / [seriesKey]) started,

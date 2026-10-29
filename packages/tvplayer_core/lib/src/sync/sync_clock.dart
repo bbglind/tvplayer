@@ -64,6 +64,13 @@ class SyncClock {
   /// from a wrong clock.
   bool isFarAhead(int t) => t > _corrected + maxAhead.inMilliseconds;
 
+  /// Takes over a saved clock ([toJson]), keeping times given out since.
+  void restore(Object? json) {
+    final map = readMap(json);
+    _offset = Duration(milliseconds: readInt(map?['offset']) ?? 0);
+    _last = max(_last, readInt(map?['last']) ?? 0);
+  }
+
   Map<String, Object?> toJson() => {
     'offset': _offset.inMilliseconds,
     'last': _last,

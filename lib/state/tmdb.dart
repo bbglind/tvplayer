@@ -551,6 +551,19 @@ class TmdbMatchesController extends Notifier<TmdbMatchState> {
   }
 }
 
+/// The TMDB id of movie or series [id] ([kind]), when it is known (from
+/// the provider or matched); kept with watch progress and favourites so
+/// they can be matched to another provider's titles later.
+String? tmdbIdOf(Ref ref, ContentKind kind, int id) {
+  final links = ref.read(tmdbLinksProvider);
+  final link = switch (kind) {
+    ContentKind.movie => links.movie(id),
+    ContentKind.series => links.series(id),
+    ContentKind.live => null,
+  };
+  return link == null ? null : '${link.key.id}';
+}
+
 /// The TMDB title of each catalogue item, built in the background.
 final tmdbLinksProvider = Provider<TmdbLinks>(
   (ref) => ref.watch(_tmdbLinks).value?.links ?? TmdbLinks.empty,

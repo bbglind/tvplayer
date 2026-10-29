@@ -42,6 +42,8 @@ final class AppSettings {
     this.tmdbImageCacheMb = defaultTmdbImageCacheMb,
     this.skipDbEnabled = true,
     this.introDbEnabled = true,
+    this.syncEnabled = false,
+    this.syncServer,
   });
 
   /// IANA zone for guide times, e.g. `Europe/Stockholm`; null means the
@@ -183,6 +185,14 @@ final class AppSettings {
   final bool skipDbEnabled;
   final bool introDbEnabled;
 
+  /// Whether watch data, favourites and settings are synced through a
+  /// sync server (Settings › Sync). Device-only, like [syncServer].
+  final bool syncEnabled;
+
+  /// The sync server's address as entered (see `parseSyncServerAddress`);
+  /// null when none is set.
+  final String? syncServer;
+
   Duration get endMargin => Duration(minutes: endMarginMinutes);
   Duration get startMargin => Duration(minutes: startMarginMinutes);
   Duration get maxRecordingLength => Duration(hours: maxRecordingHours);
@@ -226,6 +236,8 @@ final class AppSettings {
     int? tmdbImageCacheMb,
     bool? skipDbEnabled,
     bool? introDbEnabled,
+    bool? syncEnabled,
+    String? Function()? syncServer,
   }) => AppSettings(
     guideTimeZone: guideTimeZone == null ? this.guideTimeZone : guideTimeZone(),
     guideShiftHours: guideShiftHours ?? this.guideShiftHours,
@@ -263,6 +275,8 @@ final class AppSettings {
     tmdbImageCacheMb: tmdbImageCacheMb ?? this.tmdbImageCacheMb,
     skipDbEnabled: skipDbEnabled ?? this.skipDbEnabled,
     introDbEnabled: introDbEnabled ?? this.introDbEnabled,
+    syncEnabled: syncEnabled ?? this.syncEnabled,
+    syncServer: syncServer == null ? this.syncServer : syncServer(),
   );
 
   Map<String, Object?> toJson() => {
@@ -298,6 +312,8 @@ final class AppSettings {
     'tmdbImageCacheMb': tmdbImageCacheMb,
     'skipDb': skipDbEnabled,
     'introDb': introDbEnabled,
+    'syncEnabled': syncEnabled,
+    'syncServer': ?syncServer,
   };
 
   /// Lenient inverse of [toJson]: unknown or invalid values use defaults.
@@ -386,6 +402,11 @@ final class AppSettings {
       ),
       skipDbEnabled: json['skipDb'] != false,
       introDbEnabled: json['introDb'] != false,
+      syncEnabled: json['syncEnabled'] == true,
+      syncServer: switch (json['syncServer']) {
+        final String s when s.trim().isNotEmpty => s.trim(),
+        _ => null,
+      },
     );
   }
 

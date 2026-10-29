@@ -17,11 +17,12 @@ import 'language_list_editor.dart';
 import 'playlist_section.dart';
 import 'services_section.dart';
 import 'settings_section.dart';
+import 'sync_section.dart';
 import 'time_zone_picker.dart';
 import '../shell/app_messages.dart';
 
 /// Provider management, the playlist, online services (TMDB), TV guide
-/// settings, player options, downloads and About.
+/// settings, player options, downloads, sync and About.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -384,6 +385,7 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
         const ServicesSection(),
+        const SyncSection(),
         const AboutSection(),
       ],
     );

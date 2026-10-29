@@ -50,7 +50,7 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
   Future<void> _enterKey() async {
     final saved = await showDialog<bool>(
       context: context,
-      builder: (context) => _KeyDialog(
+      builder: (context) => KeyDialog(
         title: 'TMDB key',
         help:
             'Paste your API Read Access Token or API Key from '
@@ -292,8 +292,9 @@ class _ServicesSectionState extends ConsumerState<ServicesSection> {
 }
 
 /// Asks for a service key and saves it with [save]; pops true when saved.
-class _KeyDialog extends ConsumerStatefulWidget {
-  const _KeyDialog({
+class KeyDialog extends ConsumerStatefulWidget {
+  const KeyDialog({
+    super.key,
     required this.title,
     required this.help,
     required this.hint,
@@ -313,10 +314,10 @@ class _KeyDialog extends ConsumerStatefulWidget {
   final Future<void> Function(WidgetRef ref, String text) save;
 
   @override
-  ConsumerState<_KeyDialog> createState() => _KeyDialogState();
+  ConsumerState<KeyDialog> createState() => _KeyDialogState();
 }
 
-class _KeyDialogState extends ConsumerState<_KeyDialog> {
+class _KeyDialogState extends ConsumerState<KeyDialog> {
   final _controller = TextEditingController();
   String? _error;
   bool _saving = false;
@@ -443,7 +444,7 @@ class _SkipServicesState extends ConsumerState<_SkipServices> {
   Future<void> _enterKey() async {
     final saved = await showDialog<bool>(
       context: context,
-      builder: (context) => _KeyDialog(
+      builder: (context) => KeyDialog(
         title: 'TheIntroDB key',
         help:
             'Optional. Paste the API key from your own account on '

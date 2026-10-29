@@ -2,13 +2,16 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'provider_storage.dart';
 
-/// The online services that take a personal key.
+/// The online services that take a personal key or token.
 enum MetadataService {
   tmdb('tmdb_credential_v1'),
 
   /// SkipDB and TheIntroDB need a key only to submit timestamps (10.2).
   skipDb('skipdb_key_v1'),
-  introDb('introdb_key_v1');
+  introDb('introdb_key_v1'),
+
+  /// The login token of the user's own sync server (Settings › Sync).
+  syncToken('sync_token_v1');
 
   const MetadataService(this.storageKey);
 

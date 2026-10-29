@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'providers.dart';
+import 'tmdb.dart';
 
 /// My categories, their items and the hidden provider categories of the
 /// active provider. Changes apply at once and are saved in the background,
@@ -12,17 +13,19 @@ import 'providers.dart';
 class FavouritesController extends Notifier<FavouritesData> {
   FavouritesStore? _store;
   Future<void> _saving = Future.value();
+  Future<void> _loaded = Future.value();
 
   @override
   FavouritesData build() {
     final key = ref.watch(providerKeyProvider);
     if (key == null) {
       _store = null;
+      _loaded = Future.value();
       return FavouritesData.empty;
     }
     final store = _store = ref.watch(favouritesStoreProvider)(key);
     // Saves wait for the load, so they never replace unread data.
-    _saving = _load(store);
+    _saving = _loaded = _load(store);
     return FavouritesData.empty;
   }
 
@@ -43,6 +46,12 @@ class FavouritesController extends Notifier<FavouritesData> {
   @visibleForTesting
   Future<void> get saved => _saving;
 
+  /// Completes when the saved data has been read.
+  Future<void> get loaded => _loaded;
+
+  /// Takes [data] changed by sync, and saves it.
+  void applySynced(FavouritesData data) => _update(data);
+
   void _update(FavouritesData data) {
     if (!ref.mounted || identical(data, state)) return;
     state = data;
@@ -57,7 +66,7 @@ class FavouritesController extends Notifier<FavouritesData> {
     });
   }
 
-  DateTime get _now => DateTime.now().toUtc();
+  DateTime get _now => ref.read(syncClockProvider).now();
 
   /// Creates a category at the end of [kind]'s list; null when [name] is
   /// empty.
@@ -102,6 +111,10 @@ class FavouritesController extends Notifier<FavouritesData> {
       name: name,
       member: member,
       now: _now,
+      tmdbId: switch (int.tryParse(item.id)) {
+        final id? => tmdbIdOf(ref, item.kind, id),
+        null => null,
+      },
     ),
   );
 

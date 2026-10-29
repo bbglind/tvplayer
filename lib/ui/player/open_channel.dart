@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
@@ -100,10 +102,49 @@ Future<bool> confirmPauseDownload(BuildContext context, WidgetRef ref) async {
 /// elsewhere.
 Route<void> playbackRoute(WidgetRef ref, PlaybackRequest request) =>
     MaterialPageRoute<void>(
-      builder: (_) => ref.read(useExternalMpvProvider)
-          ? MpvPlayerScreen(request: request)
-          : TouchPlayerScreen(request: request),
+      builder: (_) => _PlayerOpenMark(
+        child: ref.read(useExternalMpvProvider)
+            ? MpvPlayerScreen(request: request)
+            : TouchPlayerScreen(request: request),
+      ),
     );
+
+/// Sets [playerOpenProvider] while its player is shown.
+class _PlayerOpenMark extends ConsumerStatefulWidget {
+  const _PlayerOpenMark({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_PlayerOpenMark> createState() => _PlayerOpenMarkState();
+}
+
+class _PlayerOpenMarkState extends ConsumerState<_PlayerOpenMark> {
+  late final PlayerOpen _open = ref.read(playerOpenProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    // Providers can't change while the tree builds or is torn down.
+    scheduleMicrotask(_open.enter);
+  }
+
+  @override
+  void dispose() {
+    final open = _open;
+    scheduleMicrotask(() {
+      try {
+        open.leave();
+      } catch (_) {
+        // The app (or test) is gone.
+      }
+    });
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 /// The playback URL of [request], from the one source it needs. Contains
 /// credentials: never log or show it.

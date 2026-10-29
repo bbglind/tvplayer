@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/provider_storage.dart';
 import 'state/providers.dart';
 import 'state/recording_controller.dart';
+import 'state/sync.dart';
 import 'ui/setup/setup_screen.dart';
 import 'ui/shell/app_shell.dart';
 import 'ui/shell/keyboard_dismisser.dart';
@@ -38,6 +39,7 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
       }
       return AppExitResponse.exit;
     },
+    onResume: () => ref.read(syncProvider.notifier).request(SyncReason.resume),
   );
 
   final _snackBarDismisser = SnackBarDismisser();
@@ -47,6 +49,8 @@ class _TvPlayerAppState extends ConsumerState<TvPlayerApp> {
   void initState() {
     super.initState();
     _lifecycle;
+    // Sync runs for the whole session (and does nothing when it is off).
+    ref.listenManual(syncProvider, (_, _) {});
   }
 
   @override
