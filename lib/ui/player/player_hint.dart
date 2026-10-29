@@ -239,17 +239,40 @@ class PlayerHintLine extends StatelessWidget {
   static const _margin = EdgeInsets.fromLTRB(12, 2, 12, 4);
 
   /// The height of the line at the current text scale.
-  static double heightOf(BuildContext context) {
+  static double heightOf(BuildContext context) =>
+      pillHeightOf(context) + _margin.vertical;
+
+  /// The height of a [pill] at the current text scale.
+  static double pillHeightOf(BuildContext context) {
     final size = Theme.of(context).textTheme.bodySmall?.fontSize ?? 13;
     return MediaQuery.textScalerOf(context).scale(size) * _lineHeight +
-        _pillPadding.vertical +
-        _margin.vertical;
+        _pillPadding.vertical;
+  }
+
+  /// [text] in the hint's `card` pill (also the seek bar's hover time).
+  static Widget pill(BuildContext context, String text, {Key? key}) {
+    final style = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: AppColors.textPrimary, height: _lineHeight);
+    return DecoratedBox(
+      key: key,
+      decoration: const BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.all(Radius.circular(6)),
+      ),
+      child: Padding(
+        padding: _pillPadding,
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall
-        ?.copyWith(color: AppColors.textPrimary, height: _lineHeight);
     return SizedBox(
       key: const Key('player.hintLine'),
       height: heightOf(context),
@@ -261,23 +284,12 @@ class PlayerHintLine extends StatelessWidget {
             builder: (context, _) {
               final hint = controller.current;
               if (hint == null) return const SizedBox.expand();
-              return _UnderAnchor(
+              return UnderAnchor(
                 anchorX: hint.anchor.center.dx,
-                child: DecoratedBox(
+                child: pill(
+                  context,
+                  hint.message,
                   key: const Key('player.hint'),
-                  decoration: const BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.all(Radius.circular(6)),
-                  ),
-                  child: Padding(
-                    padding: _pillPadding,
-                    child: Text(
-                      hint.message,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: style,
-                    ),
-                  ),
                 ),
               );
             },
@@ -290,8 +302,8 @@ class PlayerHintLine extends StatelessWidget {
 
 /// Fills the space it gets and places [child] centred under the global x
 /// [anchorX], kept inside its own edges.
-class _UnderAnchor extends SingleChildRenderObjectWidget {
-  const _UnderAnchor({required this.anchorX, super.child});
+class UnderAnchor extends SingleChildRenderObjectWidget {
+  const UnderAnchor({super.key, required this.anchorX, super.child});
 
   final double anchorX;
 
@@ -300,8 +312,8 @@ class _UnderAnchor extends SingleChildRenderObjectWidget {
       _RenderUnderAnchor(anchorX);
 
   @override
-  void updateRenderObject(BuildContext context, _RenderUnderAnchor r) =>
-      r.anchorX = anchorX;
+  void updateRenderObject(BuildContext context, RenderObject renderObject) =>
+      (renderObject as _RenderUnderAnchor).anchorX = anchorX;
 }
 
 class _RenderUnderAnchor extends RenderShiftedBox {

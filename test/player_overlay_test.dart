@@ -805,6 +805,110 @@ void main() {
     await tester.pump();
   });
 
+  group('seek bar hover time', () {
+    final label = find.byKey(const Key('player.seekTime'));
+
+    String labelText(WidgetTester tester) => tester
+        .widget<Text>(find.descendant(of: label, matching: find.byType(Text)))
+        .data!;
+
+    /// Lets the overlay mirror send its image: its rate limit, then the
+    /// capture's engine calls.
+    Future<void> mirror(WidgetTester tester) async {
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+      }
+    }
+
+    testWidgets('windowed: drawn by mpv at the bottom of the video, under '
+        'the pointer; the video keeps its size', (tester) async {
+      await open(tester, const MoviePlayback(_movie));
+      emit();
+      await tester.pump();
+      final video = tester.getRect(find.byKey(const Key('mpv.video')));
+      final rects = embed.rects.length;
+      final seek = tester.getRect(find.byKey(const Key('player.seek')));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: video.center);
+      addTearDown(gesture.removePointer);
+
+      // A quarter of the way along the 40 min track.
+      final at = Offset(
+        seek.left + 24 + 0.25 * (seek.width - 48),
+        seek.center.dy,
+      );
+      await gesture.moveTo(at);
+      await tester.pump();
+      expect(labelText(tester), '10:00');
+      final pill = tester.getRect(label);
+      expect(pill.bottom, lessThanOrEqualTo(video.bottom));
+      expect(pill.top, greaterThan(video.center.dy));
+      expect(pill.center.dx, moreOrLessEquals(at.dx, epsilon: 1));
+      // The seek hint still shows in the hint line.
+      expect(find.byKey(const Key('player.hint')), findsOneWidget);
+
+      await mirror(tester);
+      final overlay = player.overlays[4];
+      expect(overlay, isNotNull);
+      expect(overlay!.y, (pill.top - video.top).round());
+      expect(overlay.x, (pill.left - video.left).round());
+      expect(overlay.width, pill.width.round());
+
+      // It follows the pointer.
+      await gesture.moveTo(at + const Offset(100, 0));
+      await tester.pump();
+      // The mirror's rate limit runs on the real clock.
+      for (var i = 0; i < 10 && player.overlays[4]!.x == overlay.x; i++) {
+        await mirror(tester);
+      }
+      expect(player.overlays[4]!.x, greaterThan(overlay.x + 90));
+
+      await gesture.moveTo(video.center);
+      await tester.pump();
+      expect(label, findsNothing);
+      expect(player.overlays[4], isNull);
+      expect(tester.getRect(find.byKey(const Key('mpv.video'))), video);
+      expect(embed.rects.length, rects);
+    });
+
+    testWidgets('fullscreen: just above the bar, gone when the bar hides', (
+      tester,
+    ) async {
+      await open(tester, const MoviePlayback(_movie));
+      emit();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.pump();
+      await tester.pump();
+      final seek = tester.getRect(find.byKey(const Key('player.seek')));
+      embed.pointer(VideoPointerMove(seek.center));
+      await tester.pump();
+      await tester.pump();
+      expect(labelText(tester), '20:00');
+      final bar = tester.getRect(
+        find
+            .ancestor(
+              of: find.byKey(const Key('player.seek')),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      final pill = tester.getRect(label);
+      expect(pill.bottom, lessThanOrEqualTo(bar.top));
+      expect(pill.bottom, greaterThan(bar.top - 20));
+      await mirror(tester);
+      expect(player.overlays[4], isNotNull);
+
+      await tester.pump(const Duration(seconds: 3));
+      expect(label, findsNothing);
+      expect(player.overlays, isEmpty);
+    });
+  });
+
   group('tooltips', () {
     const window = Rect.fromLTWH(0, 0, 1600, 900);
     final hint = find.byKey(const Key('player.hint'));

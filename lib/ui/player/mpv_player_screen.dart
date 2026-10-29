@@ -60,6 +60,7 @@ abstract final class _Overlay {
   static const bottom = 1;
   static const panel = 2;
   static const recording = 3;
+  static const seekTime = 4;
 }
 
 /// A question asked in the confirm panel.
@@ -183,6 +184,12 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   /// The hint of the control under the mouse or with keyboard focus.
   final _hints = PlayerHintController();
+
+  /// The time under the mouse on the seek bar, shown above it by mpv.
+  final _seekHover = ValueNotifier<SeekHover?>(null);
+
+  /// The video area in the app view, as last reported (windowed).
+  Offset _videoOrigin = Offset.zero;
   late final _gestures = VideoGestures(
     onClick: _onVideoClick,
     onDoubleClick: () => _setFullscreen(!_fullscreen),
@@ -981,7 +988,10 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   void _onControlsChange() {
     if (!mounted) return;
-    if (!_controls.visible) _hints.clear();
+    if (!_controls.visible) {
+      _hints.clear();
+      _seekHover.value = null;
+    }
     if (!_controls.visible && _barFocus.hasFocus) {
       _shortcutsFocus.requestFocus();
     }
@@ -1028,14 +1038,63 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
 
   void _fullscreenChanged() {
     _hints.clear();
+    _seekHover.value = null;
     _controls.autoHide = _fullscreen;
     if (!_fullscreen) _forwarder?.remove();
     _updateCursor();
   }
 
   void _onVideoRect(Rect rect) {
-    if (mounted && _showVideo) unawaited(_embed?.setRect(rect));
+    if (!mounted) return;
+    if (_videoOrigin != rect.topLeft) {
+      setState(() => _videoOrigin = rect.topLeft);
+    }
+    if (_showVideo) unawaited(_embed?.setRect(rect));
   }
+
+  /// The seek bar's hover time, only while the video is embedded (the
+  /// label is drawn by mpv over it).
+  void _onSeekHover(SeekHover? hover) =>
+      _seekHover.value = _mode == _Mode.embedded && _showVideo ? hover : null;
+
+  /// The seek bar's hover time as a pill drawn by mpv over the video, under
+  /// the pointer and [gap] above the bottom of the space it gets: windowed
+  /// the video area (at [videoOrigin] in the app view), fullscreen the
+  /// screen above the bar.
+  Widget _buildSeekHover({required Offset videoOrigin, required double gap}) =>
+      Positioned.fill(
+        child: IgnorePointer(
+          child: ValueListenableBuilder(
+            valueListenable: _seekHover,
+            builder: (context, hover, _) {
+              if (hover == null) return const SizedBox.shrink();
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    height: PlayerHintLine.pillHeightOf(context),
+                    child: UnderAnchor(
+                      anchorX: hover.x,
+                      child: OsdMirror(
+                        id: _Overlay.seekTime,
+                        player: _player,
+                        videoOrigin: videoOrigin,
+                        placement: hover.x,
+                        child: PlayerHintLine.pill(
+                          context,
+                          hover.label,
+                          key: const Key('player.seekTime'),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: gap),
+                ],
+              );
+            },
+          ),
+        ),
+      );
 
   /// Esc: cancels the countdown, else closes the panel, else leaves
   /// fullscreen.
@@ -1068,6 +1127,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     _gestures.dispose();
     _controls.dispose();
     _hints.dispose();
+    _seekHover.dispose();
     _forwarder?.remove();
     if (_volumeSave != null) {
       _volumeSave!.cancel();
@@ -1228,7 +1288,15 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
         Expanded(
           child: Row(
             children: [
-              Expanded(child: video),
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    video,
+                    _buildSeekHover(videoOrigin: _videoOrigin, gap: 6),
+                  ],
+                ),
+              ),
               if (panel != null || card != null)
                 SizedBox(
                   width: _panelWidth,
@@ -1331,6 +1399,18 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
               ),
             ),
           ),
+        if (_barHeight case final bar? when controls)
+          Positioned(
+            left: 0,
+            right: right,
+            top: 0,
+            bottom: 0,
+            child: Stack(
+              children: [
+                _buildSeekHover(videoOrigin: Offset.zero, gap: bar + 6),
+              ],
+            ),
+          ),
         if (ref.watch(recordingProvider) case final recording?)
           Positioned(
             top: 16,
@@ -1355,6 +1435,12 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
           ),
       ],
     );
+  }
+
+  /// The height of the fullscreen bar as last laid out.
+  double? get _barHeight {
+    final box = _barKey.currentContext?.findRenderObject();
+    return box is RenderBox && box.hasSize ? box.size.height : null;
   }
 
   double get _panelWidth => switch (_panel) {
@@ -1630,6 +1716,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
                         ),
                         onSeek: (p) => unawaited(_player.seek(p)),
                         onDragging: (v) => _controls.hold(#seek, v),
+                        onHover: _onSeekHover,
                       )
                     : _buildLivePaused(),
               ),
@@ -1757,6 +1844,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
       loading: loading,
       onSeek: _seekReplayTo,
       onDragging: (v) => _controls.hold(#seek, v),
+      onHover: _onSeekHover,
     );
   }
 

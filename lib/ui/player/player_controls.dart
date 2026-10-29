@@ -135,6 +135,7 @@ class PlayerSeekBar extends StatefulWidget {
     required this.onToggleRemaining,
     required this.onSeek,
     this.onDragging,
+    this.onHover,
     this.touch = false,
   });
 
@@ -144,6 +145,10 @@ class PlayerSeekBar extends StatefulWidget {
   final VoidCallback onToggleRemaining;
   final ValueChanged<Duration> onSeek;
   final ValueChanged<bool>? onDragging;
+
+  /// The time under the mouse pointer, null when it leaves the slider or
+  /// a drag starts.
+  final ValueChanged<SeekHover?>? onHover;
 
   /// In the touch player: tooltips name taps instead of keys.
   final bool touch;
@@ -185,20 +190,26 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
             // Never keyboard focus, even after a drag: the arrows always
             // seek and change the volume (PlayerShortcuts).
             child: ExcludeFocus(
-              child: Slider(
-                key: const Key('player.seek'),
-                value: value,
-                max: max,
-                onChangeStart: (v) {
-                  widget.onDragging?.call(true);
-                  setState(() => _drag = v);
-                },
-                onChanged: (v) => setState(() => _drag = v),
-                onChangeEnd: (v) {
-                  widget.onDragging?.call(false);
-                  widget.onSeek(Duration(milliseconds: v.round()));
-                  setState(() => _drag = null);
-                },
+              child: _SeekHoverRegion(
+                onHover: widget.onHover,
+                labelAt: (f) =>
+                    formatDuration(Duration(seconds: (f * max / 1000).floor())),
+                child: Slider(
+                  key: const Key('player.seek'),
+                  value: value,
+                  max: max,
+                  onChangeStart: (v) {
+                    widget.onHover?.call(null);
+                    widget.onDragging?.call(true);
+                    setState(() => _drag = v);
+                  },
+                  onChanged: (v) => setState(() => _drag = v),
+                  onChangeEnd: (v) {
+                    widget.onDragging?.call(false);
+                    widget.onSeek(Duration(milliseconds: v.round()));
+                    setState(() => _drag = null);
+                  },
+                ),
               ),
             ),
           ),
@@ -212,6 +223,56 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
           touch: widget.touch,
         ),
       ],
+    );
+  }
+}
+
+/// The mouse pointer over a seek bar: [label] is the time a click there
+/// seeks to, [x] the pointer's x in the app view.
+typedef SeekHover = ({String label, double x});
+
+/// Reports [onHover] while the mouse moves over [child], a seek [Slider]:
+/// [labelAt] names the time at a fraction (0–1) of the bar, found as the
+/// slider finds it for a click (its track is inset by the thumb).
+class _SeekHoverRegion extends StatelessWidget {
+  const _SeekHoverRegion({
+    required this.onHover,
+    required this.labelAt,
+    required this.child,
+  });
+
+  final ValueChanged<SeekHover?>? onHover;
+  final String Function(double fraction) labelAt;
+  final Widget child;
+
+  double _fractionAt(BuildContext context, double x) {
+    final box = context.findRenderObject()! as RenderBox;
+    final theme = SliderTheme.of(context);
+    final shapes = theme.copyWith(
+      trackShape: theme.trackShape ?? const RoundedRectSliderTrackShape(),
+      thumbShape: theme.thumbShape ?? const RoundSliderThumbShape(),
+      overlayShape: theme.overlayShape ?? const RoundSliderOverlayShape(),
+      trackHeight: theme.trackHeight ?? 4,
+    );
+    final track = shapes.trackShape!.getPreferredRect(
+      parentBox: box,
+      sliderTheme: shapes,
+    );
+    if (track.width <= 0) return 0;
+    return ((x - track.left) / track.width).clamp(0.0, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onHover = this.onHover;
+    if (onHover == null) return child;
+    return MouseRegion(
+      onHover: (e) => onHover((
+        label: labelAt(_fractionAt(context, e.localPosition.dx)),
+        x: e.position.dx,
+      )),
+      onExit: (_) => onHover(null),
+      child: child,
     );
   }
 }
@@ -339,6 +400,7 @@ class ReplaySeekBar extends StatefulWidget {
     this.behind,
     this.loading = false,
     this.onDragging,
+    this.onHover,
     this.touch = false,
   });
 
@@ -350,6 +412,9 @@ class ReplaySeekBar extends StatefulWidget {
   final Duration? behind;
   final bool loading;
   final ValueChanged<bool>? onDragging;
+
+  /// The clock time under the mouse pointer; see [PlayerSeekBar.onHover].
+  final ValueChanged<SeekHover?>? onHover;
 
   /// See [PlayerSeekBar.touch].
   final bool touch;
@@ -400,22 +465,30 @@ class _ReplaySeekBarState extends State<ReplaySeekBar> {
                   // Never keyboard focus, even after a drag: the arrows always
                   // seek and change the volume (PlayerShortcuts).
                   child: ExcludeFocus(
-                    child: Slider(
-                      key: const Key('player.seek'),
-                      value: value,
-                      max: max,
-                      onChangeStart: (v) {
-                        widget.onDragging?.call(true);
-                        setState(() => _drag = v);
-                      },
-                      onChanged: (v) => setState(() => _drag = v),
-                      onChangeEnd: (v) {
-                        widget.onDragging?.call(false);
-                        widget.onSeek(
-                          widget.from.add(Duration(seconds: v.round())),
-                        );
-                        setState(() => _drag = null);
-                      },
+                    child: _SeekHoverRegion(
+                      onHover: widget.onHover,
+                      labelAt: (f) => _clock(
+                        widget.from.add(Duration(seconds: (f * max).round())),
+                        seconds: true,
+                      ),
+                      child: Slider(
+                        key: const Key('player.seek'),
+                        value: value,
+                        max: max,
+                        onChangeStart: (v) {
+                          widget.onHover?.call(null);
+                          widget.onDragging?.call(true);
+                          setState(() => _drag = v);
+                        },
+                        onChanged: (v) => setState(() => _drag = v),
+                        onChangeEnd: (v) {
+                          widget.onDragging?.call(false);
+                          widget.onSeek(
+                            widget.from.add(Duration(seconds: v.round())),
+                          );
+                          setState(() => _drag = null);
+                        },
+                      ),
                     ),
                   ),
                 ),

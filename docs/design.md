@@ -316,7 +316,12 @@ clean and simple over every desktop feature.
   the side panels and the next-episode card stay inside the panel column;
   in fullscreen they use the hint line too, which mpv shows with the bar
   and which hides with it (the prominent skip button, shown without the
-  bar, has no hint until the bar shows). In the touch player (Android) there is no hint
+  bar, has no hint until the bar shows). The seek bar's hover time is the
+  same pill, drawn by mpv (its own small overlay, so the bar's image
+  doesn't change with the pointer) centred under the pointer just above
+  the bar: windowed at the bottom edge of the video, fullscreen above the
+  bar, hidden with it. VOD shows the position ("1:02:15"), replays the
+  clock time ("20:41:12"); the touch player has none. In the touch player (Android) there is no hint
   line: controls use ordinary tooltips, shown on long-press, without key
   names ("Pause live TV", "Seek (or double-tap left or right: 10 s)").
 - **Player layout**: windowed, the video keeps its area; the controls bar

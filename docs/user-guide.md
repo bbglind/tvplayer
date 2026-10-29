@@ -648,7 +648,10 @@ From left to right (only the parts that apply are shown):
 - **"Record"** on live TV (see [Recording](#recording-live-tv)).
 - **Seek bar** with the position and the end time (movies, episodes,
   replays). Double-click the end time (or focus it and press Enter) to
-  switch between the length and the time left ("-12:34").
+  switch between the length and the time left ("-12:34"). While the mouse
+  is over the bar, a small label above it, following the pointer, shows
+  the time a click there jumps to ("1:02:15"; in a replay the clock time,
+  "20:41:12"). Not on a phone.
 - **"Skip intro"** / **"Skip recap"** while an episode's intro or recap
   plays (see [Skip intro and recap](#skip-intro-and-recap)).
 - **"LIVE"** in a replay or while live TV is paused: back to live.
@@ -681,7 +684,8 @@ move the mouse or press a key, and hide again after 3 seconds (with the
 mouse pointer). When an intro or recap starts, "Skip intro" / "Skip
 recap" shows at the bottom right for about 10 seconds even while the
 controls are hidden; after that it is in the controls bar. They stay while a panel is open, a control has keyboard
-focus or you drag a slider. **Esc** (or f, or a double click) leaves
+focus or you drag a slider. The time label of the seek bar shows just
+above the bar here too. **Esc** (or f, or a double click) leaves
 fullscreen.
 
 ### Channels panel (zapping)
@@ -768,7 +772,8 @@ programme is still on air, the bar reaches from the programme's start (or
 two hours back, if that is earlier) up to now, with "Behind live 12 min"
 after it.
 
-- ←/→ jump 10 seconds, with Shift 1 minute; or drag the bar.
+- ←/→ jump 10 seconds, with Shift 1 minute; or drag the bar. Hovering the
+  bar shows the clock time a click there jumps to.
 - The title and now/next follow what you are watching and run on into the
   next programme.
 - A jump outside what is loaded briefly shows a short progress bar while it

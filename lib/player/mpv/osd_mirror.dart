@@ -22,6 +22,7 @@ class OsdMirror extends StatefulWidget {
     required this.player,
     required this.child,
     this.videoOrigin = Offset.zero,
+    this.placement,
   });
 
   /// The mpv overlay id; one per mirror.
@@ -31,6 +32,11 @@ class OsdMirror extends StatefulWidget {
 
   /// Top left of the video area in the app view, logical pixels.
   final Offset videoOrigin;
+
+  /// Changes when [child] moves without repainting (e.g. it follows the
+  /// pointer), so the image is placed again at once rather than at the
+  /// next check.
+  final Object? placement;
 
   static const maxRate = 30;
 
@@ -70,6 +76,9 @@ class _OsdMirrorState extends State<OsdMirror> {
       oldWidget.player.hideOverlay(oldWidget.id);
       _lastImage = null;
       _request();
+    } else if (oldWidget.placement != widget.placement ||
+        oldWidget.videoOrigin != widget.videoOrigin) {
+      _onPainted();
     }
   }
 
