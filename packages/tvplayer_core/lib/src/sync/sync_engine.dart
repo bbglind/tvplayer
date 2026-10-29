@@ -131,15 +131,32 @@ class SyncEngine {
     final force = first && space.remoteWinsOnFirstSync;
     final shadow = {...state.shadow};
     var cursor = state.cursor;
+    var head = state.head;
     var pulled = 0, applied = 0;
 
     Future<void> save({bool complete = false}) => states.save(
       space.id,
-      SyncState(cursor: cursor, shadow: shadow, complete: complete),
+      SyncState(cursor: cursor, head: head, shadow: shadow, complete: complete),
     );
 
+    var reset = false;
     while (true) {
-      final page = await backend.pull(space.id, cursor, limit: pageLimit);
+      final page = await backend.pull(
+        space.id,
+        cursor,
+        limit: pageLimit,
+        head: head,
+      );
+      if (page.reset && !reset) {
+        // The backend lost changes this device saw (restored from a
+        // backup): pull everything again and send whatever it lacks.
+        reset = true;
+        shadow.clear();
+        cursor = null;
+        head = null;
+        continue;
+      }
+      head = page.head ?? head;
       for (final r in page.records) {
         clock.observe(r.t);
       }
@@ -181,6 +198,7 @@ class SyncEngine {
     var pushed = 0;
     for (final batch in batches) {
       final result = await backend.push(space.id, batch);
+      head = result.head ?? head;
       final stale = {for (final s in result.stale) s.key: s};
       for (final r in batch) {
         if (!stale.containsKey(r.key)) {

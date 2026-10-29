@@ -118,6 +118,9 @@ class HttpSyncBackend implements SyncBackend {
         _ => throw const SyncException(SyncFailure.invalidData),
       };
 
+  static String? _head(Map<String, Object?> body) =>
+      body['head'] is String ? body['head'] as String : null;
+
   static List<SyncRecord> _records(Object? json) {
     if (json is! List) throw const SyncException(SyncFailure.invalidData);
     return [
@@ -145,10 +148,15 @@ class HttpSyncBackend implements SyncBackend {
     String space,
     String? cursor, {
     int limit = syncMaxRecords,
+    String? head,
   }) async {
     final body = await _send(
       () => _client.get(
-        _uri('spaces/$space/changes', {'since': ?cursor, 'limit': '$limit'}),
+        _uri('spaces/$space/changes', {
+          'since': ?cursor,
+          'head': ?head,
+          'limit': '$limit',
+        }),
         headers: _headers,
       ),
     );
@@ -158,6 +166,8 @@ class HttpSyncBackend implements SyncBackend {
       cursor: next is String ? next : null,
       more: body['more'] == true,
       serverTime: _serverTime(body),
+      head: _head(body),
+      reset: body['reset'] == true,
     );
   }
 
@@ -175,6 +185,7 @@ class HttpSyncBackend implements SyncBackend {
     return PushResult(
       stale: _records(body['stale']),
       serverTime: _serverTime(body),
+      head: _head(body),
     );
   }
 

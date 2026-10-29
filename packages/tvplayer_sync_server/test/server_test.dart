@@ -169,6 +169,34 @@ void main() {
       expect(page3['records'], [record('k0', t1 + 1, 'new')]);
     });
 
+    test('a cursor ahead of the database asks for a reset', () async {
+      await call(
+        'POST',
+        '/v1/spaces/settings/records',
+        body: {
+          'records': [record('a', t1, 1)],
+        },
+      );
+      final (_, page) = await call(
+        'GET',
+        '/v1/spaces/settings/changes?since=99',
+      );
+      expect(page['reset'], isTrue);
+      expect(page['records'], isEmpty);
+      final (_, normal) = await call(
+        'GET',
+        '/v1/spaces/settings/changes?since=1',
+      );
+      expect(normal.containsKey('reset'), isFalse);
+      expect(normal['head'], '1');
+      // Ahead by a push the database no longer has.
+      final (_, pushed) = await call(
+        'GET',
+        '/v1/spaces/settings/changes?since=1&head=2',
+      );
+      expect(pushed['reset'], isTrue);
+    });
+
     test('spaces are kept apart', () async {
       await call(
         'POST',

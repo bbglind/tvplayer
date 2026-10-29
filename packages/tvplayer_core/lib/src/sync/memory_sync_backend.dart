@@ -24,6 +24,15 @@ class MemorySyncBackend implements SyncBackend {
 
   int get _now => _clock().millisecondsSinceEpoch;
 
+  /// Forgets everything after change [seq], as when the server's database
+  /// is restored from an older backup.
+  void restore(int seq) {
+    for (final space in _spaces.values) {
+      space.removeWhere((_, v) => v.$1 > seq);
+    }
+    _seq = seq;
+  }
+
   /// The records of [space] by key.
   Map<String, SyncRecord> records(String space) => {
     for (final MapEntry(:key, :value) in (_spaces[space] ?? const {}).entries)
@@ -45,9 +54,21 @@ class MemorySyncBackend implements SyncBackend {
     String space,
     String? cursor, {
     int limit = syncMaxRecords,
+    String? head,
   }) async {
     _check();
     final since = int.tryParse(cursor ?? '') ?? 0;
+    final known = int.tryParse(head ?? '') ?? 0;
+    if (since > _seq || known > _seq) {
+      return SyncPage(
+        records: const [],
+        cursor: null,
+        more: false,
+        serverTime: _now,
+        head: '$_seq',
+        reset: true,
+      );
+    }
     final changes = [
       for (final (seq, r) in (_spaces[space] ?? const {}).values)
         if (seq > since) (seq, r),
@@ -58,6 +79,7 @@ class MemorySyncBackend implements SyncBackend {
       cursor: page.isEmpty ? cursor : '${page.last.$1}',
       more: changes.length > page.length,
       serverTime: _now,
+      head: '$_seq',
     );
   }
 
@@ -79,7 +101,7 @@ class MemorySyncBackend implements SyncBackend {
       }
       stored[r.key] = (++_seq, r);
     }
-    return PushResult(stale: stale, serverTime: _now);
+    return PushResult(stale: stale, serverTime: _now, head: '$_seq');
   }
 
   @override

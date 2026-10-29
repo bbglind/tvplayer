@@ -2,10 +2,12 @@
 ///
 /// - `GET /v1/health` (no login): `{"service", "api"}`
 /// - `GET /v1/info`: `{"service", "api", "salt", "serverTime"}`
-/// - `GET /v1/spaces/<space>/changes?since=<cursor>&limit=<n>`:
-///   `{"records", "cursor", "more", "serverTime"}`
+/// - `GET /v1/spaces/<space>/changes?since=<cursor>&head=<head>&limit=<n>`:
+///   `{"records", "cursor", "more", "head", "serverTime"}`, or
+///   `"reset": true` when the cursor or head is ahead of the server (it
+///   was restored from a backup)
 /// - `POST /v1/spaces/<space>/records` with `{"records"}`:
-///   `{"stale", "serverTime"}`; HTTP 422 with `{"error": "clock"}` when a
+///   `{"stale", "head", "serverTime"}`; HTTP 422 with `{"error": "clock"}` when a
 ///   record is dated more than [syncMaxAhead] after the server's clock.
 ///
 /// Every request but health needs `Authorization: Bearer <token>`.

@@ -62,6 +62,8 @@ final class SyncPage {
     required this.cursor,
     required this.more,
     required this.serverTime,
+    this.head,
+    this.reset = false,
   });
 
   final List<SyncRecord> records;
@@ -72,16 +74,28 @@ final class SyncPage {
   /// Whether more changes follow right away.
   final bool more;
   final int serverTime;
+
+  /// The backend's latest change (opaque), passed back as `head` to
+  /// [SyncBackend.pull] so a backend that lost changes can tell.
+  final String? head;
+
+  /// The cursor or head is ahead of the backend (e.g. restored from a
+  /// backup): it lost changes this device saw, so the space must be
+  /// synced from the start. No records come with it.
+  final bool reset;
 }
 
 /// The answer to a push.
 final class PushResult {
-  const PushResult({required this.stale, required this.serverTime});
+  const PushResult({required this.stale, required this.serverTime, this.head});
 
   /// The backend's copies of pushed records it already had newer: they
   /// replace the local ones. Every other pushed record was taken.
   final List<SyncRecord> stale;
   final int serverTime;
+
+  /// The backend's latest change after the push, as in [SyncPage.head].
+  final String? head;
 }
 
 /// Where synced records are kept: a sync server today; a sync file on
@@ -93,8 +107,14 @@ abstract interface class SyncBackend {
   Future<SyncInfo> info();
 
   /// Changes in [space] after [cursor] (null: from the start), at most
-  /// [limit] records. Throws [SyncException].
-  Future<SyncPage> pull(String space, String? cursor, {int limit});
+  /// [limit] records. [head] is the latest [SyncPage.head] or
+  /// [PushResult.head] seen. Throws [SyncException].
+  Future<SyncPage> pull(
+    String space,
+    String? cursor, {
+    int limit,
+    String? head,
+  });
 
   /// Stores [records] in [space]; each is kept unless the backend has a
   /// copy that wins ([SyncRecord.compareTo]). Throws [SyncException].

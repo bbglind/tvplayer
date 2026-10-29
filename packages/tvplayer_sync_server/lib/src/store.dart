@@ -7,7 +7,13 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 /// One page of changes from [SyncStore.changes].
-typedef ChangePage = ({List<SyncRecord> records, int cursor, bool more});
+typedef ChangePage = ({
+  List<SyncRecord> records,
+  int cursor,
+  bool more,
+  int head,
+  bool reset,
+});
 
 /// A saved login token, without the token itself.
 typedef TokenInfo = ({String name, DateTime created, DateTime? lastUsed});
@@ -90,14 +96,31 @@ class SyncStore {
   /// Made once with the database; see `SyncInfo.salt`.
   String get salt => _meta('salt');
 
+  /// The number of the latest change, in any space.
+  int get head => int.parse(_meta('seq'));
+
   /// The records of [space] changed after [since], oldest change first:
   /// at most [limit] and, after the first, about [maxBytes] of values.
+  /// `head` is the latest change. With `reset` (and no records) when
+  /// [since] or [known] is a change this database never had: it was
+  /// restored from an older backup.
   ChangePage changes(
     String space,
     int since, {
+    int known = 0,
     int limit = syncMaxRecords,
     int maxBytes = syncMaxPageBytes,
   }) {
+    final head = this.head;
+    if (since > head || known > head) {
+      return (
+        records: const [],
+        cursor: 0,
+        more: false,
+        head: head,
+        reset: true,
+      );
+    }
     final rows = _db.select(
       'SELECT key, t, deleted, value, seq FROM records '
       'WHERE space = ? AND seq > ? ORDER BY seq LIMIT ?',
@@ -124,6 +147,8 @@ class SyncStore {
       records: records,
       cursor: cursor,
       more: records.length < rows.length,
+      head: head,
+      reset: false,
     );
   }
 

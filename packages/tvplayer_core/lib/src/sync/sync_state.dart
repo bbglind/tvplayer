@@ -11,9 +11,17 @@ import 'sync_record.dart';
 /// sent, so changes made offline wait in the data itself, with no queue
 /// that could get lost.
 final class SyncState {
-  const SyncState({this.cursor, this.shadow = const {}, this.complete = false});
+  const SyncState({
+    this.cursor,
+    this.head,
+    this.shadow = const {},
+    this.complete = false,
+  });
 
   final String? cursor;
+
+  /// The backend's latest change seen ([SyncPage.head]).
+  final String? head;
   final Map<String, SyncVersion> shadow;
 
   /// Whether the first sync of the space went through to the end. Until
@@ -25,6 +33,7 @@ final class SyncState {
   Map<String, Object?> toJson() => {
     'version': 1,
     'cursor': ?cursor,
+    'head': ?head,
     'complete': complete,
     'shadow': {
       for (final MapEntry(:key, :value) in shadow.entries) key: value.toJson(),
@@ -37,8 +46,10 @@ final class SyncState {
     final shadow = readMap(map?['shadow']);
     if (map == null || shadow == null) return null;
     final cursor = map['cursor'];
+    final head = map['head'];
     return SyncState(
       cursor: cursor is String ? cursor : null,
+      head: head is String ? head : null,
       complete: map['complete'] == true,
       shadow: {
         for (final MapEntry(:key, :value) in shadow.entries)

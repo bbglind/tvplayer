@@ -530,6 +530,28 @@ void main() {
       expect(phone.watch.syncRecords, laptop.watch.syncRecords);
     });
 
+    test(
+      'a server restored from an older backup gets everything back',
+      () async {
+        laptop.watch = _progress(laptop.watch, 1, 30, laptop.now());
+        await laptop.sync();
+        laptop.watch = _progress(laptop.watch, 2, 30, laptop.now());
+        _category(laptop, 'c1', 'News');
+        await laptop.sync();
+        // Back to the state after the first sync.
+        backend.restore(3);
+        final space = watchSpace(syncAccountId('salt-1', _config));
+        expect(backend.records(space).keys, isNot(contains(movieKey(2))));
+        await laptop.sync();
+        expect(backend.records(space).keys, contains(movieKey(2)));
+        await phone.sync();
+        expect(phone.watch.movie(2), isNotNull);
+        expect(phone.favourites.category('c1'), isNotNull);
+        // No backup or first-sync merge again.
+        expect(laptop.backups, 3);
+      },
+    );
+
     test('keys trimmed locally are not sent back or deleted', () async {
       for (var i = 0; i < maxChannelHistory + 5; i++) {
         laptop.watch = recordChannel(laptop.watch, 'ch$i', laptop.now());

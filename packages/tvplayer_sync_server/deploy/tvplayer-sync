@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs a server command (token create, token list, backup, status…) as the
+# service user with the installed config. Install as
+# /usr/local/bin/tvplayer-sync; see docs/sync-server.md.
+exec runuser -u tvplayer-sync -- /opt/tvplayer-sync/bin/tvplayer_sync_server \
+  --config /etc/tvplayer-sync/config.json "$@"

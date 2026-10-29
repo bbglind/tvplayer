@@ -81,13 +81,19 @@ Future<(Response, String, int?)> _route(
       if (!isSyncSpace(space)) return (_error(400, 'space'), route, null);
       final query = request.url.queryParameters;
       final since = int.tryParse(query['since'] ?? '0');
+      final known = int.tryParse(query['head'] ?? '0');
       final limit = int.tryParse(query['limit'] ?? '$syncMaxRecords');
-      if (since == null || since < 0 || limit == null || limit < 1) {
+      if (since == null ||
+          since < 0 ||
+          known == null ||
+          limit == null ||
+          limit < 1) {
         return (_error(400, 'query'), route, null);
       }
       final page = store.changes(
         space,
         since,
+        known: known,
         limit: limit.clamp(1, syncMaxRecords),
       );
       return (
@@ -95,6 +101,8 @@ Future<(Response, String, int?)> _route(
           'records': [for (final r in page.records) r.toJson()],
           'cursor': '${page.cursor}',
           'more': page.more,
+          'head': '${page.head}',
+          if (page.reset) 'reset': true,
           'serverTime': time,
         }),
         route,
@@ -132,6 +140,7 @@ Future<(Response, String, int?)> _route(
       return (
         _json({
           'stale': [for (final r in stale) r.toJson()],
+          'head': '${store.head}',
           'serverTime': time,
         }),
         route,
