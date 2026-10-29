@@ -5,6 +5,7 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../format.dart';
 import '../../state/global_search.dart';
+import '../../state/navigation.dart';
 import '../../state/providers.dart';
 import '../live/live_tv_screen.dart';
 import '../theme/app_colors.dart';
@@ -27,7 +28,8 @@ enum _Group {
   final String singular;
 }
 
-/// The Search page: one field (focused when the page opens) searching
+/// The Search page: one field (focused when the page opens, not when it is
+/// only rebuilt, see [searchFieldFocusProvider]) searching
 /// channels, movies and series at once. Results are grouped with their
 /// counts; each group shows its best matches and "Show all" lists all of
 /// them. Enter in the field moves to the first result; Enter or a click
@@ -59,11 +61,43 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// The group listed in full ("Show all"), if any.
   _Group? _expanded;
 
+  /// Whether the field takes focus: when the page opens, or when it is
+  /// rebuilt in place while the field had it, but never under another page
+  /// (e.g. when the phone turns to landscape for the player). Requested
+  /// after the first frame rather than by `autofocus`, which gives way to
+  /// whatever was focused before (the magnifier, a tab).
+  late final bool _autofocus = () {
+    final focus =
+        ref.read(searchFieldFocusProvider) &&
+        (ModalRoute.isCurrentOf(context) ?? true);
+    if (focus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && (ModalRoute.isCurrentOf(context) ?? true)) {
+          _field.requestFocus();
+        }
+      });
+    }
+    return focus;
+  }();
+
+  /// The section is changing away from Search.
+  bool _leaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _field.addListener(_onFieldFocus);
+  }
+
+  void _onFieldFocus() =>
+      ref.read(searchFieldFocusProvider.notifier).set(_field.hasFocus);
+
   @override
   void dispose() {
+    _field.removeListener(_onFieldFocus);
     // Leaving Search (another section, Back) closes the keyboard; opening
     // a result is handled by KeyboardDismisser.
-    if (_field.hasFocus) {
+    if (_leaving && _field.hasFocus) {
       SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     }
     _search.dispose();
@@ -84,6 +118,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final results = ref.watch(globalSearchProvider);
+    // The next time Search opens, its field is focused again.
+    ref.listen(appSectionProvider, (_, section) {
+      if (section == AppSection.search) return;
+      _leaving = true;
+      ref.read(searchFieldFocusProvider.notifier).set(true);
+    });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -95,7 +135,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             key: const Key('search.field'),
             controller: _search,
             focusNode: _field,
-            autofocus: true,
+            autofocus: _autofocus,
             debounce: ref.watch(searchDebounceProvider),
             hintText: 'Search channels, movies and series',
             onChanged: ref.read(globalQueryProvider.notifier).set,

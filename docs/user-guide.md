@@ -265,7 +265,9 @@ channels, movies and series at once and shows three groups: "Live TV",
 list of one group; "All results" (or Esc) goes back to the three groups.
 
 On a phone the keyboard closes as soon as you leave the page: when you
-open a result, switch tab or go back.
+open a result, switch tab or go back. It doesn't come back by itself
+(e.g. when the player turns the phone to landscape, or when you rotate
+it); only opening Search again or tapping the field brings it up.
 
 Hidden categories (see [Live TV](#hiding-and-ordering-provider-categories))
 are left out, unless you switch on "Show hidden categories in global

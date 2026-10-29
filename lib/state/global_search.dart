@@ -24,6 +24,21 @@ class GlobalQuery extends Notifier<String> {
   void set(String query) => state = query;
 }
 
+/// Whether the Search page's field takes focus when the page is built:
+/// true when the page opens, then whether the field had focus. So a page
+/// rebuilt in place (a phone turned to landscape, a window resized across
+/// the phone layout) doesn't take focus and open the keyboard by itself.
+final searchFieldFocusProvider = NotifierProvider<SearchFieldFocus, bool>(
+  SearchFieldFocus.new,
+);
+
+class SearchFieldFocus extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void set(bool focus) => state = focus;
+}
+
 /// Whether a group's catalogue can be searched yet.
 enum SearchGroupStatus { loading, ready, error, unsupported }
 
