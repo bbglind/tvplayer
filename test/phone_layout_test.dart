@@ -5,6 +5,7 @@ import 'package:tvplayer/state/navigation.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
 import 'package:tvplayer/ui/vod/poster.dart';
+import 'package:tvplayer/ui/vod/series_details_screen.dart';
 
 import 'helpers.dart';
 
@@ -118,6 +119,53 @@ void main() {
       expect(find.byKey(const Key('page.search')), findsNothing);
       await _tap(tester, find.byKey(const Key('page.back')));
       expect(find.byKey(const Key('movies.categories.sheet')), findsOneWidget);
+    });
+
+    testWidgets('leaving Search closes the keyboard: opening a result, '
+        'switching tab, going back', (tester) async {
+      Future<void> search(String text) async {
+        await _tap(tester, find.byKey(const Key('page.search')));
+        await tester.enterText(find.byKey(const Key('search.field')), text);
+        await tester.pumpAndSettle();
+        expect(tester.testTextInput.isVisible, isTrue);
+      }
+
+      bool fieldFocused() =>
+          FocusManager.instance.primaryFocus?.context
+              ?.findAncestorWidgetOfExactType<EditableText>() !=
+          null;
+
+      await _pump(tester);
+      // A series result opens its details.
+      await search('Series 0001');
+      await _tap(tester, find.byKey(const ValueKey('search.series.1')));
+      expect(find.byType(SeriesDetailsScreen), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(fieldFocused(), isFalse);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      // A movie result.
+      await _tap(tester, _tab(AppSection.home));
+      await search('Movie 00001');
+      await _tap(tester, find.byKey(const ValueKey('search.movie.1')));
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(fieldFocused(), isFalse);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      // Switching tab and Back.
+      await _tap(tester, _tab(AppSection.home));
+      await search('Movie');
+      await _tap(tester, _tab(AppSection.movies));
+      expect(tester.testTextInput.isVisible, isFalse);
+      await search('Movie');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('search.field')), findsNothing);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(fieldFocused(), isFalse);
     });
 
     testWidgets('Live TV opens the TV guide', (tester) async {

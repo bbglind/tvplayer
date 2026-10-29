@@ -262,6 +262,9 @@ channels, movies and series at once and shows three groups: "Live TV",
 "Movies" and "Series", each with its count. **"Show all"** opens the full
 list of one group; "All results" (or Esc) goes back to the three groups.
 
+On a phone the keyboard closes as soon as you leave the page: when you
+open a result, switch tab or go back.
+
 Hidden categories (see [Live TV](#hiding-and-ordering-provider-categories))
 are left out, unless you switch on "Show hidden categories in global
 search" in [Settings › Search](#search-1).

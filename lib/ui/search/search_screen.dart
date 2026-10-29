@@ -61,6 +61,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   void dispose() {
+    // Leaving Search (another section, Back) closes the keyboard; opening
+    // a result is handled by KeyboardDismisser.
+    if (_field.hasFocus) {
+      SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    }
     _search.dispose();
     _field.dispose();
     _firstResult.dispose();

@@ -22,6 +22,7 @@ import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/state/skip.dart';
 import 'package:tvplayer/state/tmdb.dart';
 import 'package:tvplayer/ui/player/player_hint.dart';
+import 'package:tvplayer/ui/shell/keyboard_dismisser.dart';
 import 'package:tvplayer/ui/shell/snack_bar_dismisser.dart';
 import 'package:tvplayer/ui/theme/app_theme.dart';
 import 'package:tvplayer/ui/theme/input_mode.dart';
@@ -692,7 +693,7 @@ Widget testApp({
     retry: (_, _) => null,
     child: MaterialApp(
       theme: AppTheme.dark(),
-      navigatorObservers: [SnackBarDismisser()],
+      navigatorObservers: [SnackBarDismisser(), KeyboardDismisser()],
       builder: (context, child) => InputModeScope(child: child!),
       home: child,
     ),
