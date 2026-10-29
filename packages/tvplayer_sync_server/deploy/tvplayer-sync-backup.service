@@ -1,0 +1,17 @@
+# A copy of the sync database in /var/backups/tvplayer-sync, keeping the
+# newest 14. Started daily by tvplayer-sync-backup.timer.
+[Unit]
+Description=Back up the tvplayer sync database
+
+[Service]
+Type=oneshot
+User=tvplayer-sync
+Group=tvplayer-sync
+UMask=0077
+ExecStart=/bin/sh -c '/opt/tvplayer-sync/bin/tvplayer_sync_server --config /etc/tvplayer-sync/config.json backup /var/backups/tvplayer-sync/sync-$(date +%%Y%%m%%d-%%H%%M%%S).sqlite'
+ExecStartPost=/bin/sh -c 'ls -1t /var/backups/tvplayer-sync/sync-*.sqlite | tail -n +15 | xargs -r rm --'
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/tvplayer-sync /var/backups/tvplayer-sync

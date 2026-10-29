@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily backup of the tvplayer sync database
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

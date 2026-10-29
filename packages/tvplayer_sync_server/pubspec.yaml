@@ -1,0 +1,19 @@
+name: tvplayer_sync_server
+description: Small self-hosted sync server for tvplayer (one user, SQLite). Pure Dart.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  args: ^2.7.0
+  crypto: ^3.0.7
+  shelf: ^1.4.2
+  sqlite3: ^3.8.0
+  tvplayer_core:
+    path: ../tvplayer_core
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.31.0
