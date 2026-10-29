@@ -509,7 +509,9 @@ whole.
 - A progress bar along a thumbnail: started, not finished.
 
 A movie or episode counts as watched when you play it to (near) the end, or
-when you mark it.
+when you mark it. **"Mark as unwatched"** also forgets where you stopped, so
+it plays from the beginning again; it is offered for started movies and
+episodes too, not only watched ones.
 
 ### Movie details
 
@@ -520,7 +522,9 @@ title, meta line (year, rating, length, genre), plot and director, and:
 
 - **"Play"**, or **"Resume from 12:34"** plus **"Play from start"** if you
   started it.
-- **"Mark as watched"** / **"Mark as unwatched"**.
+- **"Mark as watched"** / **"Mark as unwatched"** (a started movie has
+  both: "Mark as unwatched" forgets the position, so "Resume" becomes
+  "Play").
 - **"Download"**, which then shows its state ("Queued for download",
   "Downloading 45 %", "Download paused", "Download failed", "Downloaded")
   and opens the Downloads page when clicked.
@@ -544,8 +548,8 @@ downloaded.
 - Click an episode to play it; the main button resumes the series where
   you left off ("Resume") or plays it ("Play").
 - **"Episode options"** (⋮, or right click / long press / Menu key on the
-  row): "Mark as watched" / "Mark as unwatched", "Download", "Cancel
-  download" or "Remove download".
+  row): "Mark as watched" / "Mark as unwatched" (a started episode has
+  both), "Download", "Cancel download" or "Remove download".
 - **"Season options"**: "Mark season as watched", "Mark season as
   unwatched", and **"Download season"** (all episodes of the season not in
   Downloads yet).

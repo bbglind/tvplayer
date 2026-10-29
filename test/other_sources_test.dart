@@ -215,6 +215,60 @@ void main() {
     expect(store.data.movie(3)!.watched, isTrue);
   });
 
+  testWidgets('"Mark as unwatched" on an episode in progress in another '
+      'source resets it everywhere', (tester) async {
+    final store = await _pump(
+      tester,
+      const SeriesScreen(),
+      watch: WatchData(
+        items: {
+          episodeKey('101'): _progress(12, seriesId: 1, episode: 1, at: 2),
+        },
+        played: {seriesKey(1): _now},
+      ),
+    );
+    await _open(tester, 2);
+    expect(find.text('Resume S01E01 from 12:00 (from NF)'), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('episode.201')),
+        matching: find.byTooltip('Episode options'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('episode.markWatched')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('episode.markUnwatched')));
+    await tester.pumpAndSettle();
+    expect(find.text('Play S01E01'), findsOneWidget);
+    expect(store.data.episode('101')!.position, Duration.zero);
+    expect(store.data.episode('201')!.position, Duration.zero);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('episode.201')),
+        matching: find.byKey(const Key('poster.progress')),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('"Mark as unwatched" on a started movie resets all its '
+      'sources', (tester) async {
+    final store = await _pump(
+      tester,
+      const MoviesScreen(),
+      watch: WatchData(items: {movieKey(1): _progress(30, at: 5)}),
+    );
+    await _open(tester, 2);
+    await tester.tap(find.byKey(const Key('movie.markUnwatched')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('movie.play')), findsOneWidget);
+    expect(find.byKey(const Key('movie.markUnwatched')), findsNothing);
+    expect(store.data.movie(1)!.position, Duration.zero);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('continue.1')), findsNothing);
+  });
+
   testWidgets('series sources share episode state by season and episode', (
     tester,
   ) async {

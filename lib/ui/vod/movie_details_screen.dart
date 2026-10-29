@@ -253,6 +253,16 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
               icon: Icon(watched ? Icons.remove_done : Icons.done_all),
               label: Text(watched ? 'Mark as unwatched' : 'Mark as watched'),
             ),
+            // Started: unwatched plays it from the beginning again.
+            if (resume != null)
+              OutlinedButton.icon(
+                key: const Key('movie.markUnwatched'),
+                onPressed: () => ref
+                    .read(watchProvider.notifier)
+                    .markMovie(movie, watched: false),
+                icon: const Icon(Icons.remove_done),
+                label: const Text('Mark as unwatched'),
+              ),
             DownloadButton(
               watchKey: movieKey(movie.streamId),
               onDownload: () {

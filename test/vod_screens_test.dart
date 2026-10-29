@@ -458,6 +458,53 @@ void main() {
       expect(find.text('1. Episode 2-1'), findsNothing);
     });
 
+    testWidgets('an episode in progress can be marked unwatched, which '
+        'resets the Resume button', (tester) async {
+      final watch = MemoryWatchStore(played([], started: (1, 1)));
+      await _pump(tester, child: const SeriesScreen(), watch: watch);
+      await tester.tap(find.byKey(const ValueKey(0)));
+      await tester.pumpAndSettle();
+      expect(find.text('Resume S01E01 from 10:00'), findsOneWidget);
+
+      // The season can be reset too.
+      await tester.tap(find.byKey(const Key('season.menu')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PopupMenuItem<Object?>>(
+              find.ancestor(
+                of: find.text('Mark season as unwatched'),
+                matching: find.byWidgetPredicate((w) => w is PopupMenuItem),
+              ),
+            )
+            .enabled,
+        isTrue,
+      );
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('episode.101')),
+          matching: find.byTooltip('Episode options'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Mark as watched'), findsOneWidget);
+      await tester.tap(find.text('Mark as unwatched'));
+      await tester.pumpAndSettle();
+      expect(find.text('Play S01E01'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('episode.101')),
+          matching: find.byKey(const Key('poster.progress')),
+        ),
+        findsNothing,
+      );
+      expect(watch.data.episode('101')!.position, Duration.zero);
+      expect(watch.data.episode('101')!.watched, isFalse);
+    });
+
     testWidgets('mark a season and an episode watched or unwatched', (
       tester,
     ) async {

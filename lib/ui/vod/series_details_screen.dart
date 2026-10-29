@@ -457,7 +457,11 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
                   ),
                   PopupMenuItem(
                     value: _SeasonAction.markUnwatched,
-                    enabled: progress.watched > 0,
+                    enabled:
+                        progress.watched > 0 ||
+                        info
+                            .episodesForSeason(selected)
+                            .any((e) => isInProgress(_view.progress(e))),
                     child: const Text('Mark season as unwatched'),
                   ),
                   PopupMenuItem(
@@ -584,17 +588,25 @@ class _EpisodeTile extends StatelessWidget {
     );
   }
 
-  /// "Mark as watched" or "Mark as unwatched", then "Download", "Cancel
-  /// download" or "Remove download".
+  /// "Mark as watched" and/or "Mark as unwatched" (both while it is in
+  /// progress: unwatched starts it from the beginning again), then
+  /// "Download", "Cancel download" or "Remove download".
   List<PopupMenuEntry<EpisodeAction>> _menuItems(bool watched) {
     final download = this.download;
+    final started = isInProgress(progress);
     return [
-      PopupMenuItem(
-        value: watched
-            ? EpisodeAction.markUnwatched
-            : EpisodeAction.markWatched,
-        child: Text(watched ? 'Mark as unwatched' : 'Mark as watched'),
-      ),
+      if (!watched)
+        const PopupMenuItem(
+          key: Key('episode.markWatched'),
+          value: EpisodeAction.markWatched,
+          child: Text('Mark as watched'),
+        ),
+      if (watched || started)
+        const PopupMenuItem(
+          key: Key('episode.markUnwatched'),
+          value: EpisodeAction.markUnwatched,
+          child: Text('Mark as unwatched'),
+        ),
       if (download == null)
         const PopupMenuItem(
           key: Key('episode.download'),
