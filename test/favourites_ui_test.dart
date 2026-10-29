@@ -261,11 +261,15 @@ void main() {
       await tester.tap(find.text('Channel 0005'), buttons: kSecondaryButton);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('context.removeFavourite')), findsNothing);
+      expect(find.byKey(const Key('context.favourites')), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
 
+      // A favourite: only "Remove from favourites" (the star adds it to
+      // more categories).
       await tester.tap(find.text('Channel 0003'), buttons: kSecondaryButton);
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('context.favourites')), findsNothing);
       await tester.tap(find.byKey(const Key('context.removeFavourite')));
       await tester.pumpAndSettle();
       expect(store.data.isFavourite(item), isFalse);
@@ -592,9 +596,20 @@ void main() {
         buttons: kSecondaryButton,
       );
       await tester.pumpAndSettle();
+      expect(find.text('Add to favourites…'), findsNothing);
       await tester.tap(find.byKey(const Key('context.removeFavourite')));
       await tester.pumpAndSettle();
       expect(store.data.isFavourite(item), isFalse);
+      // No longer a favourite: only "Add to favourites…".
+      await tester.tap(
+        find.byKey(const ValueKey(3)),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Add to favourites…'), findsOneWidget);
+      expect(find.byKey(const Key('context.removeFavourite')), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
       expect(store.data.categoriesContaining(item), {'movie0', 'movie1'});

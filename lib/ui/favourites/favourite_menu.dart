@@ -324,8 +324,9 @@ List<ItemMenuAction> _moveActions(
 /// by a right click, a long press (touch) or the Menu key / Shift+F10
 /// while [child] has focus. It offers Move up, Move down and Move to top
 /// inside an [ItemOrderScope], then [actions], then "Add to
-/// favourites…", which turns the menu into the favourites checkboxes in
-/// place.
+/// favourites…" (which turns the menu into the favourites checkboxes in
+/// place) or, for an item in one of my categories, "Remove from
+/// favourites".
 class ItemContextMenu extends ConsumerStatefulWidget {
   const ItemContextMenu({
     super.key,
@@ -416,20 +417,24 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
               onPressed: a.onPressed,
               child: Text(a.label),
             ),
-          MenuItemButton(
-            key: const Key('context.favourites'),
-            focusNode: firstEnabled == null ? _first : null,
-            closeOnActivate: false,
-            leadingIcon: const Icon(Icons.star_border),
-            onPressed: _showFavourites,
-            child: const Text('Add to favourites…'),
-          ),
+          // One favourites entry: the star adds a favourite to more
+          // categories.
           if (favourite case final remove?)
             MenuItemButton(
               key: remove.key,
+              focusNode: firstEnabled == null ? _first : null,
               leadingIcon: Icon(remove.icon),
               onPressed: remove.onPressed,
               child: Text(remove.label),
+            )
+          else
+            MenuItemButton(
+              key: const Key('context.favourites'),
+              focusNode: firstEnabled == null ? _first : null,
+              closeOnActivate: false,
+              leadingIcon: const Icon(Icons.star_border),
+              onPressed: _showFavourites,
+              child: const Text('Add to favourites…'),
             ),
         ],
       ],
