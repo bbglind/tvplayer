@@ -5,7 +5,6 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 import 'providers.dart';
 import 'tmdb.dart';
 import 'variants.dart';
-import 'vod_controller.dart';
 
 /// The items of a start page row, and whether more may come (a catalogue
 /// is still loading), so the row shows placeholders meanwhile.
@@ -19,10 +18,6 @@ final class HomeRowItems<T> {
   /// Whether the row has nothing to show, now or later.
   bool get isEmpty => items.isEmpty && !loading;
 }
-
-/// Whether [state] has no catalogue yet but will get one.
-bool _waiting(VodState<Object> state) =>
-    state.supported && state.catalog == null && state.error == null;
 
 /// "Featured" on the start page: new items ([featuredPicks]) and, while
 /// the stored trending list is recent enough ([usableTrending]), trending
@@ -46,7 +41,7 @@ final featuredProvider = Provider<HomeRowItems<FeaturedPick>>((ref) {
   );
   return HomeRowItems(
     mixFeatured(picks, trendingItems),
-    loading: _waiting(movies) || _waiting(series),
+    loading: movies.waiting || series.waiting,
   );
 });
 
@@ -116,7 +111,7 @@ final recentSeriesProvider = Provider<HomeRowItems<Series>>((ref) {
   final catalog = state.catalog;
   return HomeRowItems(
     catalog == null ? const [] : recentlyAdded(catalog, hidden: hidden),
-    loading: _waiting(state),
+    loading: state.waiting,
   );
 });
 
@@ -129,7 +124,7 @@ final recentMoviesProvider = Provider<HomeRowItems<Movie>>((ref) {
   final catalog = state.catalog;
   return HomeRowItems(
     catalog == null ? const [] : recentlyAdded(catalog, hidden: hidden),
-    loading: _waiting(state),
+    loading: state.waiting,
   );
 });
 
@@ -194,7 +189,7 @@ final homeContinueProvider = Provider<HomeRowItems<ContinueItem>>((ref) {
         },
       },
   ];
-  return HomeRowItems(items, loading: _waiting(movies) || _waiting(series));
+  return HomeRowItems(items, loading: movies.waiting || series.waiting);
 });
 
 /// "Recently viewed channels": the channels the provider still lists,

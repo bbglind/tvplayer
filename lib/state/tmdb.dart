@@ -396,8 +396,11 @@ class TmdbTrendingController extends Notifier<TmdbTrendingList> {
     _ => '${e.runtimeType}',
   };
 
+  /// Whether the links covered the catalogues when the wait ended.
+  var _linked = false;
+
   Future<void> _load(TmdbBackend backend) async {
-    await _whenLinked();
+    _linked = await _whenLinked();
     if (!ref.mounted) return;
     try {
       final list = await backend.trending();
@@ -414,17 +417,20 @@ class TmdbTrendingController extends Notifier<TmdbTrendingList> {
   }
 
   /// Waits (at most a minute) until the catalogue items are linked to
-  /// TMDB, so the first check can say how many trending titles match.
-  Future<void> _whenLinked() async {
-    if (!identical(ref.read(tmdbLinksProvider), TmdbLinks.empty)) return;
-    final linked = Completer<void>();
-    final subscription = ref.listen(tmdbLinksProvider, (_, links) {
-      if (!identical(links, TmdbLinks.empty) && !linked.isCompleted) {
-        linked.complete();
-      }
+  /// TMDB ([tmdbLinksCompleteProvider]), so the first check can say how
+  /// many trending titles match. False when the wait timed out.
+  Future<bool> _whenLinked() async {
+    if (ref.read(tmdbLinksCompleteProvider)) return true;
+    final linked = Completer<bool>();
+    final subscription = ref.listen(tmdbLinksCompleteProvider, (_, complete) {
+      if (complete && !linked.isCompleted) linked.complete(true);
     });
-    await linked.future.timeout(const Duration(minutes: 1), onTimeout: () {});
+    final done = await linked.future.timeout(
+      const Duration(minutes: 1),
+      onTimeout: () => false,
+    );
     subscription.close();
+    return done;
   }
 
   Future<void> _check() async {
@@ -451,7 +457,11 @@ class TmdbTrendingController extends Notifier<TmdbTrendingList> {
       final matched = list.titles
           .where((t) => links.itemsOf(t.key).isNotEmpty)
           .length;
-      _log('refreshed (${list.titles.length} titles, $matched matched)');
+      final linked = _linked || ref.read(tmdbLinksCompleteProvider);
+      _log(
+        'refreshed (${list.titles.length} titles, $matched matched'
+        '${linked ? '' : ', links not ready'})',
+      );
     } catch (e) {
       _log('failed (${_describe(e)})');
     } finally {
@@ -543,19 +553,31 @@ class TmdbMatchesController extends Notifier<TmdbMatchState> {
 
 /// The TMDB title of each catalogue item, built in the background.
 final tmdbLinksProvider = Provider<TmdbLinks>(
-  (ref) => ref.watch(_tmdbLinks).value ?? TmdbLinks.empty,
+  (ref) => ref.watch(_tmdbLinks).value?.links ?? TmdbLinks.empty,
 );
 
-final _tmdbLinks = FutureProvider<TmdbLinks>((ref) async {
-  if (ref.watch(tmdbBackendProvider).value == null) return TmdbLinks.empty;
+/// Whether [tmdbLinksProvider] covers the catalogues: the matches are
+/// loaded and neither catalogue is still being read or downloaded.
+final tmdbLinksCompleteProvider = Provider<bool>(
+  (ref) => ref.watch(_tmdbLinks).value?.complete ?? false,
+);
+
+final _tmdbLinks = FutureProvider<({TmdbLinks links, bool complete})>((
+  ref,
+) async {
+  final none = (links: TmdbLinks.empty, complete: false);
+  if (ref.watch(tmdbBackendProvider).value == null) return none;
   final state = ref.watch(tmdbMatchesProvider);
   final movies = ref.watch(movieCatalogProvider.select((s) => s.catalog));
   final series = ref.watch(seriesCatalogProvider.select((s) => s.catalog));
+  final waiting =
+      ref.watch(movieCatalogProvider.select((s) => s.waiting)) ||
+      ref.watch(seriesCatalogProvider.select((s) => s.waiting));
   final tags = ref.watch(providerTagsProvider);
-  if (!state.loaded) return TmdbLinks.empty;
+  if (!state.loaded) return none;
   final movieItems = movies?.items ?? const <Movie>[];
   final seriesItems = series?.items ?? const <Series>[];
-  return ref.read(backgroundRunnerProvider)(
+  final links = await ref.read(backgroundRunnerProvider)(
     () => TmdbLinks.build(
       movies: tmdbMovieItems(movieItems),
       series: tmdbSeriesItems(seriesItems),
@@ -564,6 +586,7 @@ final _tmdbLinks = FutureProvider<TmdbLinks>((ref) async {
       removed: state.removed,
     ),
   );
+  return (links: links, complete: !waiting);
 });
 
 /// A catalogue item as needed to find its TMDB title.

@@ -266,15 +266,26 @@ class FixedClock extends Clock {
 
 /// In-memory [VodRepository].
 class FakeVodRepository implements VodRepository {
+  FakeVodRepository({this.gate});
+
+  /// When set, reading the cache waits for it (a slow disk).
+  final Future<void>? gate;
+
   final movies = <String, VodCatalog<Movie>>{};
   final series = <String, VodCatalog<Series>>{};
   final cleared = <String>[];
 
   @override
-  Future<VodCatalog<Movie>?> loadMovies(String key) async => movies[key];
+  Future<VodCatalog<Movie>?> loadMovies(String key) async {
+    await gate;
+    return movies[key];
+  }
 
   @override
-  Future<VodCatalog<Series>?> loadSeries(String key) async => series[key];
+  Future<VodCatalog<Series>?> loadSeries(String key) async {
+    await gate;
+    return series[key];
+  }
 
   @override
   Future<void> saveMovies(String key, VodCatalog<Movie> catalog) async =>

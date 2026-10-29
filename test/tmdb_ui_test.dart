@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -164,6 +166,7 @@ Future<({FakeSettingsStorage settings, List<TmdbBackend> backends})> _pump(
   Map<int, Movie> movieDetails = const {},
   VodCatalog<Movie>? movies,
   VodCatalog<Series>? series,
+  Future<void>? catalogueGate,
   Size size = const Size(1400, 900),
 }) async {
   final movieCatalog = movies ?? _movies;
@@ -179,7 +182,7 @@ Future<({FakeSettingsStorage settings, List<TmdbBackend> backends})> _pump(
     ),
   );
   final backends = <TmdbBackend>[];
-  final vod = FakeVodRepository()
+  final vod = FakeVodRepository(gate: catalogueGate)
     ..movies['test'] = movieCatalog
     ..series['test'] = seriesCatalog;
   final fake = api ?? _api();
@@ -812,6 +815,29 @@ void main() {
         expect(title(tester), 'Example Series');
         expect(find.byKey(const Key('home.featured.label.trending')), findsOne);
         expect(find.byKey(const Key('home.featured.dot.4')), findsNothing);
+      });
+    });
+
+    testWidgets('the matched count waits for the catalogues to load', (
+      tester,
+    ) async {
+      await withLog((log) async {
+        final gate = Completer<void>();
+        await _pump(
+          tester,
+          const Scaffold(body: HomeScreen()),
+          api: trendingApi(),
+          movies: movies,
+          series: series,
+          catalogueGate: gate.future,
+        );
+        // The backend and its matches are ready; the catalogues aren't.
+        expect(log, isEmpty);
+        gate.complete();
+        await _settle(tester);
+        expect(log, ['TMDB trending: refreshed (3 titles, 2 matched)']);
+        await showItem(tester, 1);
+        expect(find.text('TRENDING'), findsOneWidget);
       });
     });
 

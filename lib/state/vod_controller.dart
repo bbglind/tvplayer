@@ -31,6 +31,9 @@ final class VodState<T extends Object> {
   /// Why the last download failed, if it did. Never contains URLs or
   /// credentials.
   final String? error;
+
+  /// Whether there is no catalogue yet but one will come.
+  bool get waiting => supported && catalog == null && error == null;
 }
 
 /// Shows the cached catalogue at once, downloads one when there is none,
