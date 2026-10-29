@@ -21,22 +21,33 @@ import 'home_playback.dart';
 import 'home_row.dart';
 
 /// "Featured": a large banner showing one of [picks] at a time, with its
-/// backdrop (or poster), title, facts, plot, Play and More info, and page
-/// dots. It moves on every [interval] unless hovered or focused; the dots
+/// backdrop (or poster), title, facts (after a NEW or TRENDING label when
+/// trending items are mixed in), plot, Play and More info, and page dots. It moves on every [interval] unless hovered or focused; the dots
 /// and the Left/Right keys page by hand.
 class FeaturedBanner extends ConsumerStatefulWidget {
   const FeaturedBanner({super.key, required this.picks});
 
-  final List<VodPick> picks;
+  final List<FeaturedPick> picks;
 
   static const interval = Duration(seconds: 8);
 
+  /// Whether [picks] mix new and trending items, so each shows its label.
+  static bool labelled(List<FeaturedPick> picks) =>
+      picks.any((p) => p.source == FeaturedSource.trending);
+
   /// Banner height for [width] at the current text scale: wide windows get
   /// a wider-than-tall banner, and the title, facts, buttons and dots
-  /// always fit.
+  /// always fit. The label sits in the facts line, so it needs no room.
+  /// The plot's two lines leave room for a title on two.
   static double height(BuildContext context, double width) {
     final text = Theme.of(context).textTheme;
     final compact = isCompact(context);
+    // Buttons: 12 px padding above and below the label, at least 44.
+    final button = math.max(44.0, 24 + lineHeight(context, text.labelLarge));
+    final buttonRows = _buttonRows(
+      context,
+      compact ? width - 2 * _paddingOf(context) : width - 80,
+    );
     final content =
         2 * _paddingOf(context) +
         lineHeight(context, _titleStyle(context)) +
@@ -45,8 +56,8 @@ class FeaturedBanner extends ConsumerStatefulWidget {
         10 +
         2 * lineHeight(context, text.bodyMedium) +
         _gap +
-        // Buttons: 12 px padding above and below the label, at least 44.
-        math.max(44.0, 24 + lineHeight(context, text.labelLarge)) +
+        buttonRows * button +
+        (buttonRows - 1) * _buttonGap +
         _gap +
         _dotSize +
         // Rounding of line metrics.
@@ -54,6 +65,29 @@ class FeaturedBanner extends ConsumerStatefulWidget {
     // On a phone just what it shows; the picture fills the rest.
     if (compact) return math.max(content, width * 0.75).ceilToDouble();
     return math.max(content, math.min(width * 0.4, 460.0)).ceilToDouble();
+  }
+
+  static const _buttonGap = 10.0;
+
+  /// Rows Play and More info take in [textWidth]: two when they don't fit
+  /// side by side (large text on a phone).
+  static int _buttonRows(BuildContext context, double textWidth) {
+    final style = Theme.of(context).textTheme.labelLarge;
+    final scaler = MediaQuery.textScalerOf(context);
+    double width(String label) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final w = painter.width;
+      painter.dispose();
+      // Padding 20 + 20, icon 18 and the gap to the label 8.
+      return w + 66;
+    }
+
+    return width('Play') + _buttonGap + width('More info') > textWidth ? 2 : 1;
   }
 
   static const _padding = 28.0;
@@ -147,7 +181,9 @@ class _FeaturedBannerState extends ConsumerState<FeaturedBanner> {
   Widget build(BuildContext context) {
     if (_count == 0) return const SizedBox.shrink();
     final index = _index.clamp(0, _count - 1);
-    final pick = widget.picks[index];
+    final featured = widget.picks[index];
+    final pick = featured.pick;
+    final labelled = FeaturedBanner.labelled(widget.picks);
     final details = ref.watch(featuredDetailsProvider(pick)).value;
     final view = _FeaturedView.of(
       pick,
@@ -233,14 +269,18 @@ class _FeaturedBannerState extends ConsumerState<FeaturedBanner> {
                                   alignment: Alignment.bottomLeft,
                                   children: [...previous, ?current],
                                 ),
-                                child: _Info(key: ValueKey(pick), view: view),
+                                child: _Info(
+                                  key: ValueKey(featured),
+                                  view: view,
+                                  source: labelled ? featured.source : null,
+                                ),
                               ),
                             ),
                           ),
                           const SizedBox(height: FeaturedBanner._gap),
                           Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
+                            spacing: FeaturedBanner._buttonGap,
+                            runSpacing: FeaturedBanner._buttonGap,
                             children: [
                               FilledButton.icon(
                                 key: const Key('home.featured.play'),
@@ -421,11 +461,14 @@ class _Background extends StatelessWidget {
   }
 }
 
-/// Title, facts and plot.
+/// Title, the label and facts, and plot.
 class _Info extends StatelessWidget {
-  const _Info({super.key, required this.view});
+  const _Info({super.key, required this.view, this.source});
 
   final _FeaturedView view;
+
+  /// Why the item is featured; null shows no label.
+  final FeaturedSource? source;
 
   @override
   Widget build(BuildContext context) {
@@ -441,13 +484,25 @@ class _Info extends StatelessWidget {
           large: true,
           style: FeaturedBanner._titleStyle(context),
         ),
-        if (view.facts.isNotEmpty) ...[
+        if (view.facts.isNotEmpty || source != null) ...[
           const SizedBox(height: 6),
-          Text(
-            view.facts.join(' · '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: text.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          Row(
+            children: [
+              if (source case final source?) ...[
+                _SourceLabel(source),
+                const SizedBox(width: 10),
+              ],
+              Flexible(
+                child: Text(
+                  view.facts.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
         if (view.plot case final plot? when plot.trim().isNotEmpty) ...[
@@ -462,6 +517,52 @@ class _Info extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// "NEW" or "TRENDING" at the start of the facts line: a badge like
+/// REPLAY (`hover` background, `textPrimary`), trending with an arrow. No
+/// taller than the facts text, so the banner needs no extra room.
+class _SourceLabel extends StatelessWidget {
+  const _SourceLabel(this.source);
+
+  final FeaturedSource source;
+
+  static const _size = 11.0;
+  static const _iconSize = 14.0;
+  static const _style = TextStyle(
+    color: AppColors.textPrimary,
+    fontSize: _size,
+    fontWeight: FontWeight.w700,
+    letterSpacing: _size * 0.08,
+    height: 1.25,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final trending = source == FeaturedSource.trending;
+    return Container(
+      key: Key('home.featured.label.${source.name}'),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.hover,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trending) ...[
+            const Icon(
+              Icons.trending_up,
+              size: _iconSize,
+              color: AppColors.textPrimary,
+            ),
+            const SizedBox(width: 4),
+          ],
+          Text(trending ? 'TRENDING' : 'NEW', maxLines: 1, style: _style),
+        ],
+      ),
     );
   }
 }

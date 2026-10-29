@@ -31,7 +31,7 @@ typedef TmdbArtwork = ({TmdbKey key, String? poster, String? backdrop});
 
 /// TMDB data kept permanently in a SQLite database, keyed by TMDB kind and
 /// id (see [TmdbKey]): titles, genres, seasons, people, the outcomes of
-/// title searches and the links the user removed.
+/// title searches, the links the user removed and the trending list.
 ///
 /// Synchronous; the app uses it from one background isolate.
 class TmdbStore {
@@ -48,7 +48,8 @@ class TmdbStore {
 
   factory TmdbStore.inMemory() => TmdbStore._(sqlite3.openInMemory());
 
-  static const _version = 1;
+  /// 2 added the trending list and `meta`.
+  static const _version = 2;
 
   final Database _db;
 
@@ -121,6 +122,17 @@ class TmdbStore {
         tmdb_id INTEGER NOT NULL,
         at INTEGER NOT NULL,
         PRIMARY KEY (kind, tmdb_id)
+      ) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS trending (
+        kind TEXT NOT NULL,
+        id INTEGER NOT NULL,
+        rank INTEGER NOT NULL,
+        genre_ids TEXT NOT NULL,
+        PRIMARY KEY (kind, id)
+      ) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value INTEGER
       ) WITHOUT ROWID;
     ''');
     _db.userVersion = _version;
@@ -276,6 +288,98 @@ class TmdbStore {
           backdrop: r['backdrop_path'] as String?,
         ),
   ];
+
+  /// The genre names of every stored title, A to Z.
+  Map<TmdbKey, List<String>> genreNames() {
+    final names = <TmdbKey, List<String>>{};
+    for (final r in _db.select(
+      'SELECT tg.kind, tg.title_id, g.name FROM title_genre tg '
+      'JOIN genre g ON g.kind = tg.kind AND g.id = tg.genre_id '
+      'JOIN title t ON t.kind = tg.kind AND t.id = tg.title_id '
+      'WHERE t.found = 1 ORDER BY g.name',
+    )) {
+      if (TmdbKind.parse(r['kind']) case final kind?) {
+        (names[TmdbKey(kind, r['title_id'] as int)] ??= []).add(
+          r['name'] as String,
+        );
+      }
+    }
+    return names;
+  }
+
+  // Trending.
+
+  static const _trendingFetchedAt = 'trending_fetched_at';
+
+  /// Replaces the trending list with [titles], fetched [at].
+  void putTrending(List<TmdbTrending> titles, DateTime at) => _transaction(() {
+    _db.execute('DELETE FROM trending');
+    final insert = _db.prepare(
+      'INSERT OR IGNORE INTO trending VALUES (?, ?, ?, ?)',
+    );
+    try {
+      for (final t in titles) {
+        insert.execute([
+          t.key.kind.name,
+          t.key.id,
+          t.rank,
+          jsonEncode(t.genreIds),
+        ]);
+      }
+    } finally {
+      insert.close();
+    }
+    _db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)', [
+      _trendingFetchedAt,
+      _ms(at),
+    ]);
+  });
+
+  /// The stored trending list by kind and rank, with genre names.
+  TmdbTrendingList trending() {
+    final at = _db.select('SELECT value FROM meta WHERE key = ?', [
+      _trendingFetchedAt,
+    ]);
+    final fetchedAt = at.isEmpty || at.first['value'] == null
+        ? null
+        : _time(at.first['value']);
+    final genreNames = {
+      for (final r in _db.select('SELECT kind, id, name FROM genre'))
+        (r['kind'] as String, r['id'] as int): r['name'] as String,
+    };
+    final rows = _db.select(
+      'SELECT tr.kind, tr.id, tr.rank, tr.genre_ids, '
+      '(SELECT json_group_array(g.name) FROM title_genre tg JOIN genre g '
+      'ON g.kind = tg.kind AND g.id = tg.genre_id '
+      'WHERE tg.kind = tr.kind AND tg.title_id = tr.id) AS names '
+      'FROM trending tr ORDER BY tr.kind, tr.rank',
+    );
+    List<Object?> list(Object? json) {
+      if (json is! String) return const [];
+      try {
+        return readList(jsonDecode(json));
+      } on FormatException {
+        return const [];
+      }
+    }
+
+    return TmdbTrendingList([
+      for (final r in rows)
+        if (TmdbKind.parse(r['kind']) case final kind?)
+          () {
+            final ids = [for (final g in list(r['genre_ids'])) ?readInt(g)];
+            final stored = [for (final n in list(r['names'])) ?readString(n)];
+            return TmdbTrending(
+              TmdbKey(kind, r['id'] as int),
+              r['rank'] as int,
+              genreIds: ids,
+              genres: stored.isNotEmpty
+                  ? (stored..sort())
+                  : [for (final id in ids) ?genreNames[(kind.name, id)]],
+            );
+          }(),
+    ], fetchedAt);
+  }
 
   // Seasons.
 

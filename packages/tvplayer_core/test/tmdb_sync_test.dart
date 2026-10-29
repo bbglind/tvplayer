@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:sqlite3/sqlite3.dart' show sqlite3;
 import 'package:test/test.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -12,6 +13,8 @@ Map<String, Object?> _json(String name) =>
 
 final _at = DateTime.utc(2026, 1, 1);
 
+const _day = Duration(days: 1);
+
 TmdbKey _movie(int id) => TmdbKey(TmdbKind.movie, id);
 
 /// A [TmdbApi] answering from memory, counting requests.
@@ -20,6 +23,10 @@ class _FakeApi implements TmdbApi {
   final missing = <TmdbKey>{};
   final searchResults = <String, List<TmdbSearchResult>>{};
   TmdbFailure? failWith;
+
+  /// Trending titles by kind; [trendingFailsOn] fails that page.
+  final trendingTitles = <TmdbKind, List<TmdbTrending>>{};
+  (TmdbKind, int)? trendingFailsOn;
 
   /// When set, title requests wait for it.
   Completer<void>? gate;
@@ -65,6 +72,18 @@ class _FakeApi implements TmdbApi {
   }) async {
     asked.add('search $query ${year ?? '-'}');
     return searchResults[query] ?? const [];
+  }
+
+  @override
+  Future<List<TmdbTrending>> trending(TmdbKind kind, {int page = 1}) async {
+    asked.add('trending ${kind.name} $page');
+    if (trendingFailsOn == (kind, page)) {
+      throw const TmdbException(TmdbFailure.network, 'fake');
+    }
+    return [
+      for (final t in trendingTitles[kind] ?? const <TmdbTrending>[])
+        if (t.rank > (page - 1) * 20 && t.rank <= page * 20) t,
+    ];
   }
 }
 
@@ -140,6 +159,74 @@ void main() {
       store.allowMatchingAgain();
       expect(store.removedCount(), 0);
       expect(store.matches().keys, [(TmdbKind.movie, 'a|2019')]);
+    });
+
+    test('genre names of every stored title', () {
+      store.putTitle(
+        TmdbTitle(
+          key: _movie(1),
+          fetchedAt: _at,
+          genres: const [TmdbGenre(18, 'Drama'), TmdbGenre(80, 'Crime')],
+        ),
+      );
+      store.putTitle(TmdbTitle(key: _movie(2), fetchedAt: _at));
+      expect(store.genreNames(), {
+        _movie(1): ['Crime', 'Drama'],
+      });
+    });
+
+    test('keeps the trending list with genre names and when fetched', () {
+      expect(store.trending().fetchedAt, isNull);
+      expect(store.trending().titles, isEmpty);
+      store.putTitle(
+        TmdbTitle(
+          key: _movie(1),
+          fetchedAt: _at,
+          genres: const [TmdbGenre(878, 'Science Fiction')],
+        ),
+      );
+      store.putTrending([
+        TmdbTrending(_movie(1), 1, genreIds: const [28]),
+        TmdbTrending(_movie(2), 2, genreIds: const [878, 99]),
+        const TmdbTrending(TmdbKey(TmdbKind.tv, 3), 1),
+      ], _at);
+      final list = store.trending();
+      expect(list.fetchedAt, _at);
+      expect(list.titles.map((t) => '${t.key} ${t.rank}'), [
+        'movie/1 1',
+        'movie/2 2',
+        'tv/3 1',
+      ]);
+      expect(list.titles[0].genres, ['Science Fiction'], reason: 'stored');
+      expect(list.titles[1].genres, [
+        'Science Fiction',
+      ], reason: 'known ids only');
+      store.putTrending([TmdbTrending(_movie(9), 1)], _at.add(_day));
+      expect(store.trending().titles.single.key, _movie(9));
+      expect(store.trending().fetchedAt, _at.add(_day));
+    });
+
+    test('a version 1 database gets the trending tables', () {
+      final dir = Directory.systemTemp.createTempSync('tmdb_store');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = '${dir.path}/tmdb.sqlite';
+      final v1 = sqlite3.open(path)
+        ..execute(
+          'CREATE TABLE title (kind TEXT NOT NULL, id INTEGER NOT NULL, '
+          'found INTEGER NOT NULL, fetched_at INTEGER NOT NULL, '
+          'PRIMARY KEY (kind, id))',
+        )
+        ..execute("INSERT INTO title VALUES ('movie', 1, 0, 0)")
+        ..userVersion = 1;
+      v1.close();
+      final store = TmdbStore.open(path);
+      addTearDown(store.close);
+      expect(
+        store.fetchedTitles(notFoundSince: DateTime.utc(1970)),
+        contains(_movie(1)),
+      );
+      store.putTrending([TmdbTrending(_movie(1), 1)], _at);
+      expect(store.trending().titles, hasLength(1));
     });
 
     test('a database file is reopened with its data', () {
@@ -303,6 +390,43 @@ void main() {
       expect(await sync.removedLinks(), {_movie(1)});
     });
 
+    test('refreshes the trending list, all pages or nothing', () async {
+      api.trendingTitles[TmdbKind.movie] = [
+        for (var i = 1; i <= 45; i++) TmdbTrending(_movie(100 + i), i),
+      ];
+      api.trendingTitles[TmdbKind.tv] = [
+        const TmdbTrending(TmdbKey(TmdbKind.tv, 7), 1),
+      ];
+      final list = await sync.refreshTrending();
+      expect(list.titles, hasLength(46));
+      expect(list.fetchedAt, _at);
+      expect(api.asked.where((a) => a.startsWith('trending')), [
+        'trending movie 1',
+        'trending movie 2',
+        'trending movie 3',
+        'trending tv 1',
+        'trending tv 2',
+        'trending tv 3',
+      ]);
+      api.trendingTitles[TmdbKind.movie] = [TmdbTrending(_movie(1), 1)];
+      api.trendingFailsOn = (TmdbKind.tv, 2);
+      await expectLater(sync.refreshTrending(), throwsA(isA<TmdbException>()));
+      final kept = await sync.trending();
+      expect(kept.titles, hasLength(46), reason: 'old list kept');
+      expect(kept.fetchedAt, _at);
+    });
+
+    test('stored titles report their genres', () async {
+      final events = <TmdbGenresEvent>[];
+      sync.events.listen((e) {
+        if (e is TmdbGenresEvent) events.add(e);
+      });
+      await sync.title(_movie(1));
+      await _settle();
+      expect(events.single.genres.keys, [_movie(1)]);
+      expect(await sync.genres(), isEmpty, reason: 'the fake has no genres');
+    });
+
     test('seasons and people are fetched once and kept', () async {
       expect((await sync.season(2001, 1))!.episodes, hasLength(2));
       await sync.season(2001, 1);
@@ -342,6 +466,8 @@ void main() {
       MatchOutcome.removed,
     );
     expect(await worker.artwork(), isEmpty);
+    expect(await worker.genres(), isEmpty);
+    expect((await worker.trending()).fetchedAt, isNull);
     await worker.close();
   });
 }

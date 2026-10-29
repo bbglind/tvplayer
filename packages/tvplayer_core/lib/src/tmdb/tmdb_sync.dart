@@ -83,6 +83,13 @@ final class TmdbMatchEvent extends TmdbEvent {
   final TitleMatch? match;
 }
 
+/// The genres of a newly stored title.
+final class TmdbGenresEvent extends TmdbEvent {
+  const TmdbGenresEvent(this.genres);
+
+  final Map<TmdbKey, List<String>> genres;
+}
+
 /// A stored title was fetched again and may have changed.
 final class TmdbTitleEvent extends TmdbEvent {
   const TmdbTitleEvent(this.title);
@@ -137,6 +144,17 @@ abstract interface class TmdbBackend {
   /// Forgets every removed match and link.
   Future<void> allowMatchingAgain();
 
+  /// The genre names of every stored title.
+  Future<Map<TmdbKey, List<String>>> genres();
+
+  /// The stored trending list.
+  Future<TmdbTrendingList> trending();
+
+  /// Fetches this week's trending movies and series and stores them in
+  /// place of the old list, which is kept when any page fails. Throws
+  /// [TmdbException].
+  Future<TmdbTrendingList> refreshTrending();
+
   Future<void> close();
 }
 
@@ -171,6 +189,9 @@ class TmdbSync implements TmdbBackend {
 
   /// A title is skipped for this run after this many failed attempts.
   static const maxAttempts = 3;
+
+  /// Pages of the trending list fetched per kind (20 titles each).
+  static const trendingPages = 3;
 
   final TmdbStore _store;
   final TmdbApi _api;
@@ -373,6 +394,11 @@ class TmdbSync implements TmdbBackend {
           (key: key, poster: title.posterPath, backdrop: title.backdropPath),
         ]),
       );
+      _emit(
+        TmdbGenresEvent({
+          key: [for (final g in title.genres) g.name]..sort(),
+        }),
+      );
       return title;
     } on TmdbException catch (e) {
       if (e.failure == TmdbFailure.notFound) {
@@ -542,6 +568,24 @@ class TmdbSync implements TmdbBackend {
     _store.allowMatchingAgain();
     _removed.clear();
     _matches.removeWhere((_, m) => m.outcome == MatchOutcome.removed);
+  }
+
+  @override
+  Future<Map<TmdbKey, List<String>>> genres() async => _store.genreNames();
+
+  @override
+  Future<TmdbTrendingList> trending() async => _store.trending();
+
+  @override
+  Future<TmdbTrendingList> refreshTrending() async {
+    final titles = <TmdbTrending>[];
+    for (final kind in TmdbKind.values) {
+      for (var page = 1; page <= trendingPages; page++) {
+        titles.addAll(await _api.trending(kind, page: page));
+      }
+    }
+    _store.putTrending(titles, _now());
+    return _store.trending();
   }
 
   @override

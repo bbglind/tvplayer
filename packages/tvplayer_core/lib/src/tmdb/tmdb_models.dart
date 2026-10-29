@@ -436,3 +436,49 @@ final class TmdbSearchResult {
   final String? originalTitle;
   final int? year;
 }
+
+/// A title on TMDB's weekly trending list.
+final class TmdbTrending {
+  const TmdbTrending(
+    this.key,
+    this.rank, {
+    this.genreIds = const [],
+    this.genres = const [],
+  });
+
+  static TmdbTrending? fromJson(
+    TmdbKind kind,
+    Map<String, Object?> json,
+    int rank,
+  ) {
+    final id = readInt(json['id']);
+    if (id == null || id <= 0) return null;
+    return TmdbTrending(
+      TmdbKey(kind, id),
+      rank,
+      genreIds: [for (final g in readList(json['genre_ids'])) ?readInt(g)],
+    );
+  }
+
+  final TmdbKey key;
+
+  /// 1 for the most trending title of its kind.
+  final int rank;
+
+  /// TMDB's genre ids, as on the list.
+  final List<int> genreIds;
+
+  /// The genre names when read from the store: the stored title's, else
+  /// those of [genreIds] that the store knows.
+  final List<String> genres;
+}
+
+/// The stored trending list and when it was fetched (null: never).
+final class TmdbTrendingList {
+  const TmdbTrendingList(this.titles, this.fetchedAt);
+
+  static const empty = TmdbTrendingList([], null);
+
+  final List<TmdbTrending> titles;
+  final DateTime? fetchedAt;
+}

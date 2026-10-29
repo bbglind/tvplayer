@@ -41,6 +41,7 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
     required this.categoryOf,
     required this.itemRef,
     required this.imageOf,
+    this.genreSource,
     this.continueWatching = const [],
   });
 
@@ -69,6 +70,9 @@ class VodBrowser<T extends Object> extends ConsumerStatefulWidget {
   /// An item's poster, for the Reorder list.
   final String? Function(T item) imageOf;
 
+  /// The genres of an item for the Genre filter; null hides the filter.
+  final GenreSource<T>? genreSource;
+
   /// Started items with their cards for the "Continue watching" row, most
   /// recently watched first. Under "All" or a provider category only those
   /// in the selected category show; under one of my categories all show
@@ -89,11 +93,14 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   VodFilter? _queriedBy;
   FavouritesData? _queriedFavourites;
   VodSort? _queriedSort;
+  GenreSource<T>? _queriedGenres;
   List<T> _items = const [];
 
-  // Genre counts for the menu, kept per catalogue and hidden categories.
+  // Genre counts for the menu, kept per catalogue, hidden categories and
+  // genre source.
   VodCatalog<T>? _genresCatalog;
   Set<String>? _genresHidden;
+  GenreSource<T>? _genresSource;
   List<({String genre, int count})> _genres = const [];
 
   @override
@@ -108,6 +115,12 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   );
 
   bool get _searching => !SearchQuery(widget.filter.query).isEmpty;
+
+  /// The filters that apply: without a genre source (TMDB off for movies)
+  /// a genre selection is ignored.
+  VodFilters get _filters => widget.genreSource == null
+      ? widget.filter.filters.withGenres(const {})
+      : widget.filter.filters;
 
   /// Shows [category] as if the search had been cleared first.
   void _selectCategory(CategorySelection category) {
@@ -167,18 +180,22 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     final filter = widget.filter;
     final favourites = ref.watch(favouritesProvider);
     final sort = _sort;
+    final genres = widget.genreSource;
     if (!identical(catalog, _queriedCatalog) ||
         filter != _queriedBy ||
         sort != _queriedSort ||
+        !identical(genres, _queriedGenres) ||
         !identical(favourites, _queriedFavourites)) {
       _queriedCatalog = catalog;
       _queriedBy = filter;
       _queriedFavourites = favourites;
       _queriedSort = sort;
+      _queriedGenres = genres;
       _items = catalog.query(
         scope: _scope(favourites),
         search: filter.query,
-        filters: filter.filters,
+        filters: _filters,
+        genres: genres,
         sort: sort,
         currentYear: ref.read(clockProvider).year,
       );
@@ -191,12 +208,18 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   List<({String genre, int count})> _genreCounts(
     VodCatalog<T> catalog,
     Set<String> hidden,
+    GenreSource<T> source,
   ) {
     if (!identical(catalog, _genresCatalog) ||
+        !identical(source, _genresSource) ||
         !setEquals(hidden, _genresHidden)) {
       _genresCatalog = catalog;
       _genresHidden = hidden;
-      _genres = catalog.genreCounts(scope: VodScope.all(hidden: hidden));
+      _genresSource = source;
+      _genres = catalog.genreCounts(
+        scope: VodScope.all(hidden: hidden),
+        genres: source,
+      );
     }
     return _genres;
   }
@@ -247,7 +270,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   /// longer lists, matching the search. Left out while searching the whole
   /// section or filtering (they have no year or genre).
   List<FavouriteMembership> _missing(VodCatalog<T> catalog) {
-    if (_searchAll || !widget.filter.filters.isEmpty) return const [];
+    if (_searchAll || !_filters.isEmpty) return const [];
     if (_selection case MyCategory(:final id)) {
       final query = SearchQuery(widget.filter.query);
       return [
@@ -357,7 +380,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
   Widget _buildToolbar(BuildContext context, VodCatalog<T> catalog, int count) {
     final what = widget.what;
     final filter = widget.filter;
-    final filters = filter.filters;
+    final filters = _filters;
     final notifier = widget.notifier;
     final favourites = ref.watch(favouritesProvider);
     final hidden = favourites.hiddenIds(widget.kind);
@@ -408,10 +431,10 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
                     filter: filters.years,
                     onChanged: (y) => notifier.setFilters(filters.withYears(y)),
                   ),
-                  if (catalog.genreSource != null)
+                  if (widget.genreSource case final source?)
                     GenreFilterMenu(
                       section: what,
-                      genres: _genreCounts(catalog, hidden),
+                      genres: _genreCounts(catalog, hidden, source),
                       selected: filters.genres,
                       onChanged: (g) =>
                           notifier.setFilters(filters.withGenres(g)),
@@ -464,7 +487,7 @@ class _VodBrowserState<T extends Object> extends ConsumerState<VodBrowser<T>> {
     final items = _query(catalog);
     final missing = _missing(catalog);
     final mine = _selection is MyCategory && !_searchAll;
-    final filtering = !widget.filter.filters.isEmpty;
+    final filtering = !_filters.isEmpty;
     final favourites = ref.watch(favouritesProvider);
     final compact = isCompact(context);
     final continueCards = _searching || filtering

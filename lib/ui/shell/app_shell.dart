@@ -120,8 +120,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         level: notice.failed.isEmpty ? NoticeLevel.success : NoticeLevel.error,
       );
     });
-    // Keeps the TMDB background fetch running while the app is open.
+    // Keeps the TMDB background fetch and the daily trending check
+    // running while the app is open.
     ref.listen(tmdbSyncProvider, (_, _) {});
+    ref.listen(tmdbTrendingProvider, (_, _) {});
     // Keeps the downloads queue running while the app is open.
     ref.listen(downloadsProvider, (_, _) {});
     ref.listen(downloadNoticeProvider, (_, notice) {

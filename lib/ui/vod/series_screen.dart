@@ -89,6 +89,7 @@ class SeriesScreen extends ConsumerWidget {
       categoryOf: (item) => item.categoryId,
       itemRef: seriesItemRef,
       imageOf: (item) => item.coverUrl,
+      genreSource: ref.watch(seriesGenreSourceProvider),
       onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.series),
       continueWatching: [
         if (catalog != null)

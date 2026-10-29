@@ -80,7 +80,7 @@ final _series = VodCatalog.series(
       seriesId: 11,
       name: 'Sky Pirates',
       categoryId: 's0',
-      genre: 'Action & Adventure / Mystery',
+      genre: 'Adventure / Sci-Fi / Mystery',
       releaseDate: '2025-06-01',
       lastModified: _day(5),
     ),
@@ -347,11 +347,14 @@ void main() {
       expect(reset, findsNothing);
     });
 
-    testWidgets('series genres: multi-select, any of them; movies have no '
-        'genre filter yet', (tester) async {
+    testWidgets('series genres: multi-select, any of them, with TMDB names; '
+        'movies have no genre filter while TMDB is off', (tester) async {
       await _pump(tester, const SeriesScreen());
       await _tapKey(tester, 'series.genre');
+      // The provider's "Adventure / Sci-Fi" as TMDB names them.
       expect(find.text('Action & Adventure'), findsOneWidget);
+      expect(find.text('Sci-Fi & Fantasy'), findsOneWidget);
+      expect(find.text('Sci-Fi'), findsNothing);
       await _tapKey(tester, 'series.genre.Mystery');
       // The menu stays open while ticking.
       await _tapKey(tester, 'series.genre.Reality');

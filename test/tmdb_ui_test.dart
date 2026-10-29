@@ -4,13 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/service_credentials.dart';
 import 'package:tvplayer/state/providers.dart';
+import 'package:tvplayer/state/playlist_refresh.dart';
 import 'package:tvplayer/state/tmdb.dart';
+import 'package:tvplayer/ui/home/home_screen.dart';
 import 'package:tvplayer/ui/settings/settings_screen.dart';
 import 'package:tvplayer/ui/vod/movie_details_screen.dart';
 import 'package:tvplayer/ui/vod/movies_screen.dart';
 import 'package:tvplayer/ui/vod/person_screen.dart';
 import 'package:tvplayer/ui/vod/poster.dart';
 import 'package:tvplayer/ui/vod/series_details_screen.dart';
+import 'package:tvplayer/ui/vod/series_screen.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'helpers.dart';
@@ -57,6 +60,19 @@ class _FakeApi implements TmdbApi {
   }) async {
     asked.add('search $query');
     return searches[query] ?? const [];
+  }
+
+  /// This week's trending titles by kind (all on page 1).
+  final trending_ = <TmdbKind, List<TmdbTrending>>{};
+
+  /// When set, trending requests fail with it.
+  TmdbFailure? trendingFails;
+
+  @override
+  Future<List<TmdbTrending>> trending(TmdbKind kind, {int page = 1}) async {
+    asked.add('trending ${kind.name} $page');
+    if (trendingFails case final f?) throw TmdbException(f, 'fake');
+    return page == 1 ? trending_[kind] ?? const [] : const [];
   }
 }
 
@@ -144,27 +160,36 @@ Future<({FakeSettingsStorage settings, List<TmdbBackend> backends})> _pump(
   bool key = true,
   bool hideCategory = false,
   bool preferTmdbPosters = false,
+  bool paused = false,
   Map<int, Movie> movieDetails = const {},
+  VodCatalog<Movie>? movies,
+  VodCatalog<Series>? series,
   Size size = const Size(1400, 900),
 }) async {
+  final movieCatalog = movies ?? _movies;
+  final seriesCatalog = series ?? _series;
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final settings = FakeSettingsStorage(
-    AppSettings(tmdbEnabled: enabled, tmdbPreferPosters: preferTmdbPosters),
+    AppSettings(
+      tmdbEnabled: enabled,
+      tmdbPreferPosters: preferTmdbPosters,
+      tmdbPaused: paused,
+    ),
   );
   final backends = <TmdbBackend>[];
   final vod = FakeVodRepository()
-    ..movies['test'] = _movies
-    ..series['test'] = _series;
+    ..movies['test'] = movieCatalog
+    ..series['test'] = seriesCatalog;
   final fake = api ?? _api();
   await tester.pumpWidget(
     testApp(
       overrides: [
         vodSourceProvider.overrideWithValue(
           FakeVodSource(
-            movies: _movies,
-            series: _series,
+            movies: movieCatalog,
+            series: seriesCatalog,
             seriesInfos: {7: _seriesInfo},
             movieDetails: movieDetails,
           ),
@@ -219,6 +244,7 @@ class _Host extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen(tmdbSyncProvider, (_, _) {});
+    ref.listen(tmdbTrendingProvider, (_, _) {});
     return child;
   }
 }
@@ -602,5 +628,288 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  group('genres', () {
+    testWidgets('Movies: Genre from TMDB, only genres of visible movies; '
+        'movies without TMDB genres are left out', (tester) async {
+      final api = _api()
+        ..titles[const TmdbKey(TmdbKind.movie, 1003)] = TmdbTitle(
+          key: const TmdbKey(TmdbKind.movie, 1003),
+          fetchedAt: _at,
+          genres: const [TmdbGenre(27, 'Horror')],
+        );
+      await _pump(
+        tester,
+        const Scaffold(body: MoviesScreen()),
+        api: api,
+        hideCategory: true,
+      );
+      await tester.tap(find.byKey(const Key('movies.genre')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('movies.genre.Drama')), findsWidgets);
+      expect(
+        find.byKey(const Key('movies.genre.Horror')),
+        findsNothing,
+        reason: 'only in a hidden category',
+      );
+      await tester.tap(find.byKey(const Key('movies.genre.Drama')).first);
+      await tester.tap(find.byKey(const Key('movies.genre.done')));
+      await tester.pumpAndSettle();
+      expect(find.text('1 movie'), findsOneWidget);
+      expect(find.text('Drama'), findsOneWidget, reason: 'the chip label');
+    });
+
+    testWidgets('Series: TMDB genres first, else the provider genre with '
+        'TMDB names', (tester) async {
+      final api = _api()
+        ..titles[const TmdbKey(TmdbKind.tv, 2001)] = TmdbTitle(
+          key: const TmdbKey(TmdbKind.tv, 2001),
+          fetchedAt: _at,
+          genres: const [TmdbGenre(10765, 'Sci-Fi & Fantasy')],
+        );
+      await _pump(
+        tester,
+        const Scaffold(body: SeriesScreen()),
+        api: api,
+        series: VodCatalog.series(
+          categories: const [Category(id: 's0', name: 'Shows')],
+          items: const [
+            Series(
+              seriesId: 7,
+              name: 'Example Series',
+              categoryId: 's0',
+              tmdbId: '2001',
+              genre: 'Drama',
+            ),
+            Series(
+              seriesId: 8,
+              name: 'Other Series',
+              categoryId: 's0',
+              genre: 'Sci-Fi / Crime',
+            ),
+          ],
+          fetchedAt: _at,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('series.genre')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('series.genre.Sci-Fi & Fantasy')),
+        findsWidgets,
+      );
+      expect(find.byKey(const Key('series.genre.Crime')), findsWidgets);
+      expect(
+        find.byKey(const Key('series.genre.Drama')),
+        findsNothing,
+        reason: "TMDB's genres win over the provider's",
+      );
+      await tester.tap(
+        find.byKey(const Key('series.genre.Sci-Fi & Fantasy')).first,
+      );
+      await tester.tap(find.byKey(const Key('series.genre.done')));
+      await tester.pumpAndSettle();
+      expect(find.text('2 series'), findsOneWidget);
+    });
+  });
+
+  group('Featured for you', () {
+    final movies = VodCatalog.movies(
+      categories: const [Category(id: 'm0', name: 'Films')],
+      items: [
+        for (final (id, name, tmdb, days) in [
+          (1, 'Example Movie', '1001', 1),
+          (2, 'Second Movie', '1002', 2),
+          (5, 'Fresh Movie', null, 3),
+        ])
+          Movie(
+            streamId: id,
+            name: name,
+            categoryId: 'm0',
+            tmdbId: tmdb,
+            added: _at.subtract(Duration(days: days)),
+            rating: 8,
+          ),
+      ],
+      fetchedAt: _at,
+    );
+    final series = VodCatalog.series(
+      categories: const [Category(id: 's0', name: 'Shows')],
+      items: [
+        Series(
+          seriesId: 7,
+          name: 'Example Series',
+          categoryId: 's0',
+          tmdbId: '2001',
+          lastModified: _at.subtract(const Duration(days: 1)),
+          rating: 8,
+        ),
+      ],
+      fetchedAt: _at,
+    );
+    _FakeApi trendingApi() => _api()
+      ..trending_[TmdbKind.movie] = const [
+        TmdbTrending(TmdbKey(TmdbKind.movie, 1002), 1),
+        TmdbTrending(TmdbKey(TmdbKind.movie, 9999), 2),
+      ]
+      ..trending_[TmdbKind.tv] = const [
+        TmdbTrending(TmdbKey(TmdbKind.tv, 2001), 1),
+      ];
+
+    String title(WidgetTester tester) => tester
+        .widget<Text>(
+          find.descendant(
+            of: find.byKey(const Key('home.featured.title')),
+            matching: find.byType(Text),
+          ),
+        )
+        .data!;
+
+    Future<void> showItem(WidgetTester tester, int i) async {
+      await tester.tap(find.byKey(Key('home.featured.dot.$i')));
+      await tester.pumpAndSettle();
+    }
+
+    /// Runs [body] with the `TMDB trending:` log lines collected.
+    Future<void> withLog(Future<void> Function(List<String> log) body) async {
+      final log = <String>[];
+      final original = debugPrint;
+      debugPrint = (message, {wrapWidth}) {
+        if (message case final m? when m.startsWith('TMDB trending:')) {
+          log.add(m);
+        }
+      };
+      try {
+        await body(log);
+      } finally {
+        debugPrint = original;
+      }
+    }
+
+    testWidgets('new and trending take turns, labelled NEW and TRENDING', (
+      tester,
+    ) async {
+      await withLog((log) async {
+        await _pump(
+          tester,
+          const Scaffold(body: HomeScreen()),
+          api: trendingApi(),
+          movies: movies,
+          series: series,
+        );
+        expect(log, ['TMDB trending: refreshed (3 titles, 2 matched)']);
+        // It moved on while the backend settled.
+        await showItem(tester, 0);
+        expect(title(tester), 'Example Movie');
+        expect(find.byKey(const Key('home.featured.label.fresh')), findsOne);
+        expect(find.text('NEW'), findsOneWidget);
+        await showItem(tester, 1);
+        expect(title(tester), 'Second Movie');
+        expect(find.text('TRENDING'), findsOneWidget);
+        await showItem(tester, 2);
+        expect(title(tester), 'Fresh Movie');
+        await showItem(tester, 3);
+        expect(title(tester), 'Example Series');
+        expect(find.byKey(const Key('home.featured.label.trending')), findsOne);
+        expect(find.byKey(const Key('home.featured.dot.4')), findsNothing);
+      });
+    });
+
+    testWidgets('a failed fetch leaves Featured as before, unlabelled', (
+      tester,
+    ) async {
+      await withLog((log) async {
+        await _pump(
+          tester,
+          const Scaffold(body: HomeScreen()),
+          api: trendingApi()..trendingFails = TmdbFailure.network,
+          movies: movies,
+          series: series,
+        );
+        expect(log, ['TMDB trending: failed (TmdbException(network))']);
+        await showItem(tester, 0);
+        expect(title(tester), 'Example Movie');
+        expect(find.text('NEW'), findsNothing);
+        expect(find.text('TRENDING'), findsNothing);
+        await showItem(tester, 1);
+        expect(title(tester), 'Example Series');
+        expect(find.byKey(const Key('home.featured.dot.3')), findsOneWidget);
+      });
+    });
+
+    testWidgets('waits while paused and while playing', (tester) async {
+      await withLog((log) async {
+        final api = trendingApi();
+        await _pump(
+          tester,
+          const Scaffold(body: HomeScreen()),
+          api: api,
+          movies: movies,
+          series: series,
+          paused: true,
+        );
+        expect(log, ['TMDB trending: skipped (paused)']);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(HomeScreen)),
+        );
+        container.read(playbackActiveProvider.notifier).begin();
+        await container.read(tmdbSyncProvider.notifier).setPaused(false);
+        await _settle(tester);
+        expect(log.last, 'TMDB trending: skipped (playing)');
+        expect(api.asked.where((a) => a.startsWith('trending')), isEmpty);
+        container.read(playbackActiveProvider.notifier).end();
+        await _settle(tester);
+        expect(log.last, 'TMDB trending: refreshed (3 titles, 2 matched)');
+        await showItem(tester, 0);
+        expect(find.text('NEW'), findsOneWidget);
+      });
+    });
+
+    for (final (scale, size) in [
+      (1.4, const Size(412, 900)),
+      (1.4, const Size(1000, 700)),
+      (2.0, const Size(412, 900)),
+    ]) {
+      testWidgets('the labelled banner fits at text scale $scale in a '
+          '${size.width.round()} wide window', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await withLog((_) async {
+          await _pump(
+            tester,
+            const Scaffold(body: HomeScreen()),
+            api: trendingApi(),
+            movies: movies,
+            series: series,
+            size: size,
+          );
+          for (var i = 0; i < 4; i++) {
+            await showItem(tester, i);
+            expect(find.byKey(const Key('home.featured.title')), findsOne);
+          }
+          expect(find.text('TRENDING'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        });
+      });
+    }
+
+    testWidgets('with TMDB off nothing is fetched and Featured is as before', (
+      tester,
+    ) async {
+      await withLog((log) async {
+        final api = trendingApi();
+        await _pump(
+          tester,
+          const Scaffold(body: HomeScreen()),
+          api: api,
+          movies: movies,
+          series: series,
+          enabled: false,
+        );
+        expect(log, ['TMDB trending: skipped (off)']);
+        expect(api.asked, isEmpty);
+        expect(find.text('NEW'), findsNothing);
+      });
+    });
   });
 }

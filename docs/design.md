@@ -117,7 +117,8 @@ clean and simple over every desktop feature.
   title, meta line, buttons (wrapping), plot, Cast, Recommendations and
   Other sources.
 - **Featured banner**: 16 padding, title 26/700, as tall as its content
-  or ¾ of its width; without a backdrop the poster fills it with the fade.
+  (Play and More info on two rows when they don't fit side by side) or ¾
+  of its width; without a backdrop the poster fills it with the fade.
 - **TV guide**: channel column 84 wide (scaled with the text): number
   (`textMuted`, 600) over the name (13/600, one line), not resizable. The
   category dropdown gets its own row; "Now", "Tonight" and "Updated …"
@@ -249,6 +250,11 @@ clean and simple over every desktop feature.
 - **REPLAY badge**: like the LIVE badge, but `hover` bg and `textPrimary`
   (the `live` colour stays LIVE's); before the player title while it
   plays from the archive.
+- **Featured label**: "NEW" / "TRENDING" at the start of the Featured
+  banner's meta line, only while trending items are mixed in: like the
+  REPLAY badge (`hover` bg, `textPrimary`, 11 px, 700, letter spacing
+  0.08 em, radius 4); TRENDING with a 14 px `trending_up` icon. No taller
+  than the meta line, so the banner keeps its height.
 - **Thumbnail** (continue watching, episodes): 16:9, radius 12.
 - **LIVE badge**: `live` background, `onAccent` text, 10–12 px, 700,
   uppercase, radius 4–6.
@@ -465,8 +471,9 @@ clean and simple over every desktop feature.
   (20/600) and a horizontally scrolling list (vertical wheel scrolls the
   page; Shift+wheel, touchpad, hover arrows and the keyboard scroll the
   row): the Featured banner (backdrop with the bottom fade, or the poster
-  at the left on `card`; hero title, meta line, two lines of plot, Play
-  and More info, page dots; rotates every 8 s unless hovered or focused,
+  at the left on `card`; hero title, meta line (after the Featured label
+  when trending items are mixed in), two lines of plot, Play and More
+  info, page dots; rotates every 8 s unless hovered or focused,
   Left/Right page), recently viewed channel cards, my-category tiles
   (icon, type overline, name, count), Continue watching thumbnails and
   Recently added posters, the last two with "See all". Rows still loading show `card`

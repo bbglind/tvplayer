@@ -77,6 +77,7 @@ class MoviesScreen extends ConsumerWidget {
       categoryOf: (item) => item.categoryId,
       itemRef: movieItemRef,
       imageOf: (item) => item.posterUrl,
+      genreSource: ref.watch(movieGenreSourceProvider),
       onRefresh: () => refreshPlaylistPart(ref, PlaylistPart.movies),
       continueWatching: [
         if (catalog != null)

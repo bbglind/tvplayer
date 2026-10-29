@@ -86,9 +86,10 @@ final class VodFilters {
   int get hashCode => Object.hash(years, Object.hashAllUnordered(genres));
 }
 
-/// The genres of an item. Series get theirs from the provider
-/// ([splitGenres] of `Series.genre`); movies have none in the provider's
-/// list, so another source (e.g. TMDB) can be plugged in later.
+/// The genres of an item. The catalogue's own source gives series the
+/// provider's ([splitGenres] of `Series.genre`) and movies none (the
+/// provider's list has none); the app passes TMDB's instead
+/// (`tmdbMovieGenres`, `tmdbSeriesGenres`).
 typedef GenreSource<T> = List<String> Function(T item);
 
 /// The genres in a provider's genre text like `"Crime / Drama"` or

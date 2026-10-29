@@ -115,6 +115,15 @@ class TmdbWorker implements TmdbBackend {
   Future<void> allowMatchingAgain() => _call(_AllowAgain());
 
   @override
+  Future<Map<TmdbKey, List<String>>> genres() => _call(_Genres());
+
+  @override
+  Future<TmdbTrendingList> trending() => _call(_Trending());
+
+  @override
+  Future<TmdbTrendingList> refreshTrending() => _call(_RefreshTrending());
+
+  @override
   Future<void> close() async {
     try {
       await _call<void>(_Close()).timeout(const Duration(seconds: 5));
@@ -151,8 +160,15 @@ class TmdbWorker implements TmdbBackend {
         unawaited(
           Future(() => command.run(sync)).then(
             (result) => replies.send((id, result, null)),
-            // The type only: messages may quote request details.
-            onError: (Object e) => replies.send((id, null, '${e.runtimeType}')),
+            // The type (and TMDB's failure) only: messages may quote
+            // request details.
+            onError: (Object e) => replies.send((
+              id,
+              null,
+              e is TmdbException
+                  ? 'TmdbException(${e.failure.name})'
+                  : '${e.runtimeType}',
+            )),
           ),
         );
       }
@@ -265,6 +281,21 @@ final class _RemovedCount extends _Command {
 final class _AllowAgain extends _Command {
   @override
   Future<void> run(TmdbSync sync) => sync.allowMatchingAgain();
+}
+
+final class _Genres extends _Command {
+  @override
+  Future<Map<TmdbKey, List<String>>> run(TmdbSync sync) => sync.genres();
+}
+
+final class _Trending extends _Command {
+  @override
+  Future<TmdbTrendingList> run(TmdbSync sync) => sync.trending();
+}
+
+final class _RefreshTrending extends _Command {
+  @override
+  Future<TmdbTrendingList> run(TmdbSync sync) => sync.refreshTrending();
 }
 
 final class _Close extends _Command {

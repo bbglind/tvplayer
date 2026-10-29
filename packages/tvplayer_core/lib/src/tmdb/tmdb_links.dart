@@ -2,6 +2,7 @@ import '../models/movie.dart';
 import '../models/series.dart';
 import '../text/provider_titles.dart';
 import '../vod/variants.dart';
+import '../vod/vod_catalog.dart';
 import 'title_match.dart';
 import 'tmdb_models.dart';
 import 'tmdb_store.dart';
@@ -156,4 +157,46 @@ final class TmdbLinks {
     TmdbKind.movie => _moviesOf[key] ?? const [],
     TmdbKind.tv => _seriesOf[key] ?? const [],
   };
+}
+
+/// The catalogue titles (a [Movie] or a [Series]) of the TMDB titles
+/// [keys], in their order: one per TMDB title and per variant group
+/// ([movieGroups], [seriesGroups]), none from the [hiddenMovies] or
+/// [hiddenSeries] categories.
+List<Object> catalogTitlesOf(
+  Iterable<TmdbKey> keys, {
+  required VodCatalog<Movie>? movies,
+  required VodCatalog<Series>? series,
+  required TmdbLinks links,
+  required VariantGroups movieGroups,
+  required VariantGroups seriesGroups,
+  Set<String> hiddenMovies = const {},
+  Set<String> hiddenSeries = const {},
+}) {
+  final seen = <Object>{};
+  final titles = <Object>[];
+  for (final key in keys) {
+    final ids = links.itemsOf(key);
+    switch (key.kind) {
+      case TmdbKind.movie:
+        final m = ids
+            .map((id) => movies?.byId(id))
+            .whereType<Movie>()
+            .where((m) => !hiddenMovies.contains(m.categoryId))
+            .firstOrNull;
+        if (m != null && seen.add(('m', movieGroups.keyOf(m.streamId)))) {
+          titles.add(m);
+        }
+      case TmdbKind.tv:
+        final s = ids
+            .map((id) => series?.byId(id))
+            .whereType<Series>()
+            .where((s) => !hiddenSeries.contains(s.categoryId))
+            .firstOrNull;
+        if (s != null && seen.add(('s', seriesGroups.keyOf(s.seriesId)))) {
+          titles.add(s);
+        }
+    }
+  }
+  return titles;
 }

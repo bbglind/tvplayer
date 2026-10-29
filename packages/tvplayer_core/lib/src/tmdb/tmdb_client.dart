@@ -57,6 +57,10 @@ abstract interface class TmdbApi {
     String query, {
     int? year,
   });
+
+  /// Page [page] (from 1) of this week's trending titles of [kind], ranked
+  /// from [TmdbTrending.rank] `(page - 1) * 20 + 1`.
+  Future<List<TmdbTrending>> trending(TmdbKind kind, {int page = 1});
 }
 
 /// [TmdbApi] over HTTP, in English (`en-US`), through a [RateLimiter].
@@ -144,6 +148,17 @@ class TmdbClient implements TmdbApi {
     return [
       for (final r in readList(json['results']))
         if (readMap(r) case final r?) ?TmdbSearchResult.fromJson(kind, r),
+    ];
+  }
+
+  @override
+  Future<List<TmdbTrending>> trending(TmdbKind kind, {int page = 1}) async {
+    final json = await _get('/3/trending/${kind.name}/week', {'page': '$page'});
+    final results = readList(json['results']);
+    return [
+      for (final (i, r) in results.indexed)
+        if (readMap(r) case final r?)
+          ?TmdbTrending.fromJson(kind, r, (page - 1) * 20 + i + 1),
     ];
   }
 

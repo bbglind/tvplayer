@@ -278,6 +278,188 @@ class TmdbArtworkController extends Notifier<TmdbArtworkIndex> {
   }
 }
 
+/// The genre names of the stored TMDB titles, updated every few seconds
+/// while the background fetch adds titles.
+final tmdbGenresProvider =
+    NotifierProvider<TmdbGenresController, TmdbGenreIndex>(
+      TmdbGenresController.new,
+    );
+
+class TmdbGenresController extends Notifier<TmdbGenreIndex> {
+  /// How often new genres are applied, so lists don't recount for each.
+  static const flushEvery = Duration(seconds: 3);
+
+  final _pending = <TmdbKey, List<String>>{};
+  Timer? _flush;
+
+  @override
+  TmdbGenreIndex build() {
+    final backend = ref.watch(tmdbBackendProvider).value;
+    _pending.clear();
+    if (backend == null) return const {};
+    final events = backend.events.listen((e) {
+      if (e is! TmdbGenresEvent) return;
+      _pending.addAll(e.genres);
+      _flush ??= Timer(flushEvery, _apply);
+    });
+    ref.onDispose(() {
+      events.cancel();
+      _flush?.cancel();
+      _flush = null;
+    });
+    unawaited(
+      backend.genres().then((all) {
+        if (!ref.mounted) return;
+        // Genres that arrived meanwhile are newer.
+        _pending.addAll({...all, ..._pending});
+        _apply();
+      }, onError: (Object e) => debugPrint('TMDB genres: ${e.runtimeType}')),
+    );
+    return const {};
+  }
+
+  void _apply() {
+    _flush = null;
+    if (_pending.isEmpty || !ref.mounted) return;
+    state = {...state, ..._pending};
+    _pending.clear();
+  }
+}
+
+/// The genres of the Movies filter: TMDB's; null while TMDB is off (the
+/// provider sends none).
+final movieGenreSourceProvider = Provider<GenreSource<Movie>?>((ref) {
+  if (ref.watch(tmdbBackendProvider).value == null) return null;
+  return tmdbMovieGenres(
+    ref.watch(tmdbLinksProvider),
+    ref.watch(tmdbGenresProvider),
+  );
+});
+
+/// The genres of the Series filter: TMDB's, else the provider's with
+/// TMDB's names.
+final seriesGenreSourceProvider = Provider<GenreSource<Series>>((ref) {
+  if (ref.watch(tmdbBackendProvider).value == null) {
+    return providerSeriesGenres;
+  }
+  return tmdbSeriesGenres(
+    ref.watch(tmdbLinksProvider),
+    ref.watch(tmdbGenresProvider),
+  );
+});
+
+/// TMDB's trending list as stored, fetched again at most once a day: only
+/// while TMDB is on, its background fetch isn't paused and nothing plays.
+/// Checked at start, when playback stops, on Resume and every hour. Kept
+/// alive by the app shell. Each decision is logged as one
+/// `TMDB trending: …` line (no addresses, keys or titles).
+final tmdbTrendingProvider =
+    NotifierProvider<TmdbTrendingController, TmdbTrendingList>(
+      TmdbTrendingController.new,
+    );
+
+class TmdbTrendingController extends Notifier<TmdbTrendingList> {
+  static const checkEvery = Duration(hours: 1);
+
+  var _refreshing = false;
+
+  @override
+  TmdbTrendingList build() {
+    final backend = ref.watch(tmdbBackendProvider).value;
+    if (backend == null) {
+      // Once the settings are read: these change only then and when TMDB
+      // is turned on or off, so it is logged once.
+      final loaded = ref.watch(appSettingsProvider.select((s) => s.hasValue));
+      if (loaded && !ref.watch(tmdbEnabledProvider)) _log('skipped (off)');
+      return TmdbTrendingList.empty;
+    }
+    ref.listen(playbackActiveProvider, (was, playing) {
+      if (was == true && !playing) unawaited(_check());
+    });
+    ref.listen(
+      appSettingsProvider.select((s) => s.value?.tmdbPaused ?? false),
+      (_, _) => unawaited(_check()),
+    );
+    final timer = Timer.periodic(checkEvery, (_) => unawaited(_check()));
+    ref.onDispose(timer.cancel);
+    unawaited(_load(backend));
+    return TmdbTrendingList.empty;
+  }
+
+  static void _log(String text) => debugPrint('TMDB trending: $text');
+
+  /// The type and TMDB failure of [e] only: messages may quote requests.
+  static String _describe(Object e) => switch (e) {
+    TmdbException(:final failure) => 'TmdbException(${failure.name})',
+    // From the worker, which sends only the type.
+    StateError(:final message) => message,
+    _ => '${e.runtimeType}',
+  };
+
+  Future<void> _load(TmdbBackend backend) async {
+    await _whenLinked();
+    if (!ref.mounted) return;
+    try {
+      final list = await backend.trending();
+      if (!ref.mounted) return;
+      state = list;
+      if (list.titles.isNotEmpty &&
+          usableTrending(list, ref.read(clockProvider)).isEmpty) {
+        _log('stored list too old, not shown');
+      }
+    } catch (e) {
+      _log('failed (${_describe(e)})');
+    }
+    await _check();
+  }
+
+  /// Waits (at most a minute) until the catalogue items are linked to
+  /// TMDB, so the first check can say how many trending titles match.
+  Future<void> _whenLinked() async {
+    if (!identical(ref.read(tmdbLinksProvider), TmdbLinks.empty)) return;
+    final linked = Completer<void>();
+    final subscription = ref.listen(tmdbLinksProvider, (_, links) {
+      if (!identical(links, TmdbLinks.empty) && !linked.isCompleted) {
+        linked.complete();
+      }
+    });
+    await linked.future.timeout(const Duration(minutes: 1), onTimeout: () {});
+    subscription.close();
+  }
+
+  Future<void> _check() async {
+    if (_refreshing || !ref.mounted) return;
+    final backend = ref.read(tmdbBackendProvider).value;
+    if (backend == null) return;
+    final decision = trendingDecision(
+      enabled: ref.read(tmdbEnabledProvider),
+      paused: ref.read(appSettingsProvider).value?.tmdbPaused ?? false,
+      playing: ref.read(playbackActiveProvider),
+      fetchedAt: state.fetchedAt,
+      now: ref.read(clockProvider),
+    );
+    if (decision != TrendingDecision.refresh) {
+      _log('skipped (${decision.name})');
+      return;
+    }
+    _refreshing = true;
+    try {
+      final list = await backend.refreshTrending();
+      if (!ref.mounted) return;
+      state = list;
+      final links = ref.read(tmdbLinksProvider);
+      final matched = list.titles
+          .where((t) => links.itemsOf(t.key).isNotEmpty)
+          .length;
+      _log('refreshed (${list.titles.length} titles, $matched matched)');
+    } catch (e) {
+      _log('failed (${_describe(e)})');
+    } finally {
+      _refreshing = false;
+    }
+  }
+}
+
 /// The stored title search outcomes and the links the user removed.
 final class TmdbMatchState {
   const TmdbMatchState(this.matches, this.removed, {this.loaded = true});
@@ -592,38 +774,15 @@ String? _tmdbBackdrop(WidgetRef ref, TmdbKey? key) => key == null
 /// [keys], in their order: one per TMDB title and per variant group, none
 /// from hidden categories (as Other sources).
 List<Object> catalogTitles(WidgetRef ref, Iterable<TmdbKey> keys) {
-  final movies = ref.watch(movieCatalogProvider).catalog;
-  final series = ref.watch(seriesCatalogProvider).catalog;
-  final links = ref.watch(tmdbLinksProvider);
-  final movieGroups = ref.watch(movieVariantsProvider);
-  final seriesGroups = ref.watch(seriesVariantsProvider);
   final favourites = ref.watch(favouritesProvider);
-  final hiddenMovies = favourites.hiddenIds(ContentKind.movie);
-  final hiddenSeries = favourites.hiddenIds(ContentKind.series);
-  final seen = <Object>{};
-  final titles = <Object>[];
-  for (final key in keys) {
-    final ids = links.itemsOf(key);
-    switch (key.kind) {
-      case TmdbKind.movie:
-        final m = ids
-            .map((id) => movies?.byId(id))
-            .whereType<Movie>()
-            .where((m) => !hiddenMovies.contains(m.categoryId))
-            .firstOrNull;
-        if (m != null && seen.add(('m', movieGroups.keyOf(m.streamId)))) {
-          titles.add(m);
-        }
-      case TmdbKind.tv:
-        final s = ids
-            .map((id) => series?.byId(id))
-            .whereType<Series>()
-            .where((s) => !hiddenSeries.contains(s.categoryId))
-            .firstOrNull;
-        if (s != null && seen.add(('s', seriesGroups.keyOf(s.seriesId)))) {
-          titles.add(s);
-        }
-    }
-  }
-  return titles;
+  return catalogTitlesOf(
+    keys,
+    movies: ref.watch(movieCatalogProvider).catalog,
+    series: ref.watch(seriesCatalogProvider).catalog,
+    links: ref.watch(tmdbLinksProvider),
+    movieGroups: ref.watch(movieVariantsProvider),
+    seriesGroups: ref.watch(seriesVariantsProvider),
+    hiddenMovies: favourites.hiddenIds(ContentKind.movie),
+    hiddenSeries: favourites.hiddenIds(ContentKind.series),
+  );
 }

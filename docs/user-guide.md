@@ -227,6 +227,17 @@ scrolls the page. Rows with nothing in them are left out.
   or hidden categories). "Play" starts it, "More info" opens its details.
   It moves on every 8 seconds unless you hover or focus it; Left/Right
   page through it by keyboard, the dots show where you are.
+  With [TMDB](#services) on, it also shows what is **trending** on TMDB
+  this week and your provider has: new and trending items take turns (up
+  to 4 of each), each marked **"NEW"** or **"TRENDING"** at the start of
+  the line under the title. Trending titles in the genres you watched
+  most in the last 90 days come first (worked out on the device from your
+  watch history; nothing about it is sent anywhere). Trending leaves out
+  your favourites, hidden categories, watched movies, finished series and
+  anything in Continue watching. The trending list is kept on the device
+  and used for up to 7 days, also offline; without one (TMDB off, never
+  fetched, or older than 7 days) Featured shows only new items, without
+  the labels.
 - **Recently viewed channels**: the last live channels you watched (up to
   20), with "Watched 1 h ago" and what is on now. Click to watch. The
   context menu has "Remove from recently viewed".
@@ -482,7 +493,18 @@ The toolbar above the grid:
   categories.
 - **Year**: "This year", "Last 2 years", "Last 5 years", or "Custom
   range…" (a first and/or last year).
-- **Genre** (Series): pick one or more genres; ticks apply at once.
+- **Genre**: pick one or more genres; a title with any of them shows, and
+  ticks apply at once. Only genres of titles outside hidden categories
+  are listed, with how many titles have each.
+  - **Movies**: TMDB's movie genres ("Science Fiction", "Action", …), so
+    the chip shows only while TMDB is on. Movies without TMDB genres yet
+    are left out while a genre is ticked.
+  - **Series**: TMDB's series genres ("Sci-Fi & Fantasy", "Action &
+    Adventure", …). A series without TMDB genres (or with TMDB off) uses
+    the provider's, with TMDB's names where they mean the same: "Drama /
+    Crime" counts as Drama and Crime, "Sci-Fi" as "Sci-Fi & Fantasy",
+    "Adventure" as "Action & Adventure". Genres TMDB has no series genre
+    for (e.g. "Horror") stay as the provider names them.
 - While searching: the "Only in <category>" chip.
 - The number of results, and **"Reset filters"** (clears year and genre)
   while a filter is on.
@@ -1198,6 +1220,13 @@ TMDB info is kept on the device, also when you change provider, and
 isn't fetched again (titles TMDB didn't know, and titles without a match,
 are tried again after 30 days; a title you open is refreshed when its
 info is older than 30 days).
+
+TMDB's weekly trending list (for [Featured](#3-home)) is fetched at most
+once a day: at start, when playback stops, on "Resume" and every hour the
+app checks whether it is a day old, and fetches it only while nothing is
+playing and the background fetch isn't paused ("Pause" holds it too).
+Only the list itself is asked for; nothing about what you watch is sent.
+If it can't be fetched, the stored list is used for up to 7 days.
 
 Intro, recap and credits times (see
 [Skip intro and recap](#skip-intro-and-recap)):
