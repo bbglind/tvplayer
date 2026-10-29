@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/service_credentials.dart';
 import 'package:tvplayer/player/mpv/external_mpv_player.dart';
@@ -67,7 +69,10 @@ void main() {
   group('lookup', () {
     late FakeSkip skip;
 
-    ProviderContainer container({AppSettings settings = const AppSettings()}) {
+    ProviderContainer container({
+      AppSettings settings = const AppSettings(),
+      SkipApi? skipDbApi,
+    }) {
       final c = ProviderContainer(
         overrides: [
           settingsStorageProvider.overrideWithValue(
@@ -76,7 +81,7 @@ void main() {
           serviceCredentialsProvider.overrideWithValue(
             MemoryServiceCredentials(),
           ),
-          skipDbApiProvider.overrideWithValue(skip.skipDbApi),
+          skipDbApiProvider.overrideWithValue(skipDbApi ?? skip.skipDbApi),
           introDbApiProvider.overrideWithValue(skip.introDbApi),
           skipStoreProvider.overrideWith((ref) => skip.store),
         ],
@@ -153,6 +158,27 @@ void main() {
         (await lookup(container(), episode: _ep(1, 2))).credits,
         SkipRange(_s(2370)),
       );
+    });
+
+    test("SkipDB's credits that end early: TheIntroDB's instead", () async {
+      // An exact match whose credits end 6 min before the end of the
+      // 40 min copy.
+      final skipDb = SkipDbClient(
+        MockClient(
+          (_) async => http.Response('''
+            {"segments": {
+              "intro": {"start_ms": 60000, "end_ms": 150000,
+                        "match": "exact", "confidence": 0.9},
+              "outro": {"start_ms": 2000000, "end_ms": 2040000,
+                        "match": "exact", "confidence": 0.9}}}''', 200),
+        ),
+        sleep: (_) async {},
+      );
+      skip.introDb['1:1'] = SkipSegments(credits: _credits);
+      final times = await lookup(container(skipDbApi: skipDb));
+      expect(times.intro, _intro);
+      expect(times.credits, _credits);
+      expect(skip.introDbQueries, hasLength(1));
     });
 
     test('an answer whose times were all unusable is not kept', () async {

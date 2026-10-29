@@ -56,6 +56,16 @@ void main() {
         SkipRange(s(1350)),
       );
       expect(clean(SkipSegments(credits: SkipRange(s(2697)))).credits, isNull);
+      // Credits ending more than 3 min before the end are not the end
+      // credits; a short preview or scene after them is fine.
+      expect(
+        clean(SkipSegments(credits: SkipRange(s(2400), s(2519)))).credits,
+        isNull,
+      );
+      expect(
+        clean(SkipSegments(credits: SkipRange(s(2400), s(2520)))).credits,
+        SkipRange(s(2400)),
+      );
     });
 
     test('round-trips through JSON', () {
@@ -357,6 +367,34 @@ void main() {
       expect(noOffset.incomplete, isTrue);
     });
 
+    test('credits that end early are left out', () {
+      Map<String, Object?> seg(int start, int end, {String? match}) => {
+        'start_ms': start,
+        'end_ms': end,
+        'match': match ?? 'exact',
+        'confidence': 0.9,
+        if (match != null) 'offset_ms': -32000,
+      };
+      // An exact match whose credits end 5 min before the end; the intro
+      // is for a copy 32 s longer.
+      final parsed = SkipDbClient.parse({
+        'segments': {
+          'intro': seg(274000, 364000, match: 'out-of-range'),
+          'outro': seg(3218000, 3244000),
+        },
+      }, s(3563));
+      expect(parsed.intro, SkipRange(s(274), s(364)));
+      expect(parsed.credits, isNull);
+      expect(parsed.incomplete, isTrue);
+      expect(parsed.reference, s(3595));
+      // Ending within 3 min of the end: kept.
+      final kept = SkipDbClient.parse({
+        'segments': {'outro': seg(3400000, 3400000 + 60000)},
+      }, s(3563));
+      expect(kept.credits, SkipRange(s(3400), s(3460)));
+      expect(kept.incomplete, isFalse);
+    });
+
     test('no IMDb id, 404: nothing; never the address in errors', () async {
       var calls = 0;
       final client = SkipDbClient(
@@ -638,6 +676,14 @@ void main() {
       expect(store.get('tt1', 1, 1, duration: s(2600), now: now), isNull);
       store.put('tt1', 1, 1, times, duration: s(2600), at: now);
       expect(store.get('tt1', 1, 1, duration: s(2600), now: now), times);
+      store.close();
+      // Version 2 could hold credits that end early: starts again too.
+      sqlite3.open(path)
+        ..userVersion = 2
+        ..close();
+      final again = SkipStore.open(path);
+      addTearDown(again.close);
+      expect(again.get('tt1', 1, 1, duration: s(2600), now: now), isNull);
     });
   });
 }

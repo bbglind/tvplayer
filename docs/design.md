@@ -328,7 +328,8 @@ clean and simple over every desktop feature.
   `scrim` at 85 % across the bottom, a panel takes the right edge. They
   show on mouse movement or a key and hide after 3 s (with the cursor),
   but stay while a panel is open, a control has keyboard focus or a slider
-  is dragged.
+  is dragged. The sliders (seek, volume) never take keyboard focus, so the
+  arrow keys always seek and change the volume.
 - **Replay player**: the seek bar's position is the clock time playing
   ("20:41:12") and its end the programme's ("21:00"); while the programme
   is still on it reaches from two hours back (or the programme's start)

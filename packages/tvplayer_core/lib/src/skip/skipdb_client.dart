@@ -55,7 +55,8 @@ final class SkipDbClient extends SkipHttpClient {
   /// couldn't match to it (`out-of-range`, for its copy of [duration]
   /// minus `offset_ms`) are fitted to it; that length is the result's
   /// [SkipSegments.reference]. Null entries, ones below
-  /// [skipDbMinConfidence] and unusable ones are left out
+  /// [skipDbMinConfidence], unusable ones and credits that end early
+  /// ([SkipSegments.creditsEndEarly]) are left out
   /// ([SkipSegments.incomplete]).
   static SkipSegments parse(Map<String, Object?> json, Duration? duration) {
     final segments = readMap(json['segments']);
@@ -98,12 +99,14 @@ final class SkipDbClient extends SkipHttpClient {
         ? far
         : far.fittedTo(duration, from: reference);
     final all = matched.fillFrom(fitted);
+    // Left out here, TheIntroDB is asked for the credits instead.
+    final early = duration != null && all.creditsEndEarly(duration);
     return SkipSegments(
       intro: all.intro,
       recap: all.recap,
-      credits: all.credits,
+      credits: early ? null : all.credits,
       reference: reference,
-      incomplete: incomplete,
+      incomplete: incomplete || early,
     );
   }
 }

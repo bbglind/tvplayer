@@ -25,9 +25,10 @@ class SkipStore {
     _db
       ..execute('PRAGMA journal_mode = WAL')
       ..execute('PRAGMA busy_timeout = 5000');
-    if (_db.userVersion < 2) {
+    if (_db.userVersion < 3) {
       // Version 1 kept one answer per episode, and "nothing known" for
-      // times only left out for another length: start again.
+      // times only left out for another length; version 2 kept credits
+      // that end early: start again.
       _db
         ..execute('DROP TABLE IF EXISTS skipdb_segment')
         ..execute('''
@@ -42,7 +43,7 @@ class SkipStore {
             PRIMARY KEY (imdb_id, season, episode, duration_ms)
           ) WITHOUT ROWID;
         ''')
-        ..userVersion = 2;
+        ..userVersion = 3;
     }
   }
 

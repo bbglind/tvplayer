@@ -57,6 +57,10 @@ const skipFitTolerance = Duration(seconds: 15);
 /// speed-up", 0.959), so all its times come that much earlier.
 const palSpeedUpRatio = (min: 0.95, max: 0.965);
 
+/// Credits that end earlier than this before the end of the copy are not
+/// its end credits (a short preview or post-credits scene is less).
+const maxCreditsEndGap = Duration(minutes: 3);
+
 /// The intro, recap and credits times of one episode, as far as known.
 final class SkipSegments {
   const SkipSegments({
@@ -139,11 +143,18 @@ final class SkipSegments {
     );
   }
 
+  /// Whether the credits end more than [maxCreditsEndGap] before the end
+  /// of a copy of [length] (most likely wrong).
+  bool creditsEndEarly(Duration length) {
+    final end = credits?.end;
+    return end != null && end < length - maxCreditsEndGap;
+  }
+
   /// The times that make sense in an episode of [duration]: ends past the
   /// end are cut there; parts shorter than [minSkipLength], starting after
   /// the end, an intro longer than [maxIntroLength] or a recap longer than
   /// [maxRecapLength] are dropped, and so are credits that start in the
-  /// first half (most likely wrong).
+  /// first half or end early ([creditsEndEarly]; most likely wrong).
   SkipSegments sanitized(Duration duration) {
     SkipRange? check(SkipRange? r, {Duration? max, bool toEnd = false}) {
       if (r == null || r.start < Duration.zero || r.start >= duration) {
@@ -162,7 +173,10 @@ final class SkipSegments {
     return SkipSegments(
       intro: check(intro, max: maxIntroLength),
       recap: check(recap, max: maxRecapLength),
-      credits: credits != null && credits.start * 2 >= duration
+      credits:
+          credits != null &&
+              credits.start * 2 >= duration &&
+              !creditsEndEarly(duration)
           ? credits
           : null,
     );

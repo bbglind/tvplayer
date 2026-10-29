@@ -117,6 +117,46 @@ void main() {
   );
 
   group('keyboard shortcuts', () {
+    testWidgets('after dragging the seek bar or the volume, the arrows '
+        'still seek 10 s (1 min with Shift) and ↑/↓ change the volume', (
+      tester,
+    ) async {
+      await open(tester, const MoviePlayback(_movie));
+      emit(tracks: _tracks);
+      player.emit(player.state.copyWith(volume: 60));
+      await tester.pump();
+
+      await tester.drag(
+        find.byKey(const Key('player.seek')),
+        const Offset(80, 0),
+      );
+      await tester.pump();
+      expect(player.seeksTo, hasLength(1));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(player.seeks, const [
+        Duration(seconds: 10),
+        Duration(minutes: 1),
+        Duration(seconds: -10),
+      ]);
+      expect(player.seeksTo, hasLength(1));
+
+      await tester.drag(
+        find.byKey(const Key('player.volume')),
+        const Offset(-20, 0),
+      );
+      await tester.pump();
+      final volumeSets = player.volumeSets.length;
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      expect(player.seeks.last, const Duration(seconds: -10));
+      expect(player.volumeChanges, [5]);
+      expect(player.volumeSets, hasLength(volumeSets));
+    });
+
     testWidgets('control a movie', (tester) async {
       await open(tester, const MoviePlayback(_movie));
       emit(tracks: _tracks, subtitleId: 2);

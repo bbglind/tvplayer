@@ -700,7 +700,9 @@ times yet; then nothing changes.
   stay and the credits keep their distance from the end.
 - Times that look wrong are ignored: parts shorter than 5 seconds, intros
   longer than 3 minutes, recaps longer than 8 minutes, and credits that
-  would start in the first half of the episode.
+  would start in the first half of the episode or end more than 3 minutes
+  before its end. Then the other database's credits are used, if it has
+  any.
 - Movies, live TV and replays have no skip buttons.
 
 ### Next episode
@@ -1243,6 +1245,10 @@ gold ring.
 | Player | l | Go live (in a replay or while live TV is paused) |
 | Player | r | Record / stop recording (live TV) |
 | Player | Enter (on the end time) | Switch between length and time left |
+
+The seek bar and the volume slider never take keyboard focus: ← / → always
+seek 10 s (1 min with Shift) and ↑ / ↓ always change the volume, also after
+clicking or dragging them.
 
 In the player, while a side panel has focus, the arrow keys, Space and Enter
 work inside the panel instead of controlling playback. No player key works

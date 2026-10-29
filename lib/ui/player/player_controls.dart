@@ -93,24 +93,28 @@ class _VolumeControlState extends State<VolumeControl> {
           message: VolumeControl.tooltip,
           child: SizedBox(
             width: VolumeControl.sliderWidth,
-            child: Slider(
-              key: const Key('player.volume'),
-              value: value,
-              max: 100,
-              semanticFormatterCallback: (v) => 'Volume ${v.round()}%',
-              onChangeStart: (v) {
-                widget.onDragging?.call(true);
-                setState(() => _drag = v);
-              },
-              onChanged: (v) {
-                setState(() => _drag = v);
-                widget.onChanged(v);
-              },
-              onChangeEnd: (v) {
-                widget.onDragging?.call(false);
-                widget.onChanged(v);
-                setState(() => _drag = null);
-              },
+            // Never keyboard focus, even after a drag: the arrows always
+            // seek and change the volume (PlayerShortcuts).
+            child: ExcludeFocus(
+              child: Slider(
+                key: const Key('player.volume'),
+                value: value,
+                max: 100,
+                semanticFormatterCallback: (v) => 'Volume ${v.round()}%',
+                onChangeStart: (v) {
+                  widget.onDragging?.call(true);
+                  setState(() => _drag = v);
+                },
+                onChanged: (v) {
+                  setState(() => _drag = v);
+                  widget.onChanged(v);
+                },
+                onChangeEnd: (v) {
+                  widget.onDragging?.call(false);
+                  widget.onChanged(v);
+                  setState(() => _drag = null);
+                },
+              ),
             ),
           ),
         ),
@@ -178,20 +182,24 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
             message: widget.touch
                 ? PlayerSeekBar.touchTooltip
                 : PlayerSeekBar.tooltip,
-            child: Slider(
-              key: const Key('player.seek'),
-              value: value,
-              max: max,
-              onChangeStart: (v) {
-                widget.onDragging?.call(true);
-                setState(() => _drag = v);
-              },
-              onChanged: (v) => setState(() => _drag = v),
-              onChangeEnd: (v) {
-                widget.onDragging?.call(false);
-                widget.onSeek(Duration(milliseconds: v.round()));
-                setState(() => _drag = null);
-              },
+            // Never keyboard focus, even after a drag: the arrows always
+            // seek and change the volume (PlayerShortcuts).
+            child: ExcludeFocus(
+              child: Slider(
+                key: const Key('player.seek'),
+                value: value,
+                max: max,
+                onChangeStart: (v) {
+                  widget.onDragging?.call(true);
+                  setState(() => _drag = v);
+                },
+                onChanged: (v) => setState(() => _drag = v),
+                onChangeEnd: (v) {
+                  widget.onDragging?.call(false);
+                  widget.onSeek(Duration(milliseconds: v.round()));
+                  setState(() => _drag = null);
+                },
+              ),
             ),
           ),
         ),
@@ -389,22 +397,26 @@ class _ReplaySeekBarState extends State<ReplaySeekBar> {
                   message: widget.touch
                       ? PlayerSeekBar.touchTooltip
                       : PlayerSeekBar.tooltip,
-                  child: Slider(
-                    key: const Key('player.seek'),
-                    value: value,
-                    max: max,
-                    onChangeStart: (v) {
-                      widget.onDragging?.call(true);
-                      setState(() => _drag = v);
-                    },
-                    onChanged: (v) => setState(() => _drag = v),
-                    onChangeEnd: (v) {
-                      widget.onDragging?.call(false);
-                      widget.onSeek(
-                        widget.from.add(Duration(seconds: v.round())),
-                      );
-                      setState(() => _drag = null);
-                    },
+                  // Never keyboard focus, even after a drag: the arrows always
+                  // seek and change the volume (PlayerShortcuts).
+                  child: ExcludeFocus(
+                    child: Slider(
+                      key: const Key('player.seek'),
+                      value: value,
+                      max: max,
+                      onChangeStart: (v) {
+                        widget.onDragging?.call(true);
+                        setState(() => _drag = v);
+                      },
+                      onChanged: (v) => setState(() => _drag = v),
+                      onChangeEnd: (v) {
+                        widget.onDragging?.call(false);
+                        widget.onSeek(
+                          widget.from.add(Duration(seconds: v.round())),
+                        );
+                        setState(() => _drag = null);
+                      },
+                    ),
                   ),
                 ),
         ),
