@@ -17,6 +17,7 @@ import '../downloads/download_actions.dart';
 import '../downloads/download_button.dart';
 import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
+import '../shell/app_messages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/widgets.dart';
@@ -74,6 +75,25 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
     final view = ref.read(episodeViewProvider(widget.series.seriesId));
     final start = resumePosition(view.progress(episode));
     openPlayback(context, ref, EpisodePlayback(info, episode, start: start));
+  }
+
+  /// "Reset progress": forgets where [episode] was stopped, with Undo.
+  void _resetProgress(SeriesInfo info, Episode episode) {
+    final messenger = ScaffoldMessenger.of(context);
+    final watch = ref.read(watchProvider.notifier);
+    final previous = watch.resetEpisode(info, episode);
+    final name =
+        '${plainTitle(ref, info.series.name)} '
+        '${formatEpisodeCode(episode.season, episode.episodeNumber)}';
+    showAppMessage(
+      messenger,
+      'Reset the progress of “$name”',
+      key: const Key('progress.reset'),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () => watch.restoreProgressOf(previous, info: info),
+      ),
+    );
   }
 
   void _mark(SeriesInfo info, Iterable<Episode> episodes, bool watched) => ref
@@ -343,16 +363,19 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
           runSpacing: 10,
           children: [
             if (next != null)
-              FilledButton.icon(
-                key: const Key('series.playNext'),
-                autofocus: true,
-                onPressed: () => _play(info, next),
-                icon: const Icon(Icons.play_arrow),
-                label: Text(
-                  '${resume != null ? 'Resume' : 'Play'} '
-                  '${formatEpisodeCode(next.season, next.episodeNumber)}'
-                  '${resume != null ? ' from ${formatDuration(resume)}' : ''}'
-                  '${from != null ? ' (from $from)' : ''}',
+              _withResumeMenu(
+                resume == null ? null : () => _resetProgress(info, next),
+                FilledButton.icon(
+                  key: const Key('series.playNext'),
+                  autofocus: true,
+                  onPressed: () => _play(info, next),
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(
+                    '${resume != null ? 'Resume' : 'Play'} '
+                    '${formatEpisodeCode(next.season, next.episodeNumber)}'
+                    '${resume != null ? ' from ${formatDuration(resume)}' : ''}'
+                    '${from != null ? ' (from $from)' : ''}',
+                  ),
                 ),
               ),
             FavouriteButton(
@@ -391,6 +414,23 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       posterWidth: 180,
     );
   }
+
+  /// [button] with a "Reset progress" context menu while it resumes
+  /// ([reset] not null). Always wrapped, so the button keeps its focus
+  /// when it turns into "Play".
+  static Widget _withResumeMenu(VoidCallback? reset, Widget button) =>
+      ContextMenuRegion(
+        actions: [
+          if (reset != null)
+            ItemMenuAction(
+              key: const Key('resume.reset'),
+              label: 'Reset progress',
+              icon: Icons.restart_alt,
+              onPressed: reset,
+            ),
+        ],
+        child: button,
+      );
 
   static Episode? _firstEpisode(SeriesInfo info) =>
       info.episodes.where((e) => e.season != 0).firstOrNull ??

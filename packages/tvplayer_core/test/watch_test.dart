@@ -508,6 +508,27 @@ void _continueRemovalTests() {
       expect(continueMovies(removed.merge(restored)), hasLength(1));
     });
 
+    test('resetting progress clears the records that exist; restoring '
+        'brings them back as a newer change', () {
+      final data = WatchData.empty.withItems({movieKey(1): started});
+      final (reset, previous) = resetProgress(data, [
+        movieTarget(1),
+        movieTarget(2),
+      ], now: _at(2));
+      expect(previous, {movieKey(1): started});
+      expect(reset.movie(1)!.position, Duration.zero);
+      expect(reset.movie(1)!.watched, isFalse);
+      expect(reset.movie(1)!.updatedAt, _at(2));
+      expect(reset.movie(2), isNull);
+      expect(continueMovies(reset), isEmpty);
+
+      final restored = restoreProgress(reset, previous, now: _at(3));
+      expect(resumePosition(restored.movie(1)), started.position);
+      expect(restored.movie(1)!.updatedAt, _at(3));
+      expect(restored.movie(2), isNull);
+      expect(continueMovies(reset.merge(restored)), hasLength(1));
+    });
+
     test('removing a series hides it but keeps its episodes', () {
       var data = refreshSeries(
         _play(

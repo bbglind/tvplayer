@@ -505,6 +505,49 @@ void main() {
       expect(watch.data.episode('101')!.watched, isFalse);
     });
 
+    testWidgets('"Reset progress" on the Resume button (right click or '
+        'Menu key), with Undo', (tester) async {
+      final watch = MemoryWatchStore(played([], started: (1, 1)));
+      await _pump(tester, child: const SeriesScreen(), watch: watch);
+      await tester.tap(find.byKey(const ValueKey(0)));
+      await tester.pumpAndSettle();
+      final button = find.byKey(const Key('series.playNext'));
+      expect(find.text('Resume S01E01 from 10:00'), findsOneWidget);
+
+      await tester.tap(button, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('resume.reset')));
+      await tester.pumpAndSettle();
+      expect(find.text('Play S01E01'), findsOneWidget);
+      expect(watch.data.episode('101')!.position, Duration.zero);
+      expect(
+        find.text('Reset the progress of “Series 0000 S01E01”'),
+        findsOneWidget,
+      );
+      // No player opened.
+      expect(find.byKey(const Key('series.scroll')), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Resume S01E01 from 10:00'), findsOneWidget);
+
+      // From the keyboard, on the focused button.
+      Focus.of(tester.element(find.text('Resume S01E01 from 10:00')))
+          .requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('resume.reset')), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('Play S01E01'), findsOneWidget);
+
+      // "Play" has no menu.
+      await tester.tap(button, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('resume.reset')), findsNothing);
+    });
+
     testWidgets('mark a season and an episode watched or unwatched', (
       tester,
     ) async {

@@ -138,6 +138,49 @@ class WatchController extends Notifier<WatchData> {
     );
   }
 
+  /// Forgets where [movie] and its other sources were stopped ("Reset
+  /// progress"). Returns their progress before, for [restoreProgress].
+  Map<String, WatchProgress> resetMovie(Movie movie) {
+    final (data, previous) = resetProgress(state, [
+      for (final id in ref.read(movieVariantsProvider).groupOf(movie.streamId))
+        movieTarget(id),
+    ], now: _now);
+    _update(data);
+    return previous;
+  }
+
+  /// Forgets where [episode] of [info] was stopped, in the other sources
+  /// of the series too. Returns the progress before, for
+  /// [restoreProgress].
+  Map<String, WatchProgress> resetEpisode(SeriesInfo info, Episode episode) {
+    final variants = _seriesVariants(info.series.seriesId);
+    final group = EpisodeGroupView(state, info.series.seriesId, variants);
+    final (data, previous) = resetProgress(
+      state,
+      groupEpisodeTargets(info, [episode], group),
+      now: _now,
+    );
+    _update(refreshSeries(data, info, variants: variants));
+    return previous;
+  }
+
+  /// Puts back the [previous] progress taken by [resetMovie] or
+  /// [resetEpisode] (Undo); pass the series' [info] for an episode.
+  void restoreProgressOf(
+    Map<String, WatchProgress> previous, {
+    SeriesInfo? info,
+  }) {
+    var data = restoreProgress(state, previous, now: _now);
+    if (info != null) {
+      data = refreshSeries(
+        data,
+        info,
+        variants: _seriesVariants(info.series.seriesId),
+      );
+    }
+    _update(data);
+  }
+
   /// Brings the stored summary of [info] up to date (e.g. new episodes, or
   /// episodes watched in another source).
   void refreshSeriesSummary(SeriesInfo info) => _update(

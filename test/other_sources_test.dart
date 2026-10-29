@@ -269,6 +269,27 @@ void main() {
     expect(find.byKey(const ValueKey('continue.1')), findsNothing);
   });
 
+  testWidgets('"Reset progress" (long press on Resume) resets a movie '
+      'in all its sources, with Undo', (tester) async {
+    final store = await _pump(
+      tester,
+      const MoviesScreen(),
+      watch: WatchData(items: {movieKey(1): _progress(30, at: 5)}),
+    );
+    await _open(tester, 2);
+    await tester.longPress(find.byKey(const Key('movie.resume')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('resume.reset')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('movie.play')), findsOneWidget);
+    expect(store.data.movie(1)!.position, Duration.zero);
+    expect(find.byKey(const Key('progress.reset')), findsOneWidget);
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Resume from 30:00 (from NF)'), findsOneWidget);
+    expect(store.data.movie(1)!.position, const Duration(minutes: 30));
+  });
+
   testWidgets('series sources share episode state by season and episode', (
     tester,
   ) async {

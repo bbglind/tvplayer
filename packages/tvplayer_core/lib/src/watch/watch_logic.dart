@@ -558,6 +558,41 @@ WatchData restoreContinueMovie(
   ),
 });
 
+/// [data] with the saved progress of [targets] reset at [now]: position
+/// cleared and not watched, for the targets that have a record. Also
+/// returns those records as they were, for [restoreProgress].
+(WatchData, Map<String, WatchProgress>) resetProgress(
+  WatchData data,
+  Iterable<WatchTarget> targets, {
+  required DateTime now,
+}) {
+  final kept = [
+    for (final t in targets)
+      if (data.items.containsKey(t.key)) t,
+  ];
+  final previous = {for (final t in kept) t.key: data.items[t.key]!};
+  return (markWatched(data, kept, watched: false, now: now), previous);
+}
+
+/// [data] with the [previous] records back, changed at [now] so they win
+/// over the reset when copies are merged (undoes [resetProgress]).
+WatchData restoreProgress(
+  WatchData data,
+  Map<String, WatchProgress> previous, {
+  required DateTime now,
+}) => data.withItems({
+  for (final MapEntry(:key, :value) in previous.entries)
+    key: WatchProgress(
+      position: value.position,
+      duration: value.duration,
+      watched: value.watched,
+      seriesId: value.seriesId,
+      season: value.season,
+      episode: value.episode,
+      updatedAt: now,
+    ),
+});
+
 /// [data] with series [seriesId] removed from "Continue watching" at
 /// [now], until one of its episodes changes again. Its episodes keep their
 /// progress and watched marks.

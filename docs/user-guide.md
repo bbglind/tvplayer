@@ -521,7 +521,10 @@ looks as before, with the poster beside the details). Then the poster,
 title, meta line (year, rating, length, genre), plot and director, and:
 
 - **"Play"**, or **"Resume from 12:34"** plus **"Play from start"** if you
-  started it.
+  started it. Right click (long press on a phone, Menu key) on "Resume
+  from …" offers **"Reset progress"**: the movie forgets where you stopped
+  (in its other sources too) and the button becomes "Play". A message
+  offers "Undo" for 6 seconds.
 - **"Mark as watched"** / **"Mark as unwatched"** (a started movie has
   both: "Mark as unwatched" forgets the position, so "Resume" becomes
   "Play").
@@ -546,7 +549,11 @@ when watched, and a download icon or mark when it is downloading or
 downloaded.
 
 - Click an episode to play it; the main button resumes the series where
-  you left off ("Resume") or plays it ("Play").
+  you left off ("Resume") or plays it ("Play"). Right click (long press on
+  a phone, Menu key) on "Resume S01E01 from …" offers **"Reset
+  progress"**: that episode forgets where you stopped (in the other
+  sources too) and the button becomes "Play S01E01". A message offers
+  "Undo" for 6 seconds.
 - **"Episode options"** (⋮, or right click / long press / Menu key on the
   row): "Mark as watched" / "Mark as unwatched" (a started episode has
   both), "Download", "Cancel download" or "Remove download".
@@ -1233,7 +1240,7 @@ gold ring.
 |---|---|---|
 | Everywhere | Tab / Shift+Tab, arrow keys | Move focus |
 | Everywhere | Enter or Space | Activate the focused button, row, poster or programme |
-| Everywhere | Menu key or Shift+F10 | Context menu of the focused item (channels, movies, series, episodes, categories, programmes) |
+| Everywhere | Menu key or Shift+F10 | Context menu of the focused item (channels, movies, series, episodes, categories, programmes, the Resume button on a detail page) |
 | Menus, dialogs, panels | Esc | Close / answer no |
 | Home, Featured banner | ← / → | Previous / next featured item |
 | Search page | Esc | Back from "Show all" to all results |

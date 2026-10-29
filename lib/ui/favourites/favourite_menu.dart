@@ -392,18 +392,104 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
           ),
         ],
       ],
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.contextMenu):
-              _openByKeyboard,
-          const SingleActivator(LogicalKeyboardKey.f10, shift: true):
-              _openByKeyboard,
+      child: _MenuTriggers(
+        onPointer: _openAt,
+        onKeyboard: _openByKeyboard,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Opens a context menu: a right click or long press (touch) on [child]
+/// calls [onPointer] with the local position; the Menu key or Shift+F10
+/// while [child] has focus calls [onKeyboard].
+class _MenuTriggers extends StatelessWidget {
+  const _MenuTriggers({
+    required this.onPointer,
+    required this.onKeyboard,
+    required this.child,
+  });
+
+  final ValueChanged<Offset> onPointer;
+  final VoidCallback onKeyboard;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.contextMenu): onKeyboard,
+      const SingleActivator(LogicalKeyboardKey.f10, shift: true): onKeyboard,
+    },
+    child: GestureDetector(
+      onSecondaryTapUp: (d) => onPointer(d.localPosition),
+      onLongPressStart: (d) => onPointer(d.localPosition),
+      child: child,
+    ),
+  );
+}
+
+/// A context menu of [actions] around [child] (e.g. a button), opened
+/// like an [ItemContextMenu]: right click, long press (touch), or the
+/// Menu key / Shift+F10 while [child] has focus. Without actions it
+/// doesn't open.
+class ContextMenuRegion extends StatefulWidget {
+  const ContextMenuRegion({
+    super.key,
+    required this.actions,
+    required this.child,
+  });
+
+  final List<ItemMenuAction> actions;
+  final Widget child;
+
+  @override
+  State<ContextMenuRegion> createState() => _ContextMenuRegionState();
+}
+
+class _ContextMenuRegionState extends State<ContextMenuRegion> {
+  final _menu = MenuController();
+  final _first = FocusNode(debugLabel: 'context.region.first');
+  bool _byKeyboard = false;
+
+  @override
+  void dispose() {
+    _first.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final firstEnabled = widget.actions
+        .where((a) => a.onPressed != null)
+        .firstOrNull;
+    return MenuAnchor(
+      controller: _menu,
+      onOpen: () {
+        if (_byKeyboard) _focusSoon(_first);
+      },
+      menuChildren: [
+        for (final a in widget.actions)
+          MenuItemButton(
+            key: a.key,
+            focusNode: identical(a, firstEnabled) ? _first : null,
+            leadingIcon: Icon(a.icon),
+            onPressed: a.onPressed,
+            child: Text(a.label),
+          ),
+      ],
+      child: _MenuTriggers(
+        onPointer: (position) {
+          if (widget.actions.isEmpty) return;
+          _byKeyboard = false;
+          _menu.open(position: position);
         },
-        child: GestureDetector(
-          onSecondaryTapUp: (d) => _openAt(d.localPosition),
-          onLongPressStart: (d) => _openAt(d.localPosition),
-          child: widget.child,
-        ),
+        onKeyboard: () {
+          if (widget.actions.isEmpty) return;
+          _byKeyboard = true;
+          _menu.open();
+        },
+        child: widget.child,
       ),
     );
   }

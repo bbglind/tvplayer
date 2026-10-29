@@ -13,6 +13,7 @@ import '../downloads/download_actions.dart';
 import '../downloads/download_button.dart';
 import '../favourites/favourite_menu.dart';
 import '../player/open_channel.dart';
+import '../shell/app_messages.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/compact.dart';
@@ -44,6 +45,22 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
 
   void _play({Duration? start}) =>
       openPlayback(context, ref, MoviePlayback(widget.movie, start: start));
+
+  /// "Reset progress": forgets where the movie was stopped, with Undo.
+  void _resetProgress() {
+    final messenger = ScaffoldMessenger.of(context);
+    final watch = ref.read(watchProvider.notifier);
+    final previous = watch.resetMovie(widget.movie);
+    showAppMessage(
+      messenger,
+      'Reset the progress of “${plainTitle(ref, widget.movie.name)}”',
+      key: const Key('progress.reset'),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () => watch.restoreProgressOf(previous),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -221,14 +238,24 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
           runSpacing: 10,
           children: [
             if (resume != null) ...[
-              FilledButton.icon(
-                key: const Key('movie.resume'),
-                autofocus: true,
-                onPressed: () => _play(start: resume),
-                icon: const Icon(Icons.play_arrow),
-                label: Text(
-                  'Resume from ${formatDuration(resume)}'
-                  '${from == null ? '' : ' (from $from)'}',
+              ContextMenuRegion(
+                actions: [
+                  ItemMenuAction(
+                    key: const Key('resume.reset'),
+                    label: 'Reset progress',
+                    icon: Icons.restart_alt,
+                    onPressed: _resetProgress,
+                  ),
+                ],
+                child: FilledButton.icon(
+                  key: const Key('movie.resume'),
+                  autofocus: true,
+                  onPressed: () => _play(start: resume),
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(
+                    'Resume from ${formatDuration(resume)}'
+                    '${from == null ? '' : ' (from $from)'}',
+                  ),
                 ),
               ),
               OutlinedButton.icon(
