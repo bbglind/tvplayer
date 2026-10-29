@@ -1268,6 +1268,95 @@ after it, so it is ready), the app asks the services that are on:
 
 To send nothing, switch **"SkipDB"** and **"TheIntroDB"** off here.
 
+### Sync
+
+Sync keeps what you do the same on your devices, e.g. the Linux laptop
+and an Android phone: stop a film on one and continue it on the other.
+It goes through a small **sync server of your own** (see
+[sync-server.md](sync-server.md) for installing it); there is no other
+sync service. Without a server, or with sync off, the app works exactly
+as before and sends nothing.
+
+- **"Sync"** (default off): "Keep watch progress, favourites and settings
+  the same on your devices, through your own sync server." Off, the
+  section shows only this switch.
+- **"Server address"**: "Not set", or the address. **"Edit…"** asks for
+  it ("The address of your sync server: http:// on your home network, or
+  https:// through a reverse proxy."), e.g. `http://192.0.2.10:8787` or
+  `https://sync.example.com`; an address without `http://` gets it. Other
+  input answers "Enter an address like http://192.0.2.10:8787 or
+  https://sync.example.com.".
+- **"Token"**: "Not set", or "Saved in the system keyring." ("Saved,
+  encrypted on this device." on Android). **"Enter token…"** asks for the
+  token the server printed for this device ("Paste the token that the
+  sync server printed for this device (tvplayer_sync_server token
+  create)."); anything else answers "That doesn't look like a sync token.
+  Tokens start with tvps_.". **"Remove token"** deletes it. Saving a
+  token syncs straight away.
+- **"Last sync: Today 12:40"** ("Last sync: Never" before the first one),
+  with "Syncs at start, when playback stops, every 5 minutes and after
+  changes.", "Syncing…" while it runs, or "Last sync failed: …" with the
+  reason.
+- **"Test connection"** answers "Connected to the sync server." or what
+  went wrong: "Couldn't reach the sync server. Check the address, and
+  that you're on your home network or connected from outside.", "The
+  sync server didn't accept the token. Check that you copied all of
+  it.", "That address isn't a tvplayer sync server.", "The sync server
+  didn't respond in time.", "The sync server had a problem (HTTP 500).
+  Try again later." or "This device's clock is far off. Check its date
+  and time.".
+- **"Sync now"** syncs at once and answers "Synced." or the reason it
+  failed.
+
+**When it syncs**: when the app starts, when playback stops, when you
+come back to the app, every 5 minutes, and 20 seconds after a change.
+Never while a video plays; it waits until you close the player. Changes
+made without a connection are kept and sent on the next sync. Only
+"Test connection" and "Sync now" show messages; a sync on its own that
+fails just shows "Last sync failed: …" here.
+
+**What syncs**, per provider account (the same login on both devices):
+
+- watch progress and resume positions, watched and unwatched marks,
+  "Continue watching" (also what you removed from it), recently viewed
+  channels (also the ones you removed), remembered audio and subtitle
+  choices of series;
+- my categories with their icons, order and items, hidden provider
+  categories and your order of the provider categories;
+- these settings (shared by all accounts): "Subtitles on by default",
+  "Subtitle languages", "Audio languages", "Play next episode", whether
+  the player shows the time left, the sort orders of Movies and Series
+  (also in my categories), "Show hidden categories in global search",
+  Home's rows ("Edit home"), "Prefer TMDB posters", and the TV guide's
+  "Time zone" and "Time shift".
+
+**What stays on each device**: the layout (sidebar, list widths, hidden
+category lists), the volume, "Show playback statistics" and "Player
+debug info", everything in Downloads & recording, the TMDB switch, its
+pause and image cache, the SkipDB and TheIntroDB switches, and sync's
+own settings. **Never sent**: your provider's address and login, stream
+links, the TMDB and TheIntroDB keys, TheIntroDB and SkipDB data,
+playlists, the TV guide, TMDB data and downloaded files. Synced records
+do hold names (of your categories and favourite items, and of the next
+episode), only ever to your own server.
+
+**The first sync** of a device merges: nothing of the watch history or
+favourites is lost. A film watched on either device stays watched, and
+your own categories with the same name and kind (e.g. "Favourites" in
+Live TV on both) are combined into one. **Settings are different: the
+first device to sync sets them, and every device that joins later takes
+them over.** So turn on sync first on the device whose settings you want
+to keep, and only then on the others. Before its first sync each device
+saves a copy of its settings, watch history and favourites in the app's
+data folder, under `sync_backup/<date-time>/` (on Linux in
+`~/.local/share/io.github.bbglind.tvplayer/sync_backup/`). Pointing the
+app at another sync server (or a reinstalled one) starts over with a
+first sync.
+
+When two devices change the same thing, the change made last wins. The
+device clocks needn't agree exactly: the app corrects for the server's
+clock.
+
 ### About
 
 The app's name, and the data sources it credits: the TMDB logo with
@@ -1361,6 +1450,12 @@ just choose "Pause download" and it resumes when you stop.
   replay.
 - **One provider at a time.** To switch, edit or remove the provider in
   Settings.
+- **Sync** needs your own sync server ([sync-server.md](sync-server.md))
+  and works per provider account: watch data and favourites only meet on
+  another device logged in to the same account. The first device to sync
+  sets the synced settings. There is no way yet to see or undo synced
+  changes in the app; the backup from before the first sync is in
+  `sync_backup/`.
 - **Replay** and **pause live TV** depend on the provider keeping an archive
   for that channel (the replay mark). How far back depends on the provider.
 - The UI is in **English** only.
@@ -1411,10 +1506,12 @@ layout (see [On a phone](#on-a-phone)). Differences from Linux so far:
 - **Build your own lineup**: put your everyday channels in one of my
   categories and sort them with "Reorder"; the player's Channels panel
   (c) then becomes a quick zap list.
-- **Where your data lives**: connection details in the system keyring;
-  the downloaded playlist, favourites, watch history and settings in the
-  app's data folder (`~/.local/share/io.github.bbglind.tvplayer`); downloads in
-  the downloads folder. Removing the provider deletes the keyring entry.
+- **Where your data lives**: connection details (and the sync token) in
+  the system keyring; the downloaded playlist, favourites, watch history
+  and settings in the app's data folder
+  (`~/.local/share/io.github.bbglind.tvplayer`); downloads in the
+  downloads folder. With sync on, a copy of watch data, favourites and
+  the synced settings is also on your sync server. Removing the provider deletes the keyring entry.
   If you used an earlier test build, its data folder
   (`~/.local/share/dev.example.tvplayer`), cache and saved provider are moved
   over automatically the first time this version starts.

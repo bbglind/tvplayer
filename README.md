@@ -2,6 +2,10 @@
 
 A new Flutter project.
 
+Documentation: [user guide](docs/user-guide.md), [design](docs/design.md),
+[sync server](docs/sync-server.md) (installing your own server for Settings ›
+Sync).
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
