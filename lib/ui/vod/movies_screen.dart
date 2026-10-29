@@ -96,6 +96,7 @@ class MoviesScreen extends ConsumerWidget {
                   imageFallbackUrl: moviePosterUrls(ref, movie).fallback,
                   progress: progress.fraction,
                   actions: [
+                    goToMovieAction(context, movie),
                     removeFromContinueAction(context, ref, movie: movie),
                   ],
                   onTap: () => _open(context, movie),

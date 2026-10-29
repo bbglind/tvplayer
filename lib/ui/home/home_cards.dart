@@ -17,9 +17,7 @@ import '../live/replay_mark.dart';
 import '../player/open_channel.dart';
 import '../theme/app_colors.dart';
 import '../theme/widgets.dart';
-import '../vod/movies_screen.dart';
 import '../vod/poster.dart';
-import '../vod/series_screen.dart';
 import 'continue_actions.dart';
 import 'home_playback.dart';
 import 'home_row.dart';
@@ -268,12 +266,7 @@ Widget continueCard(BuildContext context, WidgetRef ref, ContinueItem item) {
         progress: progress.fraction,
         favourite: movieItemRef(movie),
         actions: [
-          ItemMenuAction(
-            key: const Key('context.details'),
-            label: 'Open details',
-            icon: Icons.info_outline,
-            onPressed: () => openMovie(context, movie),
-          ),
+          goToMovieAction(context, movie),
           removeFromContinueAction(context, ref, movie: movie),
         ],
         onTap: () => playMovie(context, ref, movie),
@@ -315,12 +308,7 @@ Widget continueCard(BuildContext context, WidgetRef ref, ContinueItem item) {
             : math.max(progress.fraction, 0.03),
         favourite: seriesItemRef(series),
         actions: [
-          ItemMenuAction(
-            key: const Key('context.details'),
-            label: 'Open details',
-            icon: Icons.info_outline,
-            onPressed: () => openSeries(context, series),
-          ),
+          goToSeriesAction(context, series, season: progress.nextSeason),
           removeFromContinueAction(context, ref, series: series),
         ],
         onTap: () => playSeries(context, ref, series),

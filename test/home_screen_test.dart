@@ -10,6 +10,7 @@ import 'package:tvplayer/ui/live/live_tv_screen.dart';
 import 'package:tvplayer/ui/search/search_screen.dart';
 import 'package:tvplayer/ui/shell/app_shell.dart';
 import 'package:tvplayer/ui/vod/movies_screen.dart';
+import 'package:tvplayer/ui/vod/movie_details_screen.dart';
 import 'package:tvplayer/ui/vod/series_details_screen.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -396,7 +397,9 @@ void main() {
       expect(setup.player.opened.single.start, const Duration(minutes: 22));
     });
 
-    testWidgets('the context menu opens the details', (tester) async {
+    testWidgets('"Go to series" and "Go to movie" in the context menu', (
+      tester,
+    ) async {
       await _pump(tester, setup: _Setup(watch: started()));
       await tester.tap(
         find.byKey(const ValueKey('home.continue.series.10')),
@@ -404,9 +407,26 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('context.favourites')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('context.details')));
+      expect(find.text('Open details'), findsNothing);
+      await tester.tap(find.text('Go to series'));
       await tester.pumpAndSettle();
       expect(find.byType(SeriesDetailsScreen), findsOneWidget);
+      // On the season of the episode it continues with.
+      expect(
+        tester.widget<ChoiceChip>(find.byKey(const Key('season.1'))).selected,
+        isTrue,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('home.continue.movie.1')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Go to movie'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MovieDetailsScreen), findsOneWidget);
     });
 
     Future<void> removeVia(WidgetTester tester, Finder card) async {

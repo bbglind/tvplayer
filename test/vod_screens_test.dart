@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tvplayer/state/providers.dart';
 import 'package:tvplayer/ui/vod/movies_screen.dart';
 import 'package:tvplayer/ui/vod/poster.dart';
+import 'package:tvplayer/ui/vod/series_details_screen.dart';
 import 'package:tvplayer/ui/vod/series_screen.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
@@ -546,6 +547,19 @@ void main() {
       await tester.tap(button, buttons: kSecondaryButton);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('resume.reset')), findsNothing);
+    });
+
+    testWidgets('the page opens on a given season', (tester) async {
+      await _pump(
+        tester,
+        child: SeriesDetailsScreen(series: _info.series, season: 2),
+        watch: MemoryWatchStore(played([], started: (1, 1))),
+      );
+      expect(
+        tester.widget<ChoiceChip>(find.byKey(const Key('season.2'))).selected,
+        isTrue,
+      );
+      expect(find.text('Resume S01E01 from 10:00'), findsOneWidget);
     });
 
     testWidgets('mark a season and an episode watched or unwatched', (

@@ -235,8 +235,10 @@ scrolls the page. Rows with nothing in them are left out.
   the row explains how to create one with the star.
 - **Continue watching**: movies and episodes you started, most recently
   watched first, saying what is left ("S2 · E4 · 18 min left", "1 h 02 min
-  left"). Click or Enter resumes playback. Its context menu has "Open
-  details", "Remove from Continue watching" and "Add to favourites…".
+  left"). Click or Enter resumes playback. Its context menu has **"Go to
+  series"** (opens the series page on the season of the episode it
+  continues with) or **"Go to movie"** (opens the movie page), "Remove
+  from Continue watching" and "Add to favourites…".
   **"See all"** opens the Continue watching page: the same cards in a grid
   with the chips "All", "Movies" and "Series" (back arrow to return).
 - **Recently added series** and **Recently added movies**: the newest
@@ -494,7 +496,9 @@ started, most recently watched first:
 - Under a provider category: only those in that category.
 - Under one of my categories: all of them, with those in the category first.
 
-Its context menu has **"Remove from Continue watching"**. For a movie this
+Its context menu has **"Go to movie"** / **"Go to series"** (the series
+page opens on the season of the episode up next) and **"Remove from
+Continue watching"**. For a movie this
 forgets where you stopped; for a series it leaves the list but episodes
 keep their watched marks, and it comes back when you play or mark an
 episode. A message offers "Undo" for 6 seconds.

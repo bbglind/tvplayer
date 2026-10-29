@@ -15,11 +15,12 @@ import 'poster.dart';
 import 'series_details_screen.dart';
 import 'vod_browser.dart';
 
-/// Opens the details page of [series].
-void openSeries(BuildContext context, Series series) => Navigator.of(context)
-    .push(
+/// Opens the details page of [series], on [season] when given (else the
+/// season of the episode up next).
+void openSeries(BuildContext context, Series series, {int? season}) =>
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => SeriesDetailsScreen(series: series),
+        builder: (_) => SeriesDetailsScreen(series: series, season: season),
       ),
     );
 
@@ -137,7 +138,10 @@ class SeriesScreen extends ConsumerWidget {
       imageFallbackUrl: seriesPosterUrls(ref, series).fallback,
       placeholder: Icons.tv,
       progress: isInProgress(episode) ? episode!.fraction : null,
-      actions: [removeFromContinueAction(context, ref, series: series)],
+      actions: [
+        goToSeriesAction(context, series, season: progress.nextSeason),
+        removeFromContinueAction(context, ref, series: series),
+      ],
       onTap: () => _open(context, series),
     );
   }

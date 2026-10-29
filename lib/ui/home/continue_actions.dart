@@ -4,8 +4,32 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/providers.dart';
 import '../favourites/favourite_menu.dart';
+import '../vod/movies_screen.dart';
 import '../vod/provider_title.dart';
+import '../vod/series_screen.dart';
 import '../shell/app_messages.dart';
+
+/// "Go to movie": opens the details page of [movie].
+ItemMenuAction goToMovieAction(BuildContext context, Movie movie) =>
+    ItemMenuAction(
+      key: const Key('context.goTo'),
+      label: 'Go to movie',
+      icon: Icons.movie_outlined,
+      onPressed: () => openMovie(context, movie),
+    );
+
+/// "Go to series": opens the details page of [series] on [season], the
+/// season of the episode it continues with.
+ItemMenuAction goToSeriesAction(
+  BuildContext context,
+  Series series, {
+  int? season,
+}) => ItemMenuAction(
+  key: const Key('context.goTo'),
+  label: 'Go to series',
+  icon: Icons.video_library_outlined,
+  onPressed: () => openSeries(context, series, season: season),
+);
 
 /// "Remove from Continue watching" for [movie] or [series]: clears a
 /// movie's resume position, or takes a series out until it is watched

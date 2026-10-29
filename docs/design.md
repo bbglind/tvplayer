@@ -701,8 +701,10 @@ English for now.
   range…". "Reset filters" clears year and genre.
 - Home: "Continue watching" mixes movies and episodes, most recently
   watched first, without hidden categories; Enter or a click resumes
-  playback, the context menu has "Open details", "Remove from Continue
-  watching" and "Add to favourites…". Its card says what is left: "S2 ·
+  playback, the context menu has "Go to series" (on the season of the
+  episode it continues with) or "Go to movie", "Remove from Continue
+  watching" and "Add to favourites…" (plus "Remove from favourites" for a
+  favourite). Its card says what is left: "S2 ·
   E4 · 18 min left", "1 h 02 min left". Its "See all" opens the Continue
   watching page (not in the sidebar; back arrow): the same 16:9 cards in a
   grid, most recently watched first, with chips "All", "Movies",

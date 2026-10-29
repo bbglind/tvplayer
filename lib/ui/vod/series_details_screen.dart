@@ -33,9 +33,13 @@ import 'tmdb_sections.dart';
 /// per season (specials last) with watched progress, the season's
 /// episodes, then Cast, Recommendations and Other sources.
 class SeriesDetailsScreen extends ConsumerStatefulWidget {
-  const SeriesDetailsScreen({super.key, required this.series});
+  const SeriesDetailsScreen({super.key, required this.series, this.season});
 
   final Series series;
+
+  /// The season to open on, when it has episodes; else the season of the
+  /// episode up next.
+  final int? season;
 
   @override
   ConsumerState<SeriesDetailsScreen> createState() => _SeriesDetailsState();
@@ -187,7 +191,10 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       });
     }
     if (_season == null || !tabs.any((t) => t.number == _season)) {
-      _season = initialSeason(info, watch, group: view);
+      final asked = widget.season;
+      _season = _season == null && tabs.any((t) => t.number == asked)
+          ? asked
+          : initialSeason(info, watch, group: view);
     }
     final season = _season;
     final episodes = season == null
