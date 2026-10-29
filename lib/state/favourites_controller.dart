@@ -105,6 +105,18 @@ class FavouritesController extends Notifier<FavouritesData> {
     ),
   );
 
+  /// Removes [item] from all my categories. Returns its memberships
+  /// before, for [restoreMemberships].
+  List<FavouriteMembership> removeEverywhere(ItemRef item) {
+    final (data, previous) = removeFromMyCategories(state, item, now: _now);
+    _update(data);
+    return previous;
+  }
+
+  /// Puts [previous] memberships back (Undo of [removeEverywhere]).
+  void restore(List<FavouriteMembership> previous) =>
+      _update(restoreMemberships(state, previous, now: _now));
+
   /// Hides or shows the provider categories [ids] of [kind].
   void setHidden(ContentKind kind, Iterable<String> ids, bool hidden) =>
       _update(setCategoriesHidden(state, kind, ids, hidden: hidden, now: _now));

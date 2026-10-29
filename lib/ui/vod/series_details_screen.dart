@@ -138,7 +138,13 @@ class _SeriesDetailsState extends ConsumerState<SeriesDetailsScreen> {
       // A backdrop reaches the top edge, behind the back arrow.
       extendBodyBehindAppBar: true,
       appBar: detailsAppBar(
-        actions: [DetailsMenu(item: seriesTmdbItem(widget.series))],
+        actions: [
+          DetailsMenu(
+            item: seriesTmdbItem(widget.series),
+            favourite: seriesItemRef(widget.series),
+            name: widget.series.name,
+          ),
+        ],
       ),
       body: FutureBuilder(
         future: _info,

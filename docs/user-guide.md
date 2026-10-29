@@ -317,6 +317,13 @@ have their own.
   as checkboxes; each tick is saved at once. "New category…" creates one
   on the spot. "Done", Esc or a click outside closes the menu.
 - A **filled star** means the item is in at least one of my categories.
+- **Remove an item**: untick its categories in the star menu, or use
+  **"Remove from favourites"** in its context menu (right click, long press
+  on a phone, Menu key), which takes it out of all my categories of its
+  kind at once. It is there wherever a channel, movie or series that is a
+  favourite shows: lists, grids, Home rows, Search results, and the ⋮ of
+  a movie or series page. A message offers "Undo" for 6 seconds, which puts
+  it back in the same place in each category.
 - **Create, rename, delete**: "New category" (in the column's edit mode,
   or in Settings › Categories) asks for a name and an icon. A category's
   context menu has "Rename or change icon…" and "Delete…" (deleting asks

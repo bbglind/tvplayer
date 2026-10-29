@@ -225,6 +225,41 @@ void main() {
       expect(data.countIn('id0'), 0);
     });
 
+    test('remove from all my categories; restoring puts it back in its '
+        'old place in each', () {
+      var data = _withChannels();
+      data = setMembership(
+        data,
+        'id1',
+        _ch2,
+        name: 'Two',
+        member: true,
+        now: _at(13),
+      );
+      expect(_names(data, 'id0'), ['Three', 'Two', 'One']);
+      final (removed, previous) = removeFromMyCategories(
+        data,
+        _ch2,
+        now: _at(20),
+      );
+      expect(removed.isFavourite(_ch2), isFalse);
+      expect(_names(removed, 'id0'), ['Three', 'One']);
+      expect(removed.countIn('id1'), 0);
+      expect({for (final m in previous) m.categoryId}, {'id0', 'id1'});
+      // A removal wins over the older add when merged.
+      expect(data.merge(removed).isFavourite(_ch2), isFalse);
+
+      final restored = restoreMemberships(removed, previous, now: _at(21));
+      expect(restored.categoriesContaining(_ch2), {'id0', 'id1'});
+      expect(_names(restored, 'id0'), ['Three', 'Two', 'One']);
+      expect(removed.merge(restored).isFavourite(_ch2), isTrue);
+
+      // Not a favourite: nothing changes.
+      final (same, none) = removeFromMyCategories(data, _movie, now: _at(22));
+      expect(identical(same, data), isTrue);
+      expect(none, isEmpty);
+    });
+
     test('a newly added item goes first', () {
       var data = _sample();
       data = setMembership(

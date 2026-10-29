@@ -188,6 +188,55 @@ FavouritesData setMembership(
   );
 }
 
+/// [data] with [item] removed from all my categories ("Remove from
+/// favourites"). Also returns its memberships as they were, for
+/// [restoreMemberships].
+(FavouritesData, List<FavouriteMembership>) removeFromMyCategories(
+  FavouritesData data,
+  ItemRef item, {
+  required DateTime now,
+}) {
+  final previous = [
+    for (final id in data.categoriesContaining(item))
+      ?data.memberships[FavouriteMembership.membershipKey(id, item)],
+  ];
+  var result = data;
+  for (final m in previous) {
+    result = setMembership(
+      result,
+      m.categoryId,
+      item,
+      name: m.name,
+      member: false,
+      now: now,
+    );
+  }
+  return (result, previous);
+}
+
+/// [data] with the [previous] memberships back, each at its old place in
+/// its category (undoes [removeFromMyCategories]).
+FavouritesData restoreMemberships(
+  FavouritesData data,
+  List<FavouriteMembership> previous, {
+  required DateTime now,
+}) {
+  final restored = {
+    for (final m in previous)
+      if (data.category(m.categoryId) != null)
+        m.key: FavouriteMembership(
+          categoryId: m.categoryId,
+          item: m.item,
+          name: m.name,
+          addedAt: m.addedAt,
+          updatedAt: now,
+          order: m.order,
+        ),
+  };
+  if (restored.isEmpty) return data;
+  return data.copyWith(memberships: {...data.memberships, ...restored});
+}
+
 /// [data] with the provider categories [ids] of [kind] hidden or shown.
 FavouritesData setCategoriesHidden(
   FavouritesData data,

@@ -8,8 +8,7 @@ import 'package:flutter/services.dart';
 /// hide.
 void dismissKeyboard() {
   final focus = FocusManager.instance.primaryFocus;
-  if (focus?.context?.findAncestorWidgetOfExactType<EditableText>() !=
-      null) {
+  if (focus?.context?.findAncestorWidgetOfExactType<EditableText>() != null) {
     focus!.unfocus();
   }
   SystemChannels.textInput.invokeMethod<void>('TextInput.hide');

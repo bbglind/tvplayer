@@ -238,6 +238,49 @@ void main() {
       );
     });
 
+    testWidgets('"Remove from favourites" takes a channel out of all my '
+        'categories, with Undo', (tester) async {
+      final store = MemoryFavouritesStore(
+        _data(
+          live: ['News', 'Sport'],
+          members: [
+            ('live0', '4', 'Channel 0004'),
+            ('live0', '3', 'Channel 0003'),
+            ('live1', '3', 'Channel 0003'),
+          ],
+        ),
+      );
+      await _pumpLive(tester, store);
+      const item = ItemRef(ContentKind.live, '3');
+      List<String> news() => [
+        for (final m in store.data.itemsIn('live0')) m.item.id,
+      ];
+      expect(news(), ['3', '4']);
+
+      // Not a favourite: no entry.
+      await tester.tap(find.text('Channel 0005'), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('context.removeFavourite')), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Channel 0003'), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.removeFavourite')));
+      await tester.pumpAndSettle();
+      expect(store.data.isFavourite(item), isFalse);
+      expect(_starFilled(tester, 'Channel 0003'), isFalse);
+      expect(
+        find.text('Removed “Channel 0003” from favourites'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(store.data.categoriesContaining(item), {'live0', 'live1'});
+      expect(news(), ['3', '4']);
+    });
+
     testWidgets('edit mode hides provider categories from the list and All', (
       tester,
     ) async {
@@ -529,6 +572,47 @@ void main() {
       expect(find.text('32'), findsOneWidget); // 40 - 8.
       expect(find.text('Movie 00001'), findsNothing);
       expect(find.text('Movie 00002'), findsOneWidget);
+    });
+
+    testWidgets('"Remove from favourites" on a poster and in the detail '
+        "page's ⋮", (tester) async {
+      final store = MemoryFavouritesStore(
+        _data(
+          movies: ['Weekend', 'Later'],
+          members: [
+            ('movie0', '3', 'Movie 00003'),
+            ('movie1', '3', 'Movie 00003'),
+          ],
+        ),
+      );
+      await pump(tester, store, const MoviesScreen());
+      const item = ItemRef(ContentKind.movie, '3');
+      await tester.tap(
+        find.byKey(const ValueKey(3)),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.removeFavourite')));
+      await tester.pumpAndSettle();
+      expect(store.data.isFavourite(item), isFalse);
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(store.data.categoriesContaining(item), {'movie0', 'movie1'});
+
+      await tester.tap(find.byKey(const ValueKey(3)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('details.menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('context.removeFavourite')));
+      await tester.pumpAndSettle();
+      expect(store.data.isFavourite(item), isFalse);
+      expect(find.text('Add to favourites'), findsOneWidget);
+      expect(
+        find.text('Removed “Movie 00003” from favourites'),
+        findsOneWidget,
+      );
+      // Neither a favourite nor linked to TMDB: no ⋮.
+      expect(find.byKey(const Key('details.menu')), findsNothing);
     });
 
     testWidgets('the detail page has a favourite button', (tester) async {

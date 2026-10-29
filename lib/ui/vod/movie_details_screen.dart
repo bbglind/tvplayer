@@ -68,7 +68,13 @@ class _MovieDetailsState extends ConsumerState<MovieDetailsScreen> {
       // A backdrop reaches the top edge, behind the back arrow.
       extendBodyBehindAppBar: true,
       appBar: detailsAppBar(
-        actions: [DetailsMenu(item: movieTmdbItem(widget.movie))],
+        actions: [
+          DetailsMenu(
+            item: movieTmdbItem(widget.movie),
+            favourite: movieItemRef(widget.movie),
+            name: widget.movie.name,
+          ),
+        ],
       ),
       body: FutureBuilder(
         future: _details,

@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tvplayer_core/tvplayer_core.dart';
 
 import '../../state/providers.dart';
+import '../shell/app_messages.dart';
 import '../theme/app_colors.dart';
+import '../vod/provider_title.dart';
 import 'category_dialogs.dart';
 import 'category_icons.dart';
 import 'order_actions.dart';
@@ -227,6 +229,34 @@ final class ItemMenuAction {
   final Key? key;
 }
 
+/// "Remove from favourites" for [item] (named [name]): takes it out of
+/// all my categories at once, then offers "Undo" in a snack bar.
+ItemMenuAction removeFromFavouritesAction(
+  BuildContext context,
+  WidgetRef ref,
+  ItemRef item,
+  String name,
+) => ItemMenuAction(
+  key: const Key('context.removeFavourite'),
+  label: 'Remove from favourites',
+  icon: Icons.star_outline,
+  onPressed: () {
+    final messenger = ScaffoldMessenger.of(context);
+    final favourites = ref.read(favouritesProvider.notifier);
+    final previous = favourites.removeEverywhere(item);
+    final shown = item.kind == ContentKind.live ? name : plainTitle(ref, name);
+    showAppMessage(
+      messenger,
+      'Removed “$shown” from favourites',
+      key: const Key('favourites.removed'),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () => favourites.restore(previous),
+      ),
+    );
+  },
+);
+
 /// Marks the items below it as shown in my category [categoryId] in the
 /// user's order: their [ItemContextMenu]s offer Move up, Move down and
 /// Move to top.
@@ -356,6 +386,10 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
       if (scope != null) ..._moveActions(ref, scope, widget.item),
       ...widget.actions,
     ];
+    final favourite =
+        ref.watch(favouritesProvider.select((d) => d.isFavourite(widget.item)))
+        ? removeFromFavouritesAction(context, ref, widget.item, widget.name)
+        : null;
     // Keyboard focus goes to the first entry that can take it.
     final firstEnabled = actions.where((a) => a.onPressed != null).firstOrNull;
     return MenuAnchor(
@@ -390,6 +424,13 @@ class _ItemContextMenuState extends ConsumerState<ItemContextMenu> {
             onPressed: _showFavourites,
             child: const Text('Add to favourites…'),
           ),
+          if (favourite case final remove?)
+            MenuItemButton(
+              key: remove.key,
+              leadingIcon: Icon(remove.icon),
+              onPressed: remove.onPressed,
+              child: Text(remove.label),
+            ),
         ],
       ],
       child: _MenuTriggers(
