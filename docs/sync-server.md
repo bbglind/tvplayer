@@ -148,9 +148,13 @@ install -m 644 /opt/tvplayer-sync/config.example.json /etc/tvplayer-sync/config.
 # The service, the daily backup and the tvplayer-sync command.
 cp /opt/tvplayer-sync/deploy/tvplayer-sync.service /opt/tvplayer-sync/deploy/tvplayer-sync-backup.service /opt/tvplayer-sync/deploy/tvplayer-sync-backup.timer /etc/systemd/system/
 install -m 755 /opt/tvplayer-sync/deploy/tvplayer-sync /usr/local/bin/tvplayer-sync
+ln -sf /usr/local/bin/tvplayer-sync /usr/bin/tvplayer-sync
 systemctl daemon-reload
 systemctl enable --now tvplayer-sync.service tvplayer-sync-backup.timer
 ```
+
+The link in `/usr/bin` is there because a `pct enter` shell may not look in
+`/usr/local/bin`; with it, `tvplayer-sync` works in every shell.
 
 The config file `/etc/tvplayer-sync/config.json` holds:
 
@@ -280,6 +284,7 @@ mkdir -p /opt/tvplayer-sync
 tar -xzf /root/tvplayer-sync.tar.gz -C /opt/tvplayer-sync --strip-components=1 --no-same-owner
 cp /opt/tvplayer-sync/deploy/tvplayer-sync.service /opt/tvplayer-sync/deploy/tvplayer-sync-backup.service /opt/tvplayer-sync/deploy/tvplayer-sync-backup.timer /etc/systemd/system/
 install -m 755 /opt/tvplayer-sync/deploy/tvplayer-sync /usr/local/bin/tvplayer-sync
+ln -sf /usr/local/bin/tvplayer-sync /usr/bin/tvplayer-sync
 systemctl daemon-reload
 systemctl start tvplayer-sync
 /opt/tvplayer-sync/bin/tvplayer_sync_server --version
@@ -372,3 +377,11 @@ If `systemctl status tvplayer-sync` shows it isn't running, the log
 (`journalctl -u tvplayer-sync -n 50 --no-pager`) says why, e.g. a typo in
 `/etc/tvplayer-sync/config.json` ("…is not valid JSON") or a port that is
 already taken.
+
+If `tvplayer-sync` answers "command not found" inside the container (for
+example on a server installed before this link was part of section 5), run
+this once:
+
+```sh
+ln -sf /usr/local/bin/tvplayer-sync /usr/bin/tvplayer-sync
+```

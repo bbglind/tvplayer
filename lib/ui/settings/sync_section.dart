@@ -54,7 +54,7 @@ class _SyncSectionState extends ConsumerState<SyncSection> {
         title: 'Sync token',
         help:
             'Paste the token that the sync server printed for this device '
-            '(tvplayer_sync_server token create).',
+            '(tvplayer-sync token create).',
         hint: 'tvps_…',
         fieldKey: const Key('settings.syncToken.field'),
         saveKey: const Key('settings.syncToken.save'),

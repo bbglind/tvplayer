@@ -1,6 +1,8 @@
 #!/bin/sh
 # Runs a server command (token create, token list, backup, status…) as the
 # service user with the installed config. Install as
-# /usr/local/bin/tvplayer-sync; see docs/sync-server.md.
+# /usr/local/bin/tvplayer-sync, linked from /usr/bin; see docs/sync-server.md.
+# A pct enter shell can have a short PATH; runuser is in /usr/sbin.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 exec runuser -u tvplayer-sync -- /opt/tvplayer-sync/bin/tvplayer_sync_server \
   --config /etc/tvplayer-sync/config.json "$@"

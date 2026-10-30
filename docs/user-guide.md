@@ -1289,8 +1289,8 @@ as before and sends nothing.
 - **"Token"**: "Not set", or "Saved in the system keyring." ("Saved,
   encrypted on this device." on Android). **"Enter token…"** asks for the
   token the server printed for this device ("Paste the token that the
-  sync server printed for this device (tvplayer_sync_server token
-  create)."); anything else answers "That doesn't look like a sync token.
+  sync server printed for this device (tvplayer-sync token create).");
+  anything else answers "That doesn't look like a sync token.
   Tokens start with tvps_.". **"Remove token"** deletes it. Saving a
   token syncs straight away.
 - **"Last sync: Today 12:40"** ("Last sync: Never" before the first one),
