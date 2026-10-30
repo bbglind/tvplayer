@@ -79,7 +79,7 @@ class _ZapPanelState extends ConsumerState<ZapPanel> {
       body = Padding(
         padding: const EdgeInsets.all(12),
         child: Text(
-          'No Live TV favourites yet. Add channels to one of my categories '
+          'No Live TV favourites yet. Add channels to one of My categories '
           'with the star.',
           key: const Key('zap.hint'),
           style: theme.textTheme.bodyMedium?.copyWith(

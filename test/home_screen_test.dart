@@ -200,6 +200,13 @@ void main() {
   testWidgets('the hint stays while my categories are empty', (tester) async {
     await _pump(tester, setup: _Setup(favourites: defaultFavourites()));
     expect(find.byKey(const Key('home.categories.hint')), findsOneWidget);
+    expect(
+      find.text(
+        'Add favourites to My categories with the star on a channel, '
+        'movie or series, or from its context menu.',
+      ),
+      findsOneWidget,
+    );
     final data = setMembership(
       defaultFavourites(),
       'default-series',

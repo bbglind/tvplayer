@@ -278,7 +278,7 @@ class _CategoriesHint extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Add favourites to my categories with the star on a channel, '
+                'Add favourites to My categories with the star on a channel, '
                 'movie or series, or from its context menu.',
                 key: const Key('home.categories.hint'),
                 style: text.bodyMedium?.copyWith(

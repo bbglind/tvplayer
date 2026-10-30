@@ -400,6 +400,13 @@ void main() {
       await tester.tap(find.byKey(const Key('player.zap')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('zap.hint')), findsOneWidget);
+      expect(
+        find.text(
+          'No Live TV favourites yet. Add channels to one of My categories '
+          'with the star.',
+        ),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('zap.tab.default-live')), findsNothing);
     });
   });

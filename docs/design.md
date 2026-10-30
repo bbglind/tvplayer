@@ -105,7 +105,7 @@ clean and simple over every desktop feature.
   category icon, the selected category's name, dropdown arrow) above the
   content, which takes the full width. It opens a bottom sheet (`surface`,
   top radius 16, drag handle, 85 % of the height): "Categories" with the
-  edit button, then the same list as the column (my categories, All …,
+  edit button, then the same list as the column (My categories, All …,
   provider categories with counts). A choice closes it (not in edit mode).
 - **Posters**: 2–3 columns (about 130 wide each), 2:3 posters; each cell
   is as tall as the poster plus two title lines and the subtitle at the
@@ -459,7 +459,7 @@ clean and simple over every desktop feature.
   "Skip intro (i)" (touch: "Skip intro" on long-press). Never skips by
   itself.
 - **Favourite star**: filled accent star when the item is in at least one of
-  my categories; otherwise an outline star that shows only on hover or
+  My categories; otherwise an outline star that shows only on hover or
   focus. At the right end of channel rows; at the top left of posters, on a
   translucent `scrim` tile.
 - **Context menu**: channels, movies, series and episodes open one on right click,
@@ -608,7 +608,7 @@ clean and simple over every desktop feature.
   (no tombstone) if the server holds any category record of its kind and not
   its id; one deleted elsewhere comes back only with items this device put in
   it.
-- **Custom order** (kept per provider, like my categories): reorderable
+- **Custom order** (kept per provider, like My categories): reorderable
   rows have a drag handle (`drag_indicator`, hint "Drag to reorder"), and
   the same moves are in a menu for the keyboard: "Move up", "Move down",
   "Move to top" (disabled where they can't move; Move up/down pass over
@@ -621,8 +621,8 @@ clean and simple over every desktop feature.
     Shift+F10). Categories the provider adds later go at the end; removed
     ones drop out. "Reset to provider order" (edit mode and the Settings
     categories page) offers "Undo" in a snack bar for 6 s.
-  - Items in my categories: a newly added item goes first. "Reorder" (a
-    chip above the list or grid while one of my categories is shown)
+  - Items in My categories: a newly added item goes first. "Reorder" (a
+    chip above the list or grid while one of My categories is shown)
     turns the channel list or poster grid into a list with drag handles,
     small logos/posters and the names, items the provider dropped
     included; "Done reordering" ends it. The moves are in the item's
@@ -641,7 +641,7 @@ English for now.
 | My Channels / My Movies / My Series | The default categories of a new account on a new install (ordinary categories, one per kind, empty) |
 | Categories | The provider's categories |
 | All channels / All movies / All series | Everything except hidden categories |
-| Favourite (star) | The item is in at least one of my categories |
+| Favourite (star) | The item is in at least one of My categories |
 | Continue watching | Started movies and episodes |
 | Remove from Continue watching | Takes a started item out of Continue watching |
 | Hidden | Hidden provider categories |
@@ -654,9 +654,9 @@ English for now.
 | Recently added series / movies | Newest series (by last update) / movies (by date added) |
 | Edit home | The mode that moves and hides Home rows |
 | Move up / Move down / Move to top | Menu entries that move a category or an item one place or to the start |
-| Reorder / Done reordering | The mode that drags the items of one of my categories into my order |
+| Reorder / Done reordering | The mode that drags the items of one of My categories into my order |
 | Reset to provider order | Puts the provider categories of a section back in the provider's order |
-| My order | The sort of Movies/Series in my categories that keeps my order (default there) |
+| My order | The sort of Movies/Series in My categories that keeps my order (default there) |
 | Channels | The player's zap panel of my Live TV categories |
 | Play next episode | The setting and countdown that start the next episode |
 | Skip intro / Skip recap | The player button that jumps to the end of an episode's intro or recap |
@@ -693,11 +693,11 @@ English for now.
 | Minimum free disk space | Downloads pause and recordings stop below it |
 
 - The heading above a list or grid names the selected category ("All
-  movies", one of my categories or a category).
+  movies", one of My categories or a category).
 - "Continue watching" lists started items, most recently watched first.
   Under "All movies"/"All series" it shows all of them except those in
   hidden categories; under a provider category only those in that
-  category. Under one of my categories it shows all of them except those
+  category. Under one of My categories it shows all of them except those
   in hidden categories, with the ones in the selected category first. With
   none, the row and its heading are left out.
 - A movie or series and its other sources count as one: watched when
@@ -717,7 +717,7 @@ English for now.
   section (except hidden categories); "Only in <category>" limits it to
   the selected category.
 - Sort: "Recently added" (Series: "Recently updated"), "A–Z", "Top rated";
-  in one of my categories "My order" comes first and is the default. My
+  in one of My categories "My order" comes first and is the default. My
   categories remember their own sort, apart from provider categories.
   Year filter: "This year", "Last 2 years", "Last 5 years", "Custom
   range…". "Reset filters" clears year and genre.
@@ -733,7 +733,7 @@ English for now.
   "Series". Recently viewed
   channels say "Watched 1 h ago" and the programme on now; their context
   menu has "Remove from recently viewed". "See all" of Recently added
-  opens Movies/Series with "All" and "Recently added". While all my categories are empty (or
+  opens Movies/Series with "All" and "Recently added". While all My categories are empty (or
   there are none), the row shows a hint about the star.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".

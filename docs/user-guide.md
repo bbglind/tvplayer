@@ -198,7 +198,7 @@ made for one hand in portrait:
   have a **back arrow** at the top left; Android's back gesture does the
   same. From a tab, back goes to Home, and from Home it leaves the app.
 - Live TV, Movies and Series show the selected category in a button at
-  the top ("All movies" ▾). Tap it for the **category list**: my
+  the top ("All movies" ▾). Tap it for the **category list**: My
   categories, then "All …" and the provider's categories with their
   counts. Tapping one closes the list. The pencil ("Edit categories") at
   the top of the list turns on the edit mode, as in the category column
@@ -338,13 +338,13 @@ this feature doesn't get them.
 - **Add an item**: click the **star** at the end of a channel row (or on a
   poster, top left; the outline star shows on hover or focus), or use
   "Add to favourites…" in its context menu (offered only while the item
-  is in none of my categories). A menu lists your categories
+  is in none of My categories). A menu lists your categories
   as checkboxes; each tick is saved at once. "New category…" creates one
   on the spot. "Done", Esc or a click outside closes the menu.
-- A **filled star** means the item is in at least one of my categories.
+- A **filled star** means the item is in at least one of My categories.
 - **Remove an item**: untick its categories in the star menu, or use
   **"Remove from favourites"** in its context menu (right click, long press
-  on a phone, Menu key), which takes it out of all my categories of its
+  on a phone, Menu key), which takes it out of all My categories of its
   kind at once. A favourite's context menu has only this entry; to add it
   to another category, use the star. It is there wherever a channel, movie or series that is a
   favourite shows: lists, grids, Home rows, Search results, and the ⋮ of
@@ -378,10 +378,10 @@ the end.
 The same can be done in **Settings › Categories** (see
 [Settings](#categories)), which also has a filter field for long lists.
 
-### Reorder (the order inside one of my categories)
+### Reorder (the order inside one of My categories)
 
 A newly added item goes **first** in its category. To arrange them yourself,
-open one of my categories and press the **"Reorder"** chip above the list.
+open one of My categories and press the **"Reorder"** chip above the list.
 The list becomes compact rows with drag handles; drag them, then press
 **"Done reordering"**. Inside my category, an item's context menu also has
 "Move up", "Move down" and "Move to top".
@@ -414,7 +414,7 @@ cell. The time row has a label every half hour; midnight shows the date.
 From left to right:
 
 - **Category dropdown**: which channels to show ("All channels", one of
-  my categories or a provider category).
+  My categories or a provider category).
 - **"Now"**: jumps back to the current time (placed a little from the left
   edge, as when the guide opens).
 - **"Tonight"**: jumps to 20:00 this evening; from 23:00 on, to tomorrow
@@ -496,7 +496,7 @@ Click a poster to open its details page.
 The toolbar above the grid:
 
 - **Sort**: "Recently added" (Series: "Recently updated"), "A–Z", "Top
-  rated". In one of my categories **"My order"** comes first and is the
+  rated". In one of My categories **"My order"** comes first and is the
   default there (the order you set with [Reorder](#reorder-the-order-inside-one-of-my-categories)).
   My categories remember their own sort, separately from provider
   categories.
@@ -529,7 +529,7 @@ started, most recently watched first:
 
 - Under "All movies"/"All series": all of them except in hidden categories.
 - Under a provider category: only those in that category.
-- Under one of my categories: all of them, with those in the category first.
+- Under one of My categories: all of them, with those in the category first.
 
 Its context menu has **"Go to movie"** / **"Go to series"** (the series
 page opens on the season of the episode up next) and **"Remove from
@@ -577,7 +577,7 @@ title, meta line (year, rating, length, genre), plot and director, and:
 - **"Download"**, which then shows its state ("Queued for download",
   "Downloading 45 %", "Download paused", "Download failed", "Downloaded")
   and opens the Downloads page when clicked.
-- The star to add it to my categories.
+- The star to add it to My categories.
 
 Below the details: **"Cast"**, **"Recommendations"** and **"Other
 sources"** (see [TMDB on detail pages](#tmdb-on-detail-pages)).
@@ -728,7 +728,7 @@ fullscreen.
 On live TV, **"Channels"** or **c** opens a panel with your Live TV
 categories as chips and their channels, with what's on now. The current
 channel is selected. Click or Enter switches channel (fullscreen stays) and
-closes the panel; Esc closes it. It only shows **my categories**: while
+closes the panel; Esc closes it. It only shows **My categories**: while
 your Live TV categories are empty (or you have none), it explains how to add
 channels with the star.
 
@@ -1180,7 +1180,7 @@ messages, such as those offering "Undo", have no mark.
 ### Categories
 
 **Live TV**, **Movies** and **Series** each open a page to manage that
-section's categories in one place: my categories ("New category", "Rename
+section's categories in one place: My categories ("New category", "Rename
 or change icon", "Delete", "Move up"/"Move down"), and the provider
 categories with show/hide per category, "Hide all"/"Show all", a "Filter
 categories" field (with "Hide these"/"Show these" for the filtered ones),
@@ -1334,12 +1334,12 @@ fails just shows "Last sync failed: …" here.
   "Continue watching" (also what you removed from it), recently viewed
   channels (also the ones you removed), remembered audio and subtitle
   choices of series;
-- my categories with their icons, order and items, hidden provider
+- My categories with their icons, order and items, hidden provider
   categories and your order of the provider categories;
 - these settings (shared by all accounts): "Subtitles on by default",
   "Subtitle languages", "Audio languages", "Play next episode", whether
   the player shows the time left, the sort orders of Movies and Series
-  (also in my categories), "Show hidden categories in global search",
+  (also in My categories), "Show hidden categories in global search",
   Home's rows ("Edit home"), "Prefer TMDB posters", and the TV guide's
   "Time zone" and "Time shift".
 
@@ -1523,7 +1523,7 @@ layout (see [On a phone](#on-a-phone)). Differences from Linux so far:
 - **Too many categories?** Hide the ones you never use (Edit categories, or
   Settings › Categories with "Filter categories" and "Hide these"). Hidden
   categories disappear from lists, search, Home and the guide.
-- **Build your own lineup**: put your everyday channels in one of my
+- **Build your own lineup**: put your everyday channels in one of My
   categories and sort them with "Reorder"; the player's Channels panel
   (c) then becomes a quick zap list.
 - **Where your data lives**: connection details (and the sync token) in
