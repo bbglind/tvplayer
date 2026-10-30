@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:tvplayer/data/default_categories.dart';
 import 'package:tvplayer/data/app_settings.dart';
 import 'package:tvplayer/data/archive_epg_repository.dart';
 import 'package:tvplayer/data/epg_repository.dart';
@@ -336,6 +337,21 @@ class MemoryFavouritesStore implements FavouritesStore {
     saves++;
     this.data = data;
   }
+}
+
+/// In-memory [DefaultCategoriesStore]; an existing install by default.
+class MemoryDefaultCategoriesStore implements DefaultCategoriesStore {
+  MemoryDefaultCategoriesStore({bool eligible = false})
+    : marker = DefaultCategoriesMarker(eligible: eligible);
+
+  DefaultCategoriesMarker marker;
+
+  @override
+  Future<DefaultCategoriesMarker> load() async => marker;
+
+  @override
+  Future<void> save(DefaultCategoriesMarker marker) async =>
+      this.marker = marker;
 }
 
 /// [PosterLoader] that never has an image, so tests do no network or disk
@@ -694,6 +710,9 @@ Widget testApp({
       skipDbApiProvider.overrideWithValue(skips.skipDbApi),
       introDbApiProvider.overrideWithValue(skips.introDbApi),
       skipStoreProvider.overrideWith((ref) => skips.store),
+      defaultCategoriesStoreProvider.overrideWithValue(
+        MemoryDefaultCategoriesStore(),
+      ),
       // Background isolates don't finish inside fake-async widget tests.
       backgroundRunnerProvider.overrideWithValue(<R>(task) async => task()),
       searchDebounceProvider.overrideWithValue(searchDebounce),

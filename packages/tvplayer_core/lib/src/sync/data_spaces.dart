@@ -98,8 +98,16 @@ class FavouritesSyncSpace extends SyncSpace {
   @override
   Future<void> beforeFirstSync() async => backup?.call();
 
-  /// Categories made on this device with the name of a synced one are
-  /// combined into it ([combineCategoriesByName]).
+  /// The items in the default categories before anything was pulled.
+  List<FavouriteMembership>? _localDefaultItems;
+
+  @override
+  Future<void> mergeFirst(List<SyncRecord> pulled) async {
+    _localDefaultItems ??= defaultFavouriteItems(read());
+  }
+
+  /// Settles the default categories and combines categories made on this
+  /// device with the name of a synced one ([settleDefaultFavourites]).
   @override
   Future<void> afterFirstPull(Set<String> serverKeys) async {
     const prefix = 'category:';
@@ -108,8 +116,13 @@ class FavouritesSyncSpace extends SyncSpace {
         if (k.startsWith(prefix)) k.substring(prefix.length),
     };
     final data = read();
-    final combined = combineCategoriesByName(data, synced, now: clock.now());
-    if (!identical(combined, data)) write(combined);
+    final settled = settleDefaultFavourites(
+      data,
+      synced,
+      _localDefaultItems ?? const [],
+      now: clock.now(),
+    );
+    if (!identical(settled, data)) write(settled);
   }
 }
 

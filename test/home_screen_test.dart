@@ -197,6 +197,22 @@ void main() {
     expect(find.byKey(const ValueKey('home.movie.3')), findsNothing);
   });
 
+  testWidgets('the hint stays while my categories are empty', (tester) async {
+    await _pump(tester, setup: _Setup(favourites: defaultFavourites()));
+    expect(find.byKey(const Key('home.categories.hint')), findsOneWidget);
+    final data = setMembership(
+      defaultFavourites(),
+      'default-series',
+      const ItemRef(ContentKind.series, '10'),
+      name: 'Series',
+      member: true,
+      now: _now,
+    );
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, setup: _Setup(favourites: data));
+    expect(find.byKey(const Key('home.categories.hint')), findsNothing);
+  });
+
   testWidgets('typing in the search field opens Search with the text', (
     tester,
   ) async {

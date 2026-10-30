@@ -628,6 +628,257 @@ void main() {
       }
     });
 
+    group('default categories', () {
+      const live = 'default-live';
+      const movie = 'default-movie';
+
+      void item(_Device d, String category, ContentKind kind, String id) =>
+          d.favourites = setMembership(
+            d.favourites,
+            category,
+            ItemRef(kind, id),
+            name: 'Item $id',
+            member: true,
+            now: d.now(),
+          );
+
+      List<String> names(_Device d, ContentKind kind) => [
+        for (final c in d.favourites.categoriesOf(kind)) c.name,
+      ];
+
+      _Device fresh() => _Device(backend)..favourites = defaultFavourites();
+
+      setUp(() {
+        laptop.favourites = defaultFavourites();
+        phone.favourites = defaultFavourites();
+      });
+
+      test('two new devices share one set and all items', () async {
+        item(laptop, live, ContentKind.live, '1');
+        item(phone, live, ContentKind.live, '2');
+        await laptop.sync();
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.live), ['My Channels']);
+          expect(names(d, ContentKind.movie), ['My Movies']);
+          expect(names(d, ContentKind.series), ['My Series']);
+          expect(d.favourites.itemsIn(live).map((m) => m.item.id).toSet(), {
+            '1',
+            '2',
+          });
+        }
+      });
+
+      test('the order of the server wins', () async {
+        _category(laptop, 'N', 'News');
+        laptop.favourites = moveCategory(
+          laptop.favourites,
+          'N',
+          toIndex: 0,
+          now: laptop.now(),
+        );
+        await laptop.sync();
+        await phone.sync();
+        expect(names(phone, ContentKind.live), ['News', 'My Channels']);
+      });
+
+      test('an untouched default gives way to a hand-made category', () async {
+        laptop.favourites = FavouritesData.empty;
+        _category(laptop, 'H', 'My Movies', kind: ContentKind.movie);
+        item(laptop, 'H', ContentKind.movie, '5');
+        await laptop.sync();
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.movie), ['My Movies']);
+          expect(d.favourites.category('H'), isNotNull);
+          expect(d.favourites.categories.containsKey(movie), isFalse);
+        }
+        // Not sent as a deletion, and a later device does the same.
+        final later = fresh();
+        await later.sync();
+        expect(names(later, ContentKind.movie), ['My Movies']);
+        expect(later.favourites.category('H'), isNotNull);
+      });
+
+      test('items in a default merge into a hand-made category', () async {
+        laptop.favourites = FavouritesData.empty;
+        _category(laptop, 'H', 'My Movies', kind: ContentKind.movie);
+        item(laptop, 'H', ContentKind.movie, '5');
+        await laptop.sync();
+        item(phone, movie, ContentKind.movie, '6');
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.movie), ['My Movies']);
+          expect(d.favourites.itemsIn('H').map((m) => m.item.id).toSet(), {
+            '5',
+            '6',
+          });
+        }
+      });
+
+      test('a deleted default stays deleted on a new device', () async {
+        await laptop.sync();
+        _advance(const Duration(minutes: 1));
+        laptop.favourites = deleteCategory(
+          laptop.favourites,
+          live,
+          now: laptop.now(),
+        );
+        await laptop.sync();
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.live), isEmpty);
+          expect(names(d, ContentKind.movie), ['My Movies']);
+        }
+      });
+
+      test('a deletion made first still wins when the new device syncs '
+          'first', () async {
+        laptop.favourites = deleteCategory(
+          laptop.favourites,
+          live,
+          now: laptop.now(),
+        );
+        await phone.sync();
+        expect(names(phone, ContentKind.live), ['My Channels']);
+        await laptop.sync();
+        await phone.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.live), isEmpty);
+        }
+      });
+
+      test('a deleted hand-made category keeps the default away', () async {
+        laptop.favourites = FavouritesData.empty;
+        _category(laptop, 'H', 'My Channels');
+        await laptop.sync();
+        _advance(const Duration(minutes: 1));
+        laptop.favourites = deleteCategory(
+          laptop.favourites,
+          'H',
+          now: laptop.now(),
+        );
+        await laptop.sync();
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.live), isEmpty);
+        }
+        // The other kinds had nothing on the server: their defaults stay.
+        expect(names(phone, ContentKind.movie), ['My Movies']);
+      });
+
+      test('items starred before the first sync bring a deleted default '
+          'back', () async {
+        await laptop.sync();
+        item(laptop, live, ContentKind.live, '1');
+        await laptop.sync();
+        // Starred on the phone, also an item the laptop had.
+        item(phone, live, ContentKind.live, '1');
+        item(phone, live, ContentKind.live, '2');
+        _advance(const Duration(minutes: 1));
+        laptop.favourites = deleteCategory(
+          laptop.favourites,
+          live,
+          now: laptop.now(),
+        );
+        await laptop.sync();
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.live), ['My Channels']);
+          expect(d.favourites.itemsIn(live).map((m) => m.item.id).toSet(), {
+            '1',
+            '2',
+          });
+        }
+      });
+
+      test('items from a deleted default go to a category with its '
+          'name', () async {
+        await laptop.sync();
+        _advance(const Duration(minutes: 1));
+        laptop.favourites = deleteCategory(
+          laptop.favourites,
+          live,
+          now: laptop.now(),
+        );
+        _category(laptop, 'H', 'My Channels');
+        await laptop.sync();
+        item(phone, live, ContentKind.live, '2');
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.live), ['My Channels']);
+          expect(d.favourites.itemsIn('H').map((m) => m.item.id), ['2']);
+        }
+      });
+
+      test('a renamed default reaches a new device under its new '
+          'name', () async {
+        _advance(const Duration(minutes: 1));
+        laptop.favourites = renameCategory(
+          laptop.favourites,
+          movie,
+          'Films',
+          now: laptop.now(),
+        );
+        await laptop.sync();
+        await phone.sync();
+        expect(names(phone, ContentKind.movie), ['Films']);
+      });
+
+      test('a default gives way to a hand-made one with another '
+          'name', () async {
+        laptop.favourites = FavouritesData.empty;
+        _category(laptop, 'H', 'Films', kind: ContentKind.movie);
+        await laptop.sync();
+        await phone.sync();
+        expect(names(phone, ContentKind.movie), ['Films']);
+      });
+
+      test('when both rename a default the last rename wins', () async {
+        laptop.favourites = renameCategory(
+          laptop.favourites,
+          movie,
+          'Films',
+          now: laptop.now(),
+        );
+        _advance(const Duration(minutes: 1));
+        phone.favourites = renameCategory(
+          phone.favourites,
+          movie,
+          'Cinema',
+          now: phone.now(),
+        );
+        await laptop.sync();
+        await phone.sync();
+        await laptop.sync();
+        for (final d in [laptop, phone]) {
+          expect(names(d, ContentKind.movie), ['Cinema']);
+        }
+      });
+
+      test('a default renamed here survives a hand-made one', () async {
+        laptop.favourites = FavouritesData.empty;
+        _category(laptop, 'H', 'Films', kind: ContentKind.movie);
+        await laptop.sync();
+        _advance(const Duration(minutes: 1));
+        phone.favourites = renameCategory(
+          phone.favourites,
+          movie,
+          'Cinema',
+          now: phone.now(),
+        );
+        await phone.sync();
+        expect(names(phone, ContentKind.movie).toSet(), {'Films', 'Cinema'});
+      });
+    });
+
     test('the first device sets the settings; later ones take them', () async {
       laptop.set('movieSort', 'name');
       await laptop.sync();

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'app.dart';
+import 'data/default_categories.dart';
 import 'data/legacy_data.dart';
 import 'data/videos_directory.dart';
 import 'player/touch/device_controls.dart';
@@ -15,6 +16,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Before anything reads or creates files in the data folders.
   await migrateLegacyData();
+  await FileDefaultCategoriesStore().prepare();
   // The Linux default is found synchronously; Android's needs a plugin.
   final downloadFolder = Platform.isAndroid
       ? await androidDownloadFolder()

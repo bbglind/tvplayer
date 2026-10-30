@@ -139,6 +139,10 @@ On the first start the app opens **"Add a provider"**.
 4. Press **"Save"**. The details go into the system keyring and the app
    opens on Home.
 
+On a new install, the account starts with three empty
+[categories of your own](#my-categories-favourites): **"My Channels"**,
+**"My Movies"** and **"My Series"**.
+
 There is also an **"M3U URL"** tab that takes a single "Playlist URL". With
 an M3U playlist you get **live channels only**: no Movies, Series or TV
 guide (and so no replay or recording end times). Xtream is the way to test
@@ -242,8 +246,9 @@ scrolls the page. Rows with nothing in them are left out.
   20), with "Watched 1 h ago" and what is on now. Click to watch. The
   context menu has "Remove from recently viewed".
 - **My categories**: a tile per category of your own (icon, type, name and
-  count). Click to open it in Live TV, Movies or Series. With none yet,
-  the row explains how to create one with the star.
+  count). Click to open it in Live TV, Movies or Series. While all of them
+  are empty (or you have none), the row explains how to add favourites with
+  the star.
 - **Continue watching**: movies and episodes you started, most recently
   watched first, saying what is left ("S2 · E4 · 18 min left", "1 h 02 min
   left"). Click or Enter resumes playback. Its context menu has **"Go to
@@ -324,7 +329,11 @@ The heading above the list names what is selected.
 
 My categories are your own lists, for example "News" or "Kids". A channel,
 movie or series can be in several of them. Live TV, Movies and Series each
-have their own.
+have their own. A new install starts with one empty category each, "My
+Channels", "My Movies" and "My Series", so the star works right away. They
+are ordinary categories: rename, reorder or delete them as you like, and
+once deleted they don't come back. An install that was already in use before
+this feature doesn't get them.
 
 - **Add an item**: click the **star** at the end of a channel row (or on a
   poster, top left; the outline star shows on hover or focus), or use
@@ -719,8 +728,9 @@ fullscreen.
 On live TV, **"Channels"** or **c** opens a panel with your Live TV
 categories as chips and their channels, with what's on now. The current
 channel is selected. Click or Enter switches channel (fullscreen stays) and
-closes the panel; Esc closes it. It only shows **my categories**: without
-any, it explains how to add channels with the star.
+closes the panel; Esc closes it. It only shows **my categories**: while
+your Live TV categories are empty (or you have none), it explains how to add
+channels with the star.
 
 ### Subtitles and audio
 
@@ -1059,7 +1069,10 @@ keyring."). On Android they are stored encrypted in the Android Keystore
 ("Connection details are stored encrypted on this device."), and if that
 can't be read the app shows "Secure storage unavailable" with "Retry".
 
-- **"Edit provider"**: the same form as when adding one.
+- **"Edit provider"**: the same form as when adding one. On an install that
+  started with "My Channels", "My Movies" and "My Series", an account new to
+  this device gets those too. An account used here before keeps what it had,
+  and a new password doesn't change the account.
 - **"Remove provider"**: deletes the saved connection details from the
   keyring, or from the device on Android (asks first). The app then returns
   to "Add a provider".
@@ -1343,7 +1356,14 @@ episode), only ever to your own server.
 **The first sync** of a device merges: nothing of the watch history or
 favourites is lost. A film watched on either device stays watched, and
 your own categories with the same name and kind (e.g. "Favourites" in
-Live TV on both) are combined into one. **Settings are different: the
+Live TV on both) are combined into one. The starting categories "My
+Channels", "My Movies" and "My Series" are the same category on every device,
+so a rename or deletion on one device reaches a device installed later. If
+such a category is still untouched (no items, not renamed) on the new device
+and the account already has categories of that kind on the server, also
+deleted ones, it just disappears from the new device. If you deleted it on
+another device but already put items in it on this one, it comes back with
+those items. **Settings are different: the
 first device to sync sets them, and every device that joins later takes
 them over.** So turn on sync first on the device whose settings you want
 to keep, and only then on the others. Before its first sync each device

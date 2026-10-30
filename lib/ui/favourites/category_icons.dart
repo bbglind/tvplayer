@@ -10,6 +10,7 @@ const categoryIcons = <String, IconData>{
   'news': Icons.newspaper_outlined,
   'movie': Icons.movie_outlined,
   'tv': Icons.live_tv_outlined,
+  'series': Icons.video_library_outlined,
   'kids': Icons.child_care_outlined,
   'family': Icons.family_restroom_outlined,
   'music': Icons.music_note_outlined,

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/app_settings.dart';
 import '../data/archive_epg_repository.dart';
 import '../data/connection_tester.dart';
+import '../data/default_categories.dart';
 import '../data/device_time_zone.dart';
 import '../data/epg_repository.dart';
 import '../data/errors.dart';
@@ -105,12 +106,50 @@ final savedProviderProvider =
 
 class SavedProviderNotifier extends AsyncNotifier<ProviderConfig?> {
   @override
-  Future<ProviderConfig?> build() => ref.watch(providerStorageProvider).load();
+  Future<ProviderConfig?> build() async {
+    final markers = ref.watch(defaultCategoriesStoreProvider);
+    final config = await ref.watch(providerStorageProvider).load();
+    if (config != null) await _noteExistingInstall(markers);
+    return config;
+  }
+
+  /// A provider that was saved before any default categories were made
+  /// means this install isn't new (e.g. no data files, but a keyring entry).
+  Future<void> _noteExistingInstall(DefaultCategoriesStore markers) async {
+    try {
+      final marker = await markers.load();
+      if (marker.eligible && marker.seeded.isEmpty) {
+        await markers.save(const DefaultCategoriesMarker(eligible: false));
+      }
+    } catch (e) {
+      debugPrint('Could not update the install marker (${e.runtimeType})');
+    }
+  }
+
+  /// Gives the account of [config] the default categories, if this is a
+  /// new install and the account is new. The marker is saved first: a crash
+  /// in between leaves no defaults, and never makes them twice.
+  Future<void> _seedDefaultCategories(ProviderConfig config) async {
+    try {
+      final markers = ref.read(defaultCategoriesStoreProvider);
+      final marker = await markers.load();
+      final key = providerKey(config);
+      if (!marker.eligible || marker.seeded.contains(key)) return;
+      await markers.save(marker.withSeeded(key));
+      final store = ref.read(favouritesStoreProvider)(key);
+      final current = await store.load();
+      if (current.syncRecords.isNotEmpty) return;
+      await store.save(defaultFavourites());
+    } catch (e) {
+      debugPrint('Could not create the default categories (${e.runtimeType})');
+    }
+  }
 
   /// Persists [config] and makes it the active provider. Throws
   /// [ProviderStorageException] without changing the current state.
   Future<void> save(ProviderConfig config) async {
     await ref.read(providerStorageProvider).save(config);
+    await _seedDefaultCategories(config);
     final previous = state.value;
     if (previous == null ||
         encodeProviderConfig(previous) != encodeProviderConfig(config)) {
@@ -240,6 +279,12 @@ final watchProvider = NotifierProvider<WatchController, WatchData>(
 final favouritesStoreProvider = Provider<FavouritesStore Function(String key)>(
   (ref) =>
       (key) => _FileFavouritesStore(key),
+);
+
+/// Whether this install gives new accounts the default categories.
+/// Overridden in tests.
+final defaultCategoriesStoreProvider = Provider<DefaultCategoriesStore>(
+  (ref) => FileDefaultCategoriesStore(),
 );
 
 /// My categories and hidden provider categories of the saved provider.

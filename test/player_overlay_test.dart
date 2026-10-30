@@ -386,6 +386,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('zap.hint')), findsNothing);
     });
+
+    testWidgets('while my Live TV categories are empty it shows the hint', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        LivePlayback(_catalog.channels[0]),
+        favourites: defaultFavourites(),
+      );
+      emit();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('player.zap')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('zap.hint')), findsOneWidget);
+      expect(find.byKey(const Key('zap.tab.default-live')), findsNothing);
+    });
   });
 
   testWidgets('the title shows the provider label; the full name is a hint', (

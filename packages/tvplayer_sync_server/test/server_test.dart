@@ -380,6 +380,51 @@ void main() {
     });
   });
 
+  test(
+    'default categories keep their deletion through a real server',
+    () async {
+      final server = await shelf_io.serve(syncApi(store), '127.0.0.1', 0);
+      addTearDown(() => server.close(force: true));
+      const config = ProviderConfig.m3u(
+        playlistUrl: 'http://example.com/list.m3u',
+      );
+
+      Future<void> sync(
+        FavouritesData Function() read,
+        void Function(FavouritesData) write,
+        MemorySyncStateStore states,
+      ) async {
+        final backend = HttpSyncBackend(
+          server: parseSyncServerAddress('http://127.0.0.1:${server.port}')!,
+          token: token,
+        );
+        addTearDown(backend.close);
+        final clock = SyncClock();
+        await SyncEngine(backend: backend, states: states, clock: clock).run(
+          (info) => [
+            FavouritesSyncSpace(
+              id: favouritesSpace(syncAccountId(info.salt, config)),
+              read: read,
+              write: write,
+              clock: clock,
+            ),
+          ],
+        );
+      }
+
+      var a = defaultFavourites();
+      final statesA = MemorySyncStateStore();
+      await sync(() => a, (d) => a = d, statesA);
+      a = deleteCategory(a, 'default-live', now: DateTime.now().toUtc());
+      await sync(() => a, (d) => a = d, statesA);
+
+      var b = defaultFavourites();
+      await sync(() => b, (d) => b = d, MemorySyncStateStore());
+      expect(b.categoriesOf(ContentKind.live), isEmpty);
+      expect(b.categoriesOf(ContentKind.movie).single.name, 'My Movies');
+    },
+  );
+
   test('the app engine syncs two devices through a real server', () async {
     final server = await shelf_io.serve(syncApi(store), '127.0.0.1', 0);
     addTearDown(() => server.close(force: true));

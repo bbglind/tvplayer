@@ -432,7 +432,8 @@ clean and simple over every desktop feature.
   categories as toolbar chips, then compact channel rows (logo, name, the
   programme on now with progress); the current channel is the selected row
   and has focus. A click or Enter switches channel in the player and closes
-  the panel. Without my Live TV categories it shows a hint about the star.
+  the panel. While my Live TV categories are empty (or there are none) it
+  shows a hint about the star.
 - **Next episode card**: `surface` panel 360 wide, "Next episode in N s"
   (card title), the episode code and title (`textSecondary`), primary
   button "Play now" (focused) and secondary "Cancel" (also Esc). Windowed it
@@ -599,6 +600,14 @@ clean and simple over every desktop feature.
 - **My categories**: in category lists above the provider categories, with
   their icon (outline, 18), name and count; an edit mode reorders them and
   hides provider categories (eye toggle, hidden ones dimmed).
+- **Default categories**: a new install starts each new account with "My
+  Channels", "My Movies" and "My Series" (icons `tv`, `movie`, `series`).
+  Installs from before this feature never get them. They have fixed ids and
+  the epoch as change time, so they are the same record on every device and
+  any real change wins. On a device's first sync an untouched one is removed
+  (no tombstone) if the server holds any category record of its kind and not
+  its id; one deleted elsewhere comes back only with items this device put in
+  it.
 - **Custom order** (kept per provider, like my categories): reorderable
   rows have a drag handle (`drag_indicator`, hint "Drag to reorder"), and
   the same moves are in a menu for the keyboard: "Move up", "Move down",
@@ -629,6 +638,7 @@ English for now.
 | Term | Meaning |
 |------|---------|
 | My categories | The user's own favourite categories |
+| My Channels / My Movies / My Series | The default categories of a new account on a new install (ordinary categories, one per kind, empty) |
 | Categories | The provider's categories |
 | All channels / All movies / All series | Everything except hidden categories |
 | Favourite (star) | The item is in at least one of my categories |
@@ -723,8 +733,8 @@ English for now.
   "Series". Recently viewed
   channels say "Watched 1 h ago" and the programme on now; their context
   menu has "Remove from recently viewed". "See all" of Recently added
-  opens Movies/Series with "All" and "Recently added". With no categories of mine, the row
-  shows a hint about the star.
+  opens Movies/Series with "All" and "Recently added". While all my categories are empty (or
+  there are none), the row shows a hint about the star.
 - Search page groups: "Live TV", "Movies", "Series", each with its count
   and "Show all".
 - Player tooltips name their keys: "Pause (Space or click the video)",

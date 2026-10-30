@@ -401,3 +401,109 @@ FavouritesData combineCategoriesByName(
   }
   return result;
 }
+
+/// The id of the default category of each kind. Fixed, so a default is the
+/// same record on every device: a rename or deletion on one reaches the
+/// others.
+const defaultFavouriteIds = {
+  ContentKind.live: 'default-live',
+  ContentKind.movie: 'default-movie',
+  ContentKind.series: 'default-series',
+};
+
+/// The change time of an untouched default: the epoch, so that the record
+/// is equal on every device and any real change wins over it.
+final _defaultFavouriteTime = DateTime.fromMillisecondsSinceEpoch(
+  0,
+  isUtc: true,
+);
+
+/// The empty categories a new account starts with on a new install.
+FavouritesData defaultFavourites() {
+  FavouriteCategory category(ContentKind kind, String name, String icon) =>
+      FavouriteCategory(
+        id: defaultFavouriteIds[kind]!,
+        kind: kind,
+        name: name,
+        icon: icon,
+        sortOrder: 0,
+        createdAt: _defaultFavouriteTime,
+        updatedAt: _defaultFavouriteTime,
+      );
+  final categories = [
+    category(ContentKind.live, 'My Channels', 'tv'),
+    category(ContentKind.movie, 'My Movies', 'movie'),
+    category(ContentKind.series, 'My Series', 'series'),
+  ];
+  return FavouritesData(categories: {for (final c in categories) c.id: c});
+}
+
+/// The items in the default categories of [data], for
+/// [settleDefaultFavourites].
+List<FavouriteMembership> defaultFavouriteItems(FavouritesData data) => [
+  for (final id in defaultFavouriteIds.values) ...data.itemsIn(id),
+];
+
+/// [data] after the first pull of a sync, with my categories that hold the
+/// same name as a synced one combined ([combineCategoriesByName]) and the
+/// defaults settled against [synced], the ids of the categories the backend
+/// holds:
+///
+/// - A default that was deleted elsewhere while this device had put
+///   [localItems] in it comes back with them, as the items outweigh the
+///   deletion. Any other deletion stands.
+/// - An untouched default (never changed, no items) the backend doesn't
+///   hold is removed when the backend has any category of its kind, deleted
+///   ones included: the account's categories were already decided. No
+///   tombstone, as other devices never knew it.
+FavouritesData settleDefaultFavourites(
+  FavouritesData data,
+  Set<String> synced,
+  List<FavouriteMembership> localItems, {
+  required DateTime now,
+}) {
+  var result = data;
+  final keep = {...synced};
+  final rescued = {
+    for (final m in localItems)
+      if (data.categories[m.categoryId]?.deleted ?? false) m.categoryId,
+  };
+  if (rescued.isNotEmpty) {
+    result = result.copyWith(
+      categories: {
+        ...result.categories,
+        for (final id in rescued)
+          id: result.categories[id]!.copyWith(deleted: false, updatedAt: now),
+      },
+    );
+    result = restoreMemberships(result, [
+      for (final m in localItems)
+        if (rescued.contains(m.categoryId)) m,
+    ], now: now);
+    // Not settled yet: combined if another category has its name.
+    keep.removeAll(rescued);
+  }
+  final syncedKinds = {for (final id in synced) ?data.categories[id]?.kind};
+  bool isUntouched(String id) {
+    final c = result.categories[id];
+    return c != null &&
+        !c.deleted &&
+        c.updatedAt == _defaultFavouriteTime &&
+        result.itemsIn(id).isEmpty;
+  }
+
+  final untouched = {
+    for (final MapEntry(key: kind, value: id) in defaultFavouriteIds.entries)
+      if (syncedKinds.contains(kind) && !synced.contains(id) && isUntouched(id))
+        id,
+  };
+  if (untouched.isNotEmpty) {
+    result = result.copyWith(
+      categories: {
+        for (final MapEntry(:key, :value) in result.categories.entries)
+          if (!untouched.contains(key)) key: value,
+      },
+    );
+  }
+  return combineCategoriesByName(result, keep, now: now);
+}

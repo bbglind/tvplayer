@@ -174,7 +174,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ...favourites.categoriesOf(kind),
         ];
         return section(
-          categories.isEmpty
+          categories.every((c) => favourites.countIn(c.id) == 0)
               ? const _CategoriesHint()
               : HorizontalRow(
                   height: MyCategoryTile.height(context),
@@ -278,7 +278,7 @@ class _CategoriesHint extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Create your own categories with the star on a channel, '
+                'Add favourites to my categories with the star on a channel, '
                 'movie or series, or from its context menu.',
                 key: const Key('home.categories.hint'),
                 style: text.bodyMedium?.copyWith(

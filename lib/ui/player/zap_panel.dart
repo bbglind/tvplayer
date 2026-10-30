@@ -75,11 +75,11 @@ class _ZapPanelState extends ConsumerState<ZapPanel> {
       ],
     );
     final Widget body;
-    if (categories.isEmpty) {
+    if (categories.every((c) => favourites.countIn(c.id) == 0)) {
       body = Padding(
         padding: const EdgeInsets.all(12),
         child: Text(
-          'No Live TV categories yet. Add channels to one of my categories '
+          'No Live TV favourites yet. Add channels to one of my categories '
           'with the star.',
           key: const Key('zap.hint'),
           style: theme.textTheme.bodyMedium?.copyWith(
