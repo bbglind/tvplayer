@@ -433,7 +433,8 @@ clean and simple over every desktop feature.
   programme on now with progress); the current channel is the selected row
   and has focus. A click or Enter switches channel in the player and closes
   the panel. While my Live TV categories are empty (or there are none) it
-  shows a hint about the star.
+  shows the hint "No Live TV favourites yet. Add channels to one of My
+  categories with the star."
 - **Next episode card**: `surface` panel 360 wide, "Next episode in N s"
   (card title), the episode code and title (`textSecondary`), primary
   button "Play now" (focused) and secondary "Cancel" (also Esc). Windowed it

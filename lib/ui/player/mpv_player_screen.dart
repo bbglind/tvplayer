@@ -1568,7 +1568,7 @@ class _MpvPlayerScreenState extends ConsumerState<MpvPlayerScreen> {
     return PlayerPillButton(
       key: const Key('player.favourite'),
       tooltip: favourite
-          ? 'Favourite: change my categories'
+          ? 'Favourite: change My categories'
           : 'Add to favourites',
       selected: favourite,
       icon: Icons.star_border,

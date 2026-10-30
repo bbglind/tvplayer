@@ -1075,7 +1075,7 @@ void main() {
         'Mute (m)',
         'Volume (↑ / ↓, or the mouse wheel on the video)',
         'Channels: switch channel (c)',
-        'Favourite: change my categories',
+        'Favourite: change My categories',
         'Subtitles and audio (s: next subtitles)',
         'Fullscreen (f or double-click, Esc to leave)',
         'Stop and go back',
