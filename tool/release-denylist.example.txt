@@ -1,0 +1,5 @@
+# Copy to tool/release-denylist.local.txt (gitignored) and list what must never
+# be in a release: your own domains, IP addresses, provider names, one per line.
+# tool/package_release.sh fails if it finds any of them in the .deb or the APK.
+example.com
+192.0.2.1
