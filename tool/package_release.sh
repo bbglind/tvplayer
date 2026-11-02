@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the release files into dist/: tvplayer_<version>_amd64.deb,
-# tvplayer-<version>.apk and SHA256SUMS. See docs/releasing.md. Needs no root.
+# tvplayer-<version>.apk, tvplayer-sync-server_<version>_linux-amd64.tar.gz,
+# tvplayer-sync-proxmox.sh and SHA256SUMS. See docs/releasing.md. Needs no root.
 #
 # Builds from a clean export of HEAD in a neutral folder, because a build in
 # the repo folder embeds its absolute path in libapp.so and the plugins. It
@@ -34,7 +35,7 @@ the APK would be debug-signed. See docs/releasing.md."
 if [ "$(stat -c %a android/key.properties)" != 600 ]; then
   echo "WARNING: android/key.properties should have mode 600 (chmod 600 android/key.properties)."
 fi
-for tool in flutter git dpkg-deb dpkg-shlibdeps desktop-file-validate patchelf \
+for tool in flutter dart git dpkg-deb dpkg-shlibdeps desktop-file-validate patchelf \
     readelf strings unzip sha256sum; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done
@@ -51,6 +52,13 @@ version=${full_version%%+*}
   || die "unexpected version in pubspec.yaml: $full_version"
 deb_name=tvplayer_${version}_amd64.deb
 apk_name=tvplayer-${version}.apk
+server_name=tvplayer-sync-server_${version}_linux-amd64.tar.gz
+installer_name=tvplayer-sync-proxmox.sh
+
+# The one-command line in the docs must name this release.
+grep -qF "releases/download/v$version/$installer_name" docs/sync-server.md \
+  || die "docs/sync-server.md doesn't point to release v$version: update its \
+Proxmox commands."
 
 step "Building $full_version from commit $commit_short ($branch)"
 echo "Commit: $commit"
@@ -175,10 +183,47 @@ signer_cn=$(sed -n 's/.*CN=\([^,]*\).*/\1/p' <<<"$signer_dn")
 # The way keytool prints it, to compare by eye.
 signer_colons=$(tr a-f A-F <<<"$signer_sha256" | sed 's/../&:/g; s/:$//')
 
+# --- Sync server ---
+
+step "Building the sync server"
+server_src=$src/packages/tvplayer_sync_server
+(cd "$server_src" && dart pub get --enforce-lockfile && dart build cli)
+bundle=$server_src/build/cli/linux_x64/bundle
+cp -r "$server_src/deploy" "$server_src/config.example.json" "$bundle/"
+find "$bundle" -type d -exec chmod 755 {} +
+find "$bundle" -type f -exec chmod 644 {} +
+chmod 755 "$bundle/bin/tvplayer_sync_server" "$bundle/deploy/tvplayer-sync"
+server_version=$("$bundle/bin/tvplayer_sync_server" --version)
+[ "$server_version" = "$version" ] \
+  || die "the sync server says it is version $server_version, not $version"
+tar --owner=0 --group=0 --numeric-owner -czf "$work/$server_name" \
+  -C "$(dirname "$bundle")" bundle
+
+# --- Proxmox installer ---
+
+step "Pinning the Proxmox installer to $version"
+sed "s|@TVPLAYER_VERSION@|$version|" "$src/tool/proxmox/$installer_name" \
+  > "$work/$installer_name"
+chmod 755 "$work/$installer_name"
+grep -qxF "release_version='$version'" "$work/$installer_name" \
+  || die "the version didn't get into $installer_name"
+if grep -qF '@TVPLAYER_VERSION@' "$work/$installer_name"; then
+  die "$installer_name still has the version placeholder"
+fi
+bash -n "$work/$installer_name"
+if command -v shellcheck >/dev/null; then
+  shellcheck "$work/$installer_name"
+else
+  echo "WARNING: shellcheck isn't installed, so $installer_name wasn't checked with it."
+fi
+
 # --- What actually ends up in the files ---
 
 step "Checking the contents for personal data"
-mkdir "$work/check" "$work/check/deb" "$work/check/apk"
+mkdir "$work/check" "$work/check/deb" "$work/check/apk" "$work/check/server" \
+  "$work/check/installer"
+tar -xzf "$work/$server_name" -C "$work/check/server"
+cp "$work/$installer_name" "$work/check/installer/"
 dpkg-deb -x "$work/$deb_name" "$work/check/deb"
 unzip -q "$apk" -d "$work/check/apk"
 check=$work/check
@@ -193,7 +238,8 @@ while IFS= read -r -d '' elf; do
     *"$work"* | *"$HOME"* | */tmp/* | */home/*)
       die "$(basename "$elf") has a build path as RUNPATH: $runpath" ;;
   esac
-done < <(find "$check/deb/opt/tvplayer" -type f \( -name '*.so' -o -name tvplayer \) -print0)
+done < <(find "$check/deb/opt/tvplayer" "$check/server" -type f \
+  \( -name '*.so' -o -name tvplayer -o -name tvplayer_sync_server \) -print0)
 
 terms=("$HOME" "$USER")
 email=$(git config user.email || true)
@@ -215,8 +261,9 @@ done
 echo "None of the ${#terms[@]} search terms found."
 
 echo
-echo "URL hosts and IPs in the app code, to read through:"
-for libapp in "$check"/deb/opt/tvplayer/lib/libapp.so "$check"/apk/lib/*/libapp.so; do
+echo "URL hosts and IPs in the app and server code, to read through:"
+for libapp in "$check"/deb/opt/tvplayer/lib/libapp.so "$check"/apk/lib/*/libapp.so \
+    "$check"/server/bundle/bin/tvplayer_sync_server; do
   strings -a "$libapp"
 done | grep -oE 'https?://[A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | sort -u | sed 's/^/  /'
 
@@ -224,8 +271,8 @@ done | grep -oE 'https?://[A-Za-z0-9.-]+|\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | sort
 
 rm -rf dist
 mkdir dist
-cp "$work/$deb_name" "$apk" dist/
-(cd dist && sha256sum "$deb_name" "$apk_name" > SHA256SUMS)
+cp "$work/$deb_name" "$apk" "$work/$server_name" "$work/$installer_name" dist/
+(cd dist && sha256sum "$deb_name" "$apk_name" "$server_name" "$installer_name" > SHA256SUMS)
 
 step "Done"
 cat <<EOF
