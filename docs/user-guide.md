@@ -1339,8 +1339,10 @@ To send nothing, switch **"SkipDB"** and **"TheIntroDB"** off here.
 Sync keeps what you do the same on your devices, e.g. the Linux laptop
 and an Android phone: stop a film on one and continue it on the other.
 It goes through a small **sync server of your own** (see
-[sync-server.md](sync-server.md) for installing it); there is no other
-sync service. Without a server, or with sync off, the app works exactly
+[sync-server.md](sync-server.md) for installing it; on Proxmox VE one pasted
+command does it, and [the same script updates
+it](sync-server.md#update-with-the-proxmox-script)); there is no other sync
+service. Without a server, or with sync off, the app works exactly
 as before and sends nothing.
 
 - **"Sync"** (default off): "Keep watch progress, favourites and settings

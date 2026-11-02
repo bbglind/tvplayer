@@ -7,7 +7,18 @@ This page explains how to install it, keep it up to date and back it up.
 It assumes no Linux experience; every command can be copied as it is,
 except the values in `<angle brackets>`, which you fill in yourself.
 
+**On Proxmox VE there's a script that does it all:** see [Install with the
+Proxmox script](#install-with-the-proxmox-script) and [Update with the Proxmox
+script](#update-with-the-proxmox-script). The numbered sections are the manual
+way, for any Debian machine or if you prefer to do it by hand; both give
+exactly the same setup, so the script also updates a server installed by hand.
+
 Contents:
+
+- [Install with the Proxmox script](#install-with-the-proxmox-script)
+- [Update with the Proxmox script](#update-with-the-proxmox-script)
+
+Manual installation:
 
 1. [How it fits together](#1-how-it-fits-together)
 2. [Build the server (on your computer)](#2-build-the-server-on-your-computer)
@@ -22,6 +33,110 @@ Contents:
 11. [Backups and restoring](#11-backups-and-restoring)
 12. [Everyday commands](#12-everyday-commands)
 13. [Troubleshooting](#13-troubleshooting)
+
+---
+
+## Install with the Proxmox script
+
+For Proxmox VE 8 or 9. Open the Proxmox **host's** shell (in the web
+interface: click the node's name, then **Shell**), paste this line and press
+Enter:
+
+```sh
+bash -c "$(curl -fsSL https://github.com/bbglind/tvplayer/releases/download/v0.1.1/tvplayer-sync-proxmox.sh)"
+```
+
+Choose **1** in the menu.
+
+<details>
+<summary>Prefer to read the script first?</summary>
+
+Download the script and its checksums, check the script, look at it, then run
+it. Paste these lines one at a time:
+
+```sh
+curl -fsSLO https://github.com/bbglind/tvplayer/releases/download/v0.1.1/tvplayer-sync-proxmox.sh
+curl -fsSLO https://github.com/bbglind/tvplayer/releases/download/v0.1.1/SHA256SUMS
+grep ' tvplayer-sync-proxmox.sh$' SHA256SUMS | sha256sum -c -
+less tvplayer-sync-proxmox.sh
+bash tvplayer-sync-proxmox.sh
+```
+
+The third line must answer `tvplayer-sync-proxmox.sh: OK`; if it doesn't, stop
+there. In `less`, the arrow keys scroll and `q` quits.
+
+</details>
+
+**What it asks.** Press Enter to accept the value in brackets:
+
+- Container ID (the next free one) and hostname (`tvplayer-sync`)
+- Storage for the template, and for the container's disk
+- Disk (2 GB), memory (256 MB) and CPU cores (1)
+- Network bridge (`vmbr0`), and `dhcp` or `static` (e.g. `192.0.2.10/24` with
+  your router as gateway)
+- Whether to start the container when the host boots (yes)
+
+It then shows a summary and asks again. Nothing is created before you say yes.
+
+**What it creates.** An unprivileged Debian 13 container (Debian 12 if
+Proxmox VE doesn't offer or accept 13) with nesting on, set up exactly as in
+[section 5](#5-install-it). The download is checked against the release's
+`SHA256SUMS` before use. At the end it checks that the server answers, and shows
+the address for the app: `http://<container address>:8787`. If the address came
+from DHCP, give it a fixed lease in your router so it stays the same.
+
+The container has no root password. You get into it from the host with
+`pct enter <CTID>`.
+
+**Tokens.** The script offers to make them: type a device name, e.g. `laptop`,
+and it prints that device's token once. Copy it straight away. To make one later,
+on the host:
+
+```sh
+pct enter <CTID>
+tvplayer-sync token create --name <device name>
+exit
+```
+
+Then [set up the app](#9-set-up-the-app).
+
+**From outside the home network.** The script sets up the server for your home
+network only, over plain HTTP. For HTTPS, and to reach it from elsewhere, put a
+reverse proxy in front ([section 8](#8-a-reverse-proxy-with-https-optional)), for
+example at `https://sync.example.com`, and reach the proxy through e.g. a VPN.
+
+## Update with the Proxmox script
+
+This also works on a server installed by hand with this guide. In the Proxmox
+host's shell, with your container's ID instead of `<CTID>`:
+
+```sh
+bash -c "$(curl -fsSL https://github.com/bbglind/tvplayer/releases/download/v0.1.1/tvplayer-sync-proxmox.sh)" _ --update <CTID>
+```
+
+(The `_` belongs there.) The script:
+
+1. checks that the container really holds a tvplayer-sync install;
+2. downloads and checks the new version, and shows the current and the new
+   version. Asks before changing anything. A server older than 0.1.1 calls itself
+   1.0.0, so "1.0.0" to "0.1.1" is an update, not a step back;
+3. saves a copy of the database as
+   `/var/backups/tvplayer-sync/before-update-<date>-<time>.sqlite`;
+4. stops the server, replaces the program, the service files and the
+   `tvplayer-sync` command, and starts it again. Config and data stay as they are,
+   but your own edits to the service files are replaced, as in section 10;
+5. checks that the new version answers, on the port in your config.
+
+If that check fails, it puts the previous program back, starts it and tells you
+so. It never deletes data and never restores the database by itself; the copy
+from step 3 stays there ([section 11](#11-backups-and-restoring) explains how to
+use it).
+
+The devices need nothing: they sync on as before.
+
+If you copied the server archive to the host yourself, add
+`--local <path to the archive>`. If a `SHA256SUMS` lies next to it, the archive is
+checked against that, otherwise the script warns that it isn't verified.
 
 ---
 
@@ -193,7 +308,8 @@ curl http://127.0.0.1:8787/v1/health
 ```
 
 The status shows `active (running)`, and `curl` answers
-`{"service":"tvplayer-sync","api":1}`.
+`{"service":"tvplayer-sync","api":1,"version":"0.1.1"}`, with the version of
+your server (a server older than 0.1.1 doesn't show a version).
 
 Then on your computer (on the home network):
 
@@ -245,7 +361,7 @@ the same as for your other proxied services. Then on your computer:
 curl https://<your sync domain>/v1/health
 ```
 
-It answers `{"service":"tvplayer-sync","api":1}`.
+It answers the same as in section 7.
 
 Any other reverse proxy works the same: forward `https://<your sync
 domain>/` to `http://<LXC-IP>:8787/`. The server can also live under a
@@ -273,8 +389,9 @@ app's data folder under `sync_backup/`.
 
 ## 10. Update the server
 
-Build and copy the new version as in sections 2 and 4. Then inside the
-container:
+On Proxmox VE, the [script](#update-with-the-proxmox-script) does all of this.
+By hand: build and copy the new version as in sections 2 and 4. Then inside
+the container:
 
 ```sh
 systemctl stop tvplayer-sync
