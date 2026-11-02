@@ -1,0 +1,7 @@
+# Copy to android/key.properties (gitignored) and chmod 600 it.
+# See docs/releasing.md. Without that file, release builds are debug-signed.
+# storeFile is an absolute path or starts with ~/. Keep the keystore outside the repo.
+storeFile=~/keys/example-release.jks
+storePassword=changeme
+keyAlias=example
+keyPassword=changeme

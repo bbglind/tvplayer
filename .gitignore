@@ -32,6 +32,7 @@ migrate_working_dir/
 /build/
 **/build/
 /coverage/
+/dist/
 
 # Symbolication / obfuscation
 app.*.symbols

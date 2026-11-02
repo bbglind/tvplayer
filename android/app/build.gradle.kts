@@ -1,8 +1,24 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing values, from the gitignored android/key.properties (see
+// key.properties.example). Without that file release builds are debug-signed.
+val keyPropertiesFile = rootProject.file("key.properties")
+val keyProperties: Properties? =
+    if (keyPropertiesFile.exists()) {
+        Properties().apply { keyPropertiesFile.inputStream().use { load(it) } }
+    } else {
+        null
+    }
+
+fun signingValue(properties: Properties, name: String): String =
+    properties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: throw GradleException("android/key.properties has no value for $name")
 
 android {
     namespace = "io.github.bbglind.tvplayer"
@@ -29,13 +45,44 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+    signingConfigs {
+        if (keyProperties != null) {
+            create("release") {
+                val path = signingValue(keyProperties, "storeFile")
+                val keystore =
+                    if (path.startsWith("~/")) {
+                        file(System.getProperty("user.home") + path.substring(1))
+                    } else {
+                        file(path)
+                    }
+                if (!keystore.isFile) {
+                    throw GradleException("android/key.properties: storeFile $path does not exist")
+                }
+                storeFile = keystore
+                storePassword = signingValue(keyProperties, "storePassword")
+                keyAlias = signingValue(keyProperties, "keyAlias")
+                keyPassword = signingValue(keyProperties, "keyPassword")
+            }
         }
     }
+
+    buildTypes {
+        release {
+            // Debug keys without key.properties, so `flutter run --release`
+            // still works for others.
+            signingConfig = signingConfigs.getByName(if (keyProperties != null) "release" else "debug")
+        }
+    }
+}
+
+if (keyProperties == null &&
+    gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+) {
+    // Not logger.warn: Flutter runs Gradle with -q, which hides warnings.
+    logger.quiet(
+        "WARNING: android/key.properties not found, this release build is " +
+            "DEBUG-SIGNED. Don't publish it (see docs/releasing.md).",
+    )
 }
 
 kotlin {
