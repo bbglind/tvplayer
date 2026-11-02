@@ -67,7 +67,58 @@ yet.
   AMD graphics. If video stutters, see
   [Known limitations and tips](#13-known-limitations-and-tips).
 
-You can either run a ready-built copy of the app or build it yourself.
+The easiest way is to install a release (see
+[Installing from GitHub Releases](#installing-from-github-releases)). You
+can also run a ready-built folder (option A) or build the app yourself
+(option B).
+
+### Installing from GitHub Releases
+
+Releases are on <https://github.com/bbglind/tvplayer/releases>. Test releases
+are marked "Pre-release". Each one has a `.deb` for Linux, an `.apk` for Android
+and a `SHA256SUMS` file with their checksums.
+
+**Linux Mint 22.3 / Ubuntu 24.04**
+
+1. Download `tvplayer_<version>_amd64.deb`, for example to `Downloads`.
+2. Install it with apt, so its dependencies (mpv, the keyring and so on) come
+   along:
+
+   ```sh
+   cd ~/Downloads
+   sudo apt install ./tvplayer_<version>_amd64.deb
+   ```
+
+   Keep the `./`. Apt may end with a note that the download was "performed
+   unsandboxed"; that is harmless.
+3. Start **tvplayer** from the menu (in Cinnamon under "Sound & Video"), or
+   run `tvplayer` in a terminal.
+
+You need an X11 session (see [Requirements](#requirements)). On Linux Mint
+Cinnamon that is the normal "Cinnamon" session, not "Cinnamon on Wayland".
+
+To update, install the newer `.deb` the same way. To uninstall:
+
+```sh
+sudo apt remove tvplayer
+```
+
+Your settings and downloads stay in your home folder, so they are still there
+if you install the app again. The provider's connection details stay in the
+keyring.
+
+**Android**
+
+1. On the phone, download `tvplayer-<version>.apk` and open it.
+2. Android asks you to allow installing unknown apps from the browser or file
+   manager you opened it with. Allow it (the wording differs per phone; it is
+   usually called "Install unknown apps").
+3. Tap "Install", then start **tvplayer**.
+
+Updates must come from these same releases: Android only installs an update
+signed with the same key, so a tvplayer built elsewhere has to be uninstalled
+first, and uninstalling deletes the app's data on the phone. After installing,
+you can turn "Install unknown apps" off again.
 
 ### Option A: run a prebuilt bundle
 
@@ -82,8 +133,9 @@ together.
    ```
 
    (Package names differ by distribution and release; on older releases
-   `libmpv2` is called `libmpv1`. On KDE, KWallet can take the place of
-   `gnome-keyring`.)
+   `libmpv2` is called `libmpv1`, and on Ubuntu 24.04 and Linux Mint 22
+   `libgtk-3-0` is called `libgtk-3-0t64`. On KDE, KWallet can take the place
+   of `gnome-keyring`.)
 2. Copy the `bundle` folder anywhere, e.g. `~/apps/tvplayer`.
 3. Start it from a terminal:
 
