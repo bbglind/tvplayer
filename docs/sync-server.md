@@ -88,10 +88,12 @@ from DHCP, give it a fixed lease in your router so it stays the same.
 The container has no root password. You get into it from the host with
 `pct enter <CTID>`.
 
-**Tokens.** The script offers to make them: type a device name, e.g. `laptop`,
-and it prints that device's token once. Copy it straight away. It then asks for
-the next device name; press Enter on an empty line when done. To make one later,
-on the host:
+**Tokens.** Each device that syncs needs its own token, e.g. one for the laptop
+and one for the phone. The script asks "Create a token now?", then for a device
+name, e.g. `laptop`, and prints that device's token once: copy it straight away,
+e.g. into a password manager. It then asks "Create another token?"; press Enter
+for no, and the script ends. If a name is already in use, it asks for another
+one. To make a token later, on the host:
 
 ```sh
 pct enter <CTID>

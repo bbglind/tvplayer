@@ -47,13 +47,15 @@ ask() {
   printf '%s' "${answer:-$2}"
 }
 
-# ask_yes <question> <y|n>
+# ask_yes <question> <y|n> [answer at end of input, instead of stopping]
 ask_yes() {
   local answer hint='y/N'
   [ "$2" = y ] && hint='Y/n'
   while :; do
-    read -r -p "$1 [$hint]: " answer \
-      || die "No answer. Run this script in a terminal."
+    if ! read -r -p "$1 [$hint]: " answer; then
+      [ -n "${3:-}" ] || die "No answer. Run this script in a terminal."
+      answer=$3
+    fi
     answer=${answer:-$2}
     case "$answer" in
       [Yy] | [Yy][Ee][Ss]) return 0 ;;
@@ -485,23 +487,31 @@ valid_ipv4() {
 
 create_tokens() { # <ctid>
   local id=$1 name output
-  say
-  say "A device needs its own token. Each is shown only once (the server keeps"
-  say "only a hash): copy it now, e.g. into a password manager."
-  say "Type one device name at a time; press Enter on an empty line when done."
   while :; do
-    read -r -p "Device name for a new token (press Enter on an empty line when done): " name || break
-    [ -n "$name" ] || break
+    read -r -p "Device name for a new token: " name || return 0
     if ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; then
       say "Use letters, digits, dot, dash or underscore, e.g. laptop."
       continue
     fi
     if output=$(pct exec "$id" -- /usr/local/bin/tvplayer-sync token create --name "$name" </dev/null); then
       say "  $name: ${output%%$'\n'*}"
+      ask_yes "Create another token?" n n || return 0
     else
       say "No token made for $name."
+      # The server reports every database error as "name exists", so look. Any
+      # other failure would likely repeat, and this question has no way out.
+      if ! token_exists "$id" "$name"; then
+        say "Make it later, in the container: tvplayer-sync token create --name <device name>"
+        return 0
+      fi
+      say "Choose another name."
     fi
   done
+}
+
+token_exists() { # <ctid> <name>
+  pct exec "$1" -- /usr/local/bin/tvplayer-sync token list </dev/null 2>/dev/null \
+    | awk -v name="$2" '$1 == name { found = 1 } END { exit !found }'
 }
 
 do_install() {
@@ -674,7 +684,10 @@ Create a token for each device, in the container:
 HTTPS through a reverse proxy, and reaching the server from outside the
 home network: see $docs_url
 EOF
-  if ask_yes "Create tokens now?" y; then create_tokens "$id"; fi
+  say
+  say "Each device that syncs needs its own token, e.g. one for the laptop and one for the phone."
+  say "Each token is shown only once: copy it now, e.g. into a password manager."
+  if ask_yes "Create a token now?" y n; then create_tokens "$id"; fi
 }
 
 wait_for_boot() {

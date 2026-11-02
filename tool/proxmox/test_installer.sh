@@ -6,7 +6,8 @@
 #
 #   tool/proxmox/test_installer.sh [server archive]
 #
-# Without an archive it builds the server. Needs bwrap, no root.
+# Without an archive it builds the server. Needs bwrap and script (util-linux),
+# no root.
 set -euo pipefail
 umask 022
 
@@ -38,6 +39,7 @@ check() { # <description> <command...>
 }
 log_has() { grep -qF -- "$1" "$work/out"; }
 log_lacks() { ! grep -qF -- "$1" "$work/out"; }
+log_count() { grep -oF -- "$1" "$work/out" | wc -l; }
 
 # --- Fixtures ---
 
@@ -153,6 +155,9 @@ case "$cmd" in
     shift 2  # the id and --
     # A real pct exec takes a second or two.
     [ -z "${FAKE_PCT_DELAY:-}" ] || /usr/bin/sleep "$FAKE_PCT_DELAY"
+    if [ -n "${FAKE_TOKEN_FAIL:-}" ] && [[ "$*" == *"token create"* ]]; then
+      echo "pct stub: can't run that" >&2; exit 1
+    fi
     incontainer "$@"
     ;;
   *) echo "pct stub: $cmd" >&2; exit 1 ;;
@@ -216,16 +221,33 @@ EOF
   chmod +x "$sb"/localsbin/*
 }
 
-# Runs the script, with the answers on stdin. Sets $status; output in $work/out.
-run() { # <answers> <args...>
-  local answers=$1
-  shift
-  local copy=$work/script.sh
+copy_script() {
+  copy=$work/script.sh
   sed "s|/sys/class/net|$sb/net|" "$script" > "$copy"
   [ -z "${PIN:-}" ] || sed -i "s|@TVPLAYER_VERSION@|$PIN|" "$copy"
+}
+
+# Runs the script, with the answers on stdin. Sets $status; output in $work/out.
+# Questions don't show: read prints its prompt only on a terminal. LIMIT stops a
+# script that keeps asking after its input ended.
+run() { # <answers> <args...>
+  local answers=$1 copy
+  shift
+  copy_script
   status=0
   printf '%b' "$answers" | PATH="$host_stubs:$PATH" FAKE_SB="$sb" FAKE_RELEASE="${RELEASE_DIR:-}" \
-    bash "$copy" "$@" > "$work/out" 2>&1 || status=$?
+    timeout "${LIMIT:-600}" bash "$copy" "$@" > "$work/out" 2>&1 || status=$?
+}
+
+# The same on a terminal, so the output has the questions, and the answers too.
+run_tty() { # <answers> <args...>
+  local answers=$1 copy command
+  shift
+  copy_script
+  printf -v command '%q ' bash "$copy" "$@"
+  status=0
+  printf '%b' "$answers" | PATH="$host_stubs:$PATH" FAKE_SB="$sb" FAKE_RELEASE="${RELEASE_DIR:-}" \
+    script -qfec "$command" /dev/null > "$work/out" 2>&1 || status=$?
 }
 
 ct() { PATH="$host_stubs:$PATH" FAKE_SB="$sb" pct exec 1 -- "$@" </dev/null; }
@@ -299,9 +321,48 @@ check "address shown" log_has "http://192.0.2.10:8787"
 check "token printed" log_has "laptop: tvps_"
 check "pushed archive removed" [ ! -e "$sb/root/tvplayer-sync-update.tar.gz" ]
 check "token in no file" no_token_in_files
-check "says how to stop making tokens" log_has "press Enter on an empty line when done"
+check "explains one token per device" log_has "Each device that syncs needs its own token, e.g. one for the laptop and one for the phone."
+check "explains it is shown once" log_has "Each token is shown only once: copy it now, e.g. into a password manager."
+check "exactly one token" [ "$(log_count ": tvps_")" = 1 ]
+check "the old way to stop is gone" log_lacks "empty line"
 ct /usr/local/bin/tvplayer-sync backup /var/backups/tvplayer-sync/manual.sqlite >/dev/null
 check "a manual backup is private" backups_private
+
+echo "Tokens on a terminal: empty, invalid and taken names ask again"
+new_sandbox tokens
+run_tty '\n\n\n\n\n\n\n\n\n\ny\ny\n\nbad name\nlaptop\ny\nlaptop\nphone\n\n' --install --local "$good"
+check "exits 0" [ "$status" = 0 ]
+check "asks once whether to start" [ "$(log_count "Create a token now? [Y/n]: ")" = 1 ]
+check "asks for a name five times" [ "$(log_count "Device name for a new token: ")" = 5 ]
+check "asks for another after each token" [ "$(log_count "Create another token? [y/N]: ")" = 2 ]
+check "says which names work" [ "$(log_count "Use letters, digits, dot, dash or underscore")" = 2 ]
+check "says the name is taken" log_has "A token with this name exists"
+check "asks for another name" log_has "Choose another name."
+check "the first token shown once" [ "$(log_count "laptop: tvps_")" = 1 ]
+check "the second token shown once" [ "$(log_count "phone: tvps_")" = 1 ]
+check "both tokens exist" [ "$(ct /usr/local/bin/tvplayer-sync token list | grep -cE '^(laptop|phone)')" = 2 ]
+check "token in no file" no_token_in_files
+
+echo "Tokens: the input ends at each question"
+new_sandbox eofnow
+LIMIT=60 run '\n\n\n\n\n\n\n\n\n\ny\n' --install --local "$good"
+check "at the first question, exits 0" [ "$status" = 0 ]
+new_sandbox eofname
+LIMIT=60 run '\n\n\n\n\n\n\n\n\n\ny\ny\n' --install --local "$good"
+check "at the name, exits 0" [ "$status" = 0 ]
+new_sandbox eofanother
+LIMIT=60 run '\n\n\n\n\n\n\n\n\n\ny\ny\nlaptop\n' --install --local "$good"
+check "at another token, exits 0" [ "$status" = 0 ]
+check "the token was shown" log_has "laptop: tvps_"
+check "no error" log_lacks "No answer"
+
+echo "Tokens: creating one really fails"
+new_sandbox tokenfail
+FAKE_TOKEN_FAIL=1 LIMIT=60 run '\n\n\n\n\n\n\n\n\n\ny\ny\nlaptop\nphone\n' --install --local "$good"
+check "exits 0, the server is fine" [ "$status" = 0 ]
+check "says so" log_has "No token made for laptop."
+check "says how to do it later" log_has "Make it later, in the container"
+check "doesn't ask again" log_lacks "No token made for phone."
 
 echo "Fresh install, declined at the summary"
 new_sandbox decline

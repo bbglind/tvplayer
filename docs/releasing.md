@@ -90,7 +90,7 @@ addresses. The script then fails if it finds any of them in a release.
      The archive lists `bundle/bin/tvplayer_sync_server`, `bundle/lib/`,
      `bundle/deploy/` and `bundle/config.example.json`.
    - Run `tool/proxmox/test_installer.sh dist/tvplayer-sync-server_<version>_linux-amd64.tar.gz`
-     (needs `bwrap`). It tries the installer in a sandbox with stand-ins for the
+     (needs `bwrap` and `script`). It tries the installer in a sandbox with stand-ins for the
      Proxmox tools, so also try a change to the installer on a real Proxmox host:
      copy `dist/` there and use `--local` (see `docs/sync-server.md`).
 5. **Tag** the commit from the summary:
