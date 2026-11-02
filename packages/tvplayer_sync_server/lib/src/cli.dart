@@ -8,8 +8,6 @@ import 'api.dart';
 import 'config.dart';
 import 'store.dart';
 
-const serverVersion = '1.0.0';
-
 const defaultConfigPath = '/etc/tvplayer-sync/config.json';
 
 /// Runs the command line [args]; returns the exit code.

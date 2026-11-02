@@ -6,6 +6,10 @@ import 'package:tvplayer_core/tvplayer_core.dart';
 
 import 'store.dart';
 
+/// This program's version: the tvplayer release it ships in. A test keeps it
+/// equal to the versions in the pubspecs.
+const serverVersion = '0.1.1';
+
 /// Longest record key taken.
 const maxKeyLength = 512;
 
@@ -55,7 +59,11 @@ Future<(Response, String, int?)> _route(
     if (request.method != 'GET') {
       return (_error(405, 'method'), '/health', null);
     }
-    return (_json({'api': syncApiVersion}), '/health', null);
+    return (
+      _json({'api': syncApiVersion, 'version': serverVersion}),
+      '/health',
+      null,
+    );
   }
 
   final auth = request.headers['authorization'] ?? '';

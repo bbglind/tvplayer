@@ -56,6 +56,24 @@ void main() {
       final (status, body) = await call('GET', '/v1/health', auth: '');
       expect(status, 200);
       expect(body['service'], syncServiceName);
+      expect(body['api'], 1);
+      expect(body['version'], serverVersion);
+    });
+
+    test('info stays without a version', () async {
+      final (_, body) = await call('GET', '/v1/info');
+      expect(body['api'], 1);
+      expect(body.containsKey('version'), isFalse);
+    });
+
+    test('the version is the same everywhere', () async {
+      String pubspecVersion(String path) => RegExp(
+        r'^version: *([0-9.]+)',
+        multiLine: true,
+      ).firstMatch(File(path).readAsStringSync())!.group(1)!;
+      expect(pubspecVersion('pubspec.yaml'), serverVersion);
+      expect(pubspecVersion('../../pubspec.yaml'), serverVersion);
+      expect(await runCli(['--version']), 0);
     });
 
     test('everything else needs a valid token', () async {

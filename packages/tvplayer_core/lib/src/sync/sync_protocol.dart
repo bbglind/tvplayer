@@ -1,6 +1,6 @@
 /// The sync server's HTTP API, shared by the app's client and the server.
 ///
-/// - `GET /v1/health` (no login): `{"service", "api"}`
+/// - `GET /v1/health` (no login): `{"service", "api", "version"}`
 /// - `GET /v1/info`: `{"service", "api", "salt", "serverTime"}`
 /// - `GET /v1/spaces/<space>/changes?since=<cursor>&head=<head>&limit=<n>`:
 ///   `{"records", "cursor", "more", "head", "serverTime"}`, or
