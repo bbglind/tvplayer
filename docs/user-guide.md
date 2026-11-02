@@ -95,7 +95,8 @@ and a `SHA256SUMS` file with their checksums.
    run `tvplayer` in a terminal.
 
 You need an X11 session (see [Requirements](#requirements)). On Linux Mint
-Cinnamon that is the normal "Cinnamon" session, not "Cinnamon on Wayland".
+Cinnamon that is the normal "Cinnamon" session, not "Cinnamon on Wayland
+(Experimental)".
 
 To update, install the newer `.deb` the same way. To uninstall:
 
