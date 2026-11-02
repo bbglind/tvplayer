@@ -89,7 +89,8 @@ The container has no root password. You get into it from the host with
 `pct enter <CTID>`.
 
 **Tokens.** The script offers to make them: type a device name, e.g. `laptop`,
-and it prints that device's token once. Copy it straight away. To make one later,
+and it prints that device's token once. Copy it straight away. It then asks for
+the next device name; press Enter on an empty line when done. To make one later,
 on the host:
 
 ```sh

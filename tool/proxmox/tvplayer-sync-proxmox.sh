@@ -29,6 +29,8 @@ archive=
 stage_ct=          # The container holding files of an unfinished update.
 critical_ct=       # The container whose program is being replaced right now.
 health_via=
+health_url=
+health_error=
 
 say() { printf '%s\n' "$*"; }
 step() { printf '\n==> %s\n' "$*"; }
@@ -167,6 +169,9 @@ ct_backup() {
   local file
   file=/var/backups/tvplayer-sync/before-update-$(date +%Y%m%d-%H%M%S).sqlite
   /usr/local/bin/tvplayer-sync backup "$file" >/dev/null
+  # Private like the nightly copies. The wrapper of an older install, which
+  # makes this copy, doesn't see to that itself.
+  chmod 600 "$file"
   [ -s "$file" ] || { echo "The backup $file is empty." >&2; return 1; }
   echo "$file"
 }
@@ -361,32 +366,62 @@ health_matches() {
   [ -z "$2" ] || grep -qF "\"version\":\"$2\"" <<<"$1"
 }
 
-# wait_health <ctid> <ip> <port> <version, or empty for any>: sets health_via.
+# wait_health <ctid> <ip> <port> <version, or empty for any>: sets health_via,
+# and health_url and health_error for report_health_via.
+#
+# systemctl returns before the server listens, so a refused first attempt from
+# the host means nothing. An answer inside the container only says that the
+# server is up: the host then gets a few more tries before it counts as cut off.
 wait_health() {
-  local id=$1 ip=$2 port=$3 want=$4 body try
-  for try in $(seq 1 15); do
+  local id=$1 ip=$2 port=$3 want=$4 body tries=0 host_tries_left=5 up=0
+  health_via=
+  health_error=
+  health_url=http://$ip:$port/v1/health
+  while :; do
     if [ -n "$ip" ]; then
-      body=$(curl -fsS --noproxy '*' --connect-timeout 2 --max-time 4 \
-        "http://$ip:$port/v1/health" 2>/dev/null || true)
-      if health_matches "$body" "$want"; then
-        health_via=host
+      if body=$(curl -fsS --noproxy '*' --connect-timeout 2 --max-time 4 "$health_url" 2>&1); then
+        if health_matches "$body" "$want"; then
+          health_via=host
+          return 0
+        fi
+        health_error="it answered, but not as version ${want:-of the server}"
+      else
+        health_error=$body
+      fi
+    fi
+    if [ "$up" = 1 ]; then
+      if [ "$host_tries_left" = 0 ]; then
+        health_via=container
         return 0
       fi
+      host_tries_left=$((host_tries_left - 1))
+      sleep 1
+      continue
     fi
     body=$(ct_run "$id" ct_health "$port" 2>/dev/null || true)
     if health_matches "$body" "$want"; then
-      health_via=container
-      return 0
+      up=1
+      if [ -z "$ip" ]; then
+        health_via=container
+        return 0
+      fi
+      continue
     fi
-    [ "$try" = 15 ] || sleep 3
+    tries=$((tries + 1))
+    [ "$tries" -lt 15 ] || return 1
+    sleep 3
   done
-  return 1
 }
 
 report_health_via() {
-  if [ "$health_via" = container ]; then
+  [ "$health_via" = container ] || return 0
+  if [ -z "$health_url" ] || [[ $health_url == http://:* ]]; then
+    warn "The server answers inside the container, but the script found no IPv4 \
+address for the container, so it couldn't check from this host."
+  else
     warn "The server answers inside the container, but not from this host. \
-Check the firewall and the network, and \"host\" in /etc/tvplayer-sync/config.json."
+Tried $health_url: $health_error. Check the firewall and the network, and \
+\"host\" in /etc/tvplayer-sync/config.json."
   fi
 }
 
@@ -453,8 +488,9 @@ create_tokens() { # <ctid>
   say
   say "A device needs its own token. Each is shown only once (the server keeps"
   say "only a hash): copy it now, e.g. into a password manager."
+  say "Type one device name at a time; press Enter on an empty line when done."
   while :; do
-    read -r -p "Device name for a new token (Enter to finish): " name || break
+    read -r -p "Device name for a new token (press Enter on an empty line when done): " name || break
     [ -n "$name" ] || break
     if ! [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; then
       say "Use letters, digits, dot, dash or underscore, e.g. laptop."

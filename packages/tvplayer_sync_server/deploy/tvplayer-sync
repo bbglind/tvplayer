@@ -3,6 +3,9 @@
 # service user with the installed config. Install as
 # /usr/local/bin/tvplayer-sync, linked from /usr/bin; see docs/sync-server.md.
 # A pct enter shell can have a short PATH; runuser is in /usr/sbin.
+# The umask is set after runuser, so what it makes (a backup) is private, like
+# the nightly copies.
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-exec runuser -u tvplayer-sync -- /opt/tvplayer-sync/bin/tvplayer_sync_server \
-  --config /etc/tvplayer-sync/config.json "$@"
+# shellcheck disable=SC2016  # $0 and $@ are for the inner sh.
+exec runuser -u tvplayer-sync -- sh -c 'umask 077; exec "$0" "$@"' \
+  /opt/tvplayer-sync/bin/tvplayer_sync_server --config /etc/tvplayer-sync/config.json "$@"

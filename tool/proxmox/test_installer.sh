@@ -114,6 +114,10 @@ stub curl <<'EOF'
 #!/bin/bash
 args=()
 for a in "$@"; do
+  if [ -n "${FAKE_HOST_BLOCKED:-}" ] && [[ $a == http://192.0.2.10:* ]]; then
+    echo "curl: (7) Failed to connect to 192.0.2.10: Connection timed out" >&2
+    exit 7
+  fi
   a=${a/http:\/\/192.0.2.10:/http://127.0.0.1:}
   a=${a/https:\/\/github.com\/bbglind\/tvplayer\/releases\/download\/v*\//file://$FAKE_RELEASE/}
   args+=("$a")
@@ -147,6 +151,8 @@ case "$cmd" in
   push) cp "$2" "$sb/root/$(basename "$3")" ;;
   exec)
     shift 2  # the id and --
+    # A real pct exec takes a second or two.
+    [ -z "${FAKE_PCT_DELAY:-}" ] || /usr/bin/sleep "$FAKE_PCT_DELAY"
     incontainer "$@"
     ;;
   *) echo "pct stub: $cmd" >&2; exit 1 ;;
@@ -167,7 +173,8 @@ new_sandbox() {
 #!/bin/bash
 start() {
   grep -q ExecStart=/opt/tvplayer-sync/bin /etc/systemd/system/tvplayer-sync.service || exit 1
-  setsid /opt/tvplayer-sync/bin/tvplayer_sync_server --config /etc/tvplayer-sync/config.json serve \
+  # A real server isn't listening yet when systemctl returns.
+  setsid sh -c "/usr/bin/sleep $(cat /run/start-delay 2>/dev/null || echo 0); exec /opt/tvplayer-sync/bin/tvplayer_sync_server --config /etc/tvplayer-sync/config.json serve" \
     </dev/null >>/run/server.log 2>&1 &
   echo $! > /run/server.pid
 }
@@ -240,6 +247,13 @@ EOF
   mkdir -p "$sb/etc/tvplayer-sync" "$sb/varlib/tvplayer-sync" "$sb/backups/tvplayer-sync"
   sed 's/8787/18787/' "$work/x/bundle/config.example.json" > "$sb/etc/tvplayer-sync/config.json"
   cp "$old"/deploy/*.service "$old"/deploy/*.timer "$sb/etc/systemd/system/"
+  # The wrapper as it was then, without a umask of its own.
+  cat > "$old/deploy/tvplayer-sync" <<'EOF2'
+#!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+exec runuser -u tvplayer-sync -- /opt/tvplayer-sync/bin/tvplayer_sync_server \
+  --config /etc/tvplayer-sync/config.json "$@"
+EOF2
   install -m 755 "$old/deploy/tvplayer-sync" "$sb/localbin/tvplayer-sync"
   ln -s /usr/local/bin/tvplayer-sync "$sb/usrbin/tvplayer-sync"
   touch "$sb/exists"
@@ -250,6 +264,13 @@ EOF
 }
 
 backup_made() { compgen -G "$sb/backups/tvplayer-sync/before-update-*.sqlite" >/dev/null; }
+backup_count() { compgen -G "$sb/backups/tvplayer-sync/before-update-*.sqlite" | wc -l; }
+backups_private() {
+  local file
+  for file in "$sb"/backups/tvplayer-sync/*.sqlite; do
+    [ "$(stat -c %a "$file")" = 600 ] || return 1
+  done
+}
 config_sum() { sha256sum < "$sb/etc/tvplayer-sync/config.json"; }
 health() { /usr/bin/curl -fsS --noproxy '*' --max-time 3 "http://127.0.0.1:$1/v1/health"; }
 health_is() { health "$1" | grep -qF "$2"; }
@@ -278,6 +299,9 @@ check "address shown" log_has "http://192.0.2.10:8787"
 check "token printed" log_has "laptop: tvps_"
 check "pushed archive removed" [ ! -e "$sb/root/tvplayer-sync-update.tar.gz" ]
 check "token in no file" no_token_in_files
+check "says how to stop making tokens" log_has "press Enter on an empty line when done"
+ct /usr/local/bin/tvplayer-sync backup /var/backups/tvplayer-sync/manual.sqlite >/dev/null
+check "a manual backup is private" backups_private
 
 echo "Fresh install, declined at the summary"
 new_sandbox decline
@@ -311,6 +335,43 @@ check "database backed up" backup_made
 check "no rollback folder left" [ ! -e "$sb/opt/tvplayer-sync.rollback" ]
 check "no staging folder left" [ ! -e "$sb/opt/tvplayer-sync.new" ]
 check "pushed archive removed" [ ! -e "$sb/root/tvplayer-sync-update.tar.gz" ]
+check "the backup is private" backups_private
+
+echo "Update again, on the same version"
+/usr/bin/sleep 1.1
+run 'y\n' --update 1 --local "$good"
+check "exits 0" [ "$status" = 0 ]
+check "shows the same version twice" log_has "Current version: $new_version"
+check "says it is the same version" log_has "The same version"
+check "new version answers" health_is 18787 "\"version\":\"$new_version\""
+check "config untouched" [ "$before" = "$(config_sum)" ]
+check "token kept" token_kept
+check "a second backup" [ "$(backup_count)" = 2 ]
+check "both backups private" backups_private
+
+echo "Update when the server needs a moment to start"
+new_sandbox slowupdate
+hand_install
+echo 0.7 > "$sb/run/start-delay"
+FAKE_PCT_DELAY=1.5 run 'y\n' --update 1 --local "$good"
+check "exits 0" [ "$status" = 0 ]
+check "no false warning" log_lacks "not from this host"
+
+echo "Install when the server needs a moment to start"
+new_sandbox slowinstall
+echo 0.7 > "$sb/run/start-delay"
+FAKE_PCT_DELAY=1.5 run '\n\n\n\n\n\n\n\n\n\ny\nn\n' --install --local "$good"
+check "exits 0" [ "$status" = 0 ]
+check "no false warning" log_lacks "not from this host"
+
+echo "Update when the host really can't reach the container"
+new_sandbox blocked
+hand_install
+FAKE_HOST_BLOCKED=1 run 'y\n' --update 1 --local "$good"
+check "exits 0, the server is fine" [ "$status" = 0 ]
+check "warns" log_has "not from this host"
+check "with the address it tried" log_has "http://192.0.2.10:18787"
+check "and curl's own error" log_has "Connection timed out"
 
 echo "Update that fails its health check"
 new_sandbox rollback
@@ -369,6 +430,7 @@ run 'y\n' --update 1 --local "$good"
 check "exits 0" [ "$status" = 0 ]
 check "old program back" [ -x "$sb/opt/tvplayer-sync/bin/real" ]
 check "rollback folder gone" [ ! -e "$sb/opt/tvplayer-sync.rollback" ]
+/usr/bin/sleep 0.5
 check "old version answers" health_is 18787 '"service":"tvplayer-sync"'
 
 echo "Download: checksums"
